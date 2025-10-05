@@ -129,12 +129,6 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
-# Discord Bot specifics
-# Config files with secrets (e.g., bot token)
-Config.py
-config.py
-*.config
-
 # Logs
 *.log
 logs/
