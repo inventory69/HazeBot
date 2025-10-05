@@ -1,0 +1,23 @@
+name: 🚀 Deploy & Restart Pterodactyl Bot Server
+
+on:
+  push:
+    branches: ["main"]  # 🟢 Trigger on push to main branch
+  workflow_dispatch: {}  # 🔘 Allow manual triggering of the workflow
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      BOT_API_URL: ${{ secrets.BOT_API_URL }}   # 🔒 Pterodactyl API endpoint (set in repo secrets)
+      BOT_API_KEY: ${{ secrets.BOT_API_KEY }}   # 🔒 Pterodactyl API key (set in repo secrets)
+
+    steps:
+    - name: 🔄 Restart Bot Server via Pterodactyl API
+      run: |
+        # 📨 Send restart signal to Pterodactyl server
+        curl -X POST "${BOT_API_URL}" \
+          -H "Authorization: Bearer ${BOT_API_KEY}" \
+          -H "Content-Type: application/json" \
+          --data '{"signal": "restart"}'
