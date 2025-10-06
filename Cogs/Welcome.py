@@ -16,7 +16,7 @@ RULES_TEXT = (
 )
 
 # Channel and role IDs (replace with your actual IDs)
-WELCOME_RULES_CHANNEL_ID = 1424162976247582862  # Channel where rules are shown
+WELCOME_RULES_CHANNEL_ID = 1424724535923703968  # Channel where rules are shown
 WELCOME_PUBLIC_CHANNEL_ID = 1424164269775392858  # Public welcome channel
 MEMBER_ROLE_ID = 1424161475718807562            # Member role ID
 
@@ -135,7 +135,7 @@ class AcceptRulesView(discord.ui.View):
     Deletes the rules message.
     """
     def __init__(self, member, rules_msg=None):
-        super().__init__(timeout=30)  # 15 minutes (zurück zu 900)
+        super().__init__(timeout=900)  # 15 minutes (zurück zu 900)
         self.member = member
         self.interest_selected = False
         self.rules_msg = rules_msg  # Store the rules message object
