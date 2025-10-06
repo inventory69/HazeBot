@@ -17,6 +17,7 @@ root_logger.handlers.clear()
 # Jetzt erst die restlichen Imports!
 import os
 import pathlib
+import discord
 from discord.ext import commands
 from Config import CommandPrefix, Intents, BotName
 from Utils.Logger import Logger
@@ -47,6 +48,13 @@ class HazeWorldBot(commands.Bot):
         else:
             Logger.warning("⚠️ No Cogs loaded!")
         Logger.info("🎯 Cog loading sequence complete.")
+        # Debug: Check commands in tree
+        Logger.info(f"Commands in tree before copy/sync: {[cmd.name for cmd in self.tree.get_commands()]}")
+        # Copy global commands to guild and sync
+        guild = discord.Object(id=int(os.getenv("DISCORD_GUILD_ID")))
+        self.tree.copy_global_to(guild=guild)
+        synced = await self.tree.sync(guild=guild)
+        Logger.info(f"🔗 Synced {len(synced)} slash commands to guild {guild.id}.")
 
     async def on_ready(self):
         Logger.info(f'{BotName} is online as {self.user}!')

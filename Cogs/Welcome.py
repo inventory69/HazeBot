@@ -134,13 +134,14 @@ class AcceptRulesView(discord.ui.View):
     Times out after 15 minutes and kicks the user if not accepted.
     Deletes the rules message.
     """
-    def __init__(self, member, rules_msg=None):
-        super().__init__(timeout=900)  # 15 minutes (zurück zu 900)
+    def __init__(self, member, rules_msg=None, cog=None):
+        super().__init__(timeout=900)  # 15 minutes
         self.member = member
         self.interest_selected = False
         self.rules_msg = rules_msg  # Store the rules message object
+        self.cog = cog  # Reference to the cog for cleanup
         self.add_item(InterestSelect(self))  # Dropdown first
-        self.add_item(AcceptRulesButton(self))  # Button second (unter dem Dropdown)
+        self.add_item(AcceptRulesButton(self))  # Button second
 
     async def on_timeout(self):
         """
@@ -165,6 +166,10 @@ class AcceptRulesView(discord.ui.View):
                 Logger.info("Deleted rules message after timeout")
             except Exception as e:
                 Logger.error(f"Failed to delete rules message: {e}")
+        
+        # Remove from active messages
+        if self.cog and self.member.id in self.cog.active_rules_messages:
+            del self.cog.active_rules_messages[self.member.id]
 
 class Welcome(commands.Cog):
     """
@@ -172,6 +177,7 @@ class Welcome(commands.Cog):
     """
     def __init__(self, bot):
         self.bot = bot
+        self.active_rules_messages = {}  # Store active rules messages by member ID
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -190,15 +196,31 @@ class Welcome(commands.Cog):
                     "**Follow these steps to unlock the server:**\n"
                     "1. Select how you want to contribute (you can choose multiple).\n"
                     "2. Click 'Accept Rules' to agree and get access!\n\n"
-                    "⏰ **Note:** You have **15 minutes** to complete this. If not, you'll be kicked from the server."
+                    "⏰ **Note:** You have **15 minutes** to complete this. If not, you'll be kicked from the server.\n"
+                    "📝 **Privacy:** This message is public, but your selections and responses are only visible to you."
                 ),
                 color=PINK
             )
             set_pink_footer(embed, bot=self.bot.user)
-            view = AcceptRulesView(member)
+            view = AcceptRulesView(member, cog=self)
             # Save the sent message object and pass it to the view
             rules_msg = await rules_channel.send(embed=embed, view=view)
             view.rules_msg = rules_msg
+            self.active_rules_messages[member.id] = rules_msg  # Store for cleanup
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member):
+        """
+        Event: Triggered when a member leaves the server.
+        Deletes the rules message if it exists and hasn't been accepted.
+        """
+        if member.id in self.active_rules_messages:
+            try:
+                await self.active_rules_messages[member.id].delete()
+                Logger.info(f"Deleted rules message for {member} who left the server")
+            except Exception as e:
+                Logger.error(f"Failed to delete rules message for {member}: {e}")
+            del self.active_rules_messages[member.id]
 
 async def setup(bot):
     """
