@@ -122,6 +122,8 @@ class AcceptRulesButton(discord.ui.Button):
             Logger.warning(f"Public welcome channel not found (ID: {WELCOME_PUBLIC_CHANNEL_ID})")
             response_text = "You accepted the rules and are now unlocked! 🎉"
         await interaction.response.send_message(response_text, ephemeral=True)
+        # Stop the view to prevent timeout
+        self.parent_view.stop()
         # Delete the rules message after 10 seconds
         if self.parent_view.rules_msg:
             await self.parent_view.rules_msg.delete(delay=10)
@@ -129,14 +131,40 @@ class AcceptRulesButton(discord.ui.Button):
 class AcceptRulesView(discord.ui.View):
     """
     Interactive view with interest selection first, then accept rules button.
+    Times out after 15 minutes and kicks the user if not accepted.
+    Deletes the rules message.
     """
     def __init__(self, member, rules_msg=None):
-        super().__init__(timeout=300)
+        super().__init__(timeout=30)  # 15 minutes (zurück zu 900)
         self.member = member
         self.interest_selected = False
         self.rules_msg = rules_msg  # Store the rules message object
         self.add_item(InterestSelect(self))  # Dropdown first
         self.add_item(AcceptRulesButton(self))  # Button second (unter dem Dropdown)
+
+    async def on_timeout(self):
+        """
+        Called when the view times out (15 minutes).
+        Kicks the user if they haven't accepted the rules and are still in the server.
+        Deletes the rules message.
+        """
+        guild = self.member.guild
+        if self.member in guild.members:
+            try:
+                await self.member.kick(reason="Did not accept rules within 15 minutes")
+                Logger.info(f"Kicked {self.member} for not accepting rules in time")
+            except Exception as e:
+                Logger.error(f"Failed to kick {self.member}: {e}")
+        else:
+            Logger.info(f"{self.member} left the server before the 15-minute timeout")
+        
+        # Always delete the rules message
+        if self.rules_msg:
+            try:
+                await self.rules_msg.delete()
+                Logger.info("Deleted rules message after timeout")
+            except Exception as e:
+                Logger.error(f"Failed to delete rules message: {e}")
 
 class Welcome(commands.Cog):
     """
@@ -161,7 +189,8 @@ class Welcome(commands.Cog):
                     f"**Server Rules:**\n{RULES_TEXT}\n\n"
                     "**Follow these steps to unlock the server:**\n"
                     "1. Select how you want to contribute (you can choose multiple).\n"
-                    "2. Click 'Accept Rules' to agree and get access!"
+                    "2. Click 'Accept Rules' to agree and get access!\n\n"
+                    "⏰ **Note:** You have **15 minutes** to complete this. If not, you'll be kicked from the server."
                 ),
                 color=PINK
             )
