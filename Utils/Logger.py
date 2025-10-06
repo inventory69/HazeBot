@@ -1,22 +1,7 @@
 import logging
-from rich.logging import RichHandler
-from rich.console import Console
-from rich.theme import Theme
-from discord.ext import commands
-import discord
 
-# Pink Theme für RichHandler
-pink_theme = Theme({
-    "info": "bold magenta",
-    "warning": "bold bright_magenta",
-    "error": "bold red",
-    "critical": "bold white on magenta"
-})
-
-console = Console(theme=pink_theme)
-ConsoleHandler = RichHandler(console=console)
-
-logging.getLogger().setLevel(logging.WARNING)  # Root-Logger gibt nur Warnungen und Fehler aus
+# Set root logger to only show warnings and errors
+logging.getLogger().setLevel(logging.WARNING)
 
 class DiscordEmojiFormatter(logging.Formatter):
     def __init__(self):
@@ -24,18 +9,17 @@ class DiscordEmojiFormatter(logging.Formatter):
 
     def format(self, record):
         emoji = "💖" if record.levelno == logging.INFO else "🌸" if record.levelno == logging.WARNING else "🩷" if record.levelno == logging.ERROR else "🚨"
-        # Level-Namen bleiben wie im Original
         level = "DC DEBUG" if record.levelno == logging.DEBUG else "DC INFO" if record.levelno == logging.INFO else "DC WARN" if record.levelno == logging.WARNING else "DC ERROR" if record.levelno == logging.ERROR else "DC CRIT"
         time_str = self.formatTime(record, self.datefmt)
         return f"[{time_str}] {emoji}  {level:<7} │ {record.getMessage()}"
 
-# Entferne alle Handler vom Root-Logger
+# Remove all handlers from the root logger
 root_logger = logging.getLogger()
 root_logger.handlers.clear()
 
-logging.basicConfig(level=logging.INFO, handlers=[ConsoleHandler], force=True)
+logging.basicConfig(level=logging.INFO, force=True)
 
-# Discord-Logger: Verwende eigenen Handler mit Emoji-Formatter
+# Set up Discord loggers with emoji formatter
 for logger_name in ["discord", "discord.client", "discord.gateway"]:
     logger = logging.getLogger(logger_name)
     logger.handlers.clear()
@@ -50,12 +34,14 @@ class CustomFormatter(logging.Formatter):
 
     def format(self, record):
         emoji = "💖" if record.levelno == logging.INFO else "🌸" if record.levelno == logging.WARNING else "🩷" if record.levelno == logging.ERROR else "🚨"
-        # Level-Namen bleiben wie im Original
         level = "DEBUG" if record.levelno == logging.DEBUG else "INFO" if record.levelno == logging.INFO else "WARN" if record.levelno == logging.WARNING else "ERROR" if record.levelno == logging.ERROR else "CRITICAL"
         time_str = self.formatTime(record, self.datefmt)
         return f"[{time_str}] {emoji}  {level:<7} │ {record.getMessage()}"
 
 def get_logger(name="HazeWorldBot"):
+    """
+    Returns a logger instance with custom emoji formatting.
+    """
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     logger.propagate = False
@@ -66,6 +52,9 @@ def get_logger(name="HazeWorldBot"):
     return logger
 
 def log_clear(channel, author, amount):
-    Logger.info(f"🧹 {amount} Nachrichten von {channel} gelöscht durch {author}")
+    """
+    Logs when messages are cleared from a channel.
+    """
+    Logger.info(f"🧹 {amount} messages from {channel} deleted by {author}")
 
 Logger = get_logger()
