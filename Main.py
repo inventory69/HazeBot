@@ -48,6 +48,14 @@ class HazeWorldBot(commands.Bot):
         else:
             Logger.warning("⚠️ No Cogs loaded!")
         Logger.info("🎯 Cog loading sequence complete.")
+        # List available ! commands and their slash availability
+        slash_commands = ["help", "status"]  # List of commands with slash versions
+        Logger.info("📋 Available ! commands:")
+        for cog_name, cog in self.cogs.items():
+            for cmd in cog.get_commands():
+                if not cmd.hidden:
+                    slash_available = cmd.name in slash_commands
+                    Logger.info(f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}")
         # Debug: Check commands in tree
         Logger.info(f"Commands in tree before copy/sync: {[cmd.name for cmd in self.tree.get_commands()]}")
         # Copy global commands to guild and sync

@@ -31,16 +31,18 @@ INTEREST_ROLES = {
     "Just Browsing": 1424466239618810019,
 }
 
-# Funny welcome messages for public channel
+# Funny welcome messages for public channel (use {name} for username)
 WELCOME_MESSAGES = [
-    "Welcome {mention}! Your chillventory just gained a new member. 🌿",
-    "Hey {mention}, you unlocked the secret stash of good vibes! ✨",
-    "{mention} joined the inventarium. Time to relax and enjoy! 😎",
-    "Give a warm welcome to {mention}, our newest collector of chill moments! 🧘",
-    "{mention}, you found the legendary lounge zone. Welcome aboard! 🚀",
-    "Inventory update: {mention} added. Please store your good mood here! 😁",
-    "Alert: {mention} has entered the realm of ultimate relaxation. 🛋️",
-    "Welcome {mention}! May your inventory always be full of chill and fun. 🎉"
+    "Welcome {name}! Your chillventory just gained a new member. 🌿",
+    "Hey {name}, you unlocked the secret stash of good vibes! ✨",
+    "{name} joined the inventarium. Time to relax and enjoy! 😎",
+    "Give a warm welcome to {name}, our newest collector of chill moments! 🧘",
+    "{name}, you found the legendary lounge zone. Welcome aboard! 🚀",
+    "Inventory update: {name} added. Please store your good mood here! 😁",
+    "Alert: {name} has entered the realm of ultimate relaxation. 🛋️",
+    "Welcome {name}! May your inventory always be full of chill and fun. 🎉",
+    "New item in stock: {name}, the ultimate chill collector! 📦",
+    "{name} discovered the hidden inventory of positivity. Welcome! 🌟"
 ]
 
 class InterestSelect(discord.ui.Select):
@@ -89,12 +91,17 @@ class AcceptRulesButton(discord.ui.Button):
     def __init__(self, parent_view):
         super().__init__(label="Step 2: Accept Rules", style=discord.ButtonStyle.success, emoji="✅")
         self.parent_view = parent_view
+        self.bot = parent_view.bot  # Get bot reference from parent view
+        self.cog = parent_view.cog  # Get cog reference from parent view
+        self.member = parent_view.member  # Get member reference from parent view
 
     async def callback(self, interaction: discord.Interaction):
+        # Defer the response to avoid timeout
+        await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         member = interaction.user
         if not self.parent_view.interest_selected:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Please select at least one way you want to contribute before accepting the rules.",
                 ephemeral=True
             )
@@ -104,29 +111,66 @@ class AcceptRulesButton(discord.ui.Button):
         if role and role not in member.roles:
             await member.add_roles(role, reason="Accepted rules")
         welcome_channel = guild.get_channel(WELCOME_PUBLIC_CHANNEL_ID)
-        # Send the public welcome message after role assignment
+        # Send the polished welcome embed after role assignment
         if welcome_channel:
-            message = random.choice(WELCOME_MESSAGES).format(mention=member.mention)
+            # Get the member's interest roles
+            interest_role_names = []
+            for role_name, role_id in INTEREST_ROLES.items():
+                role = discord.utils.get(guild.roles, id=role_id)
+                if role and role in member.roles:
+                    interest_role_names.append(role_name)
+            # Random welcome message with username
+            welcome_message = random.choice(WELCOME_MESSAGES).format(name=member.display_name)
+            embed = discord.Embed(
+                title=f"🎉 Welcome to {guild.name}, {member.display_name}!",
+                description=welcome_message,
+                color=PINK
+            )
+            embed.add_field(
+                name="🎨 Your Interests",
+                value="\n".join([f"• {interest}" for interest in interest_role_names]) if interest_role_names else "None selected",
+                inline=True
+            )
+            embed.add_field(
+                name="📅 Joined At",
+                value=member.joined_at.strftime("%B %d, %Y"),
+                inline=True
+            )
+            embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
+            embed.set_footer(text="Powered by Haze World 💖", icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None)
             try:
-                public_msg = await welcome_channel.send(message)
-                Logger.info(f"Sent public welcome message for {member} in {welcome_channel}")
+                view = WelcomeCardView(member, cog=self.cog)
+                mention_msg = await welcome_channel.send(member.mention)
+                embed_msg = await welcome_channel.send(embed=embed, view=view)
+                view.message = embed_msg  # Store the message for editing on timeout
+                # Store the sent messages for cleanup
+                if member.id not in self.cog.sent_messages:
+                    self.cog.sent_messages[member.id] = []
+                self.cog.sent_messages[member.id].extend([mention_msg, embed_msg])
+                Logger.info(f"Sent polished welcome embed for {member} in {welcome_channel}")
                 channel_link = f"https://discord.com/channels/{guild.id}/{welcome_channel.id}"
                 response_text = (
                     f"You accepted the rules and are now unlocked! 🎉\n"
-                    f"Jump to the welcome channel: {welcome_channel.mention} or [Click here]({channel_link})"
+                    f"Check out your welcome card: {welcome_channel.mention} or [Click here]({channel_link})"
                 )
             except Exception as e:
-                Logger.error(f"Error sending public welcome message: {e}")
-                response_text = "You accepted the rules and are now unlocked! 🎉 (But I couldn't send a public welcome message.)"
+                Logger.error(f"Error sending welcome embed: {e}")
+                response_text = "You accepted the rules and are now unlocked! 🎉 (But I couldn't send a welcome card.)"
         else:
             Logger.warning(f"Public welcome channel not found (ID: {WELCOME_PUBLIC_CHANNEL_ID})")
             response_text = "You accepted the rules and are now unlocked! 🎉"
-        await interaction.response.send_message(response_text, ephemeral=True)
+        await interaction.followup.send(response_text, ephemeral=True)
         # Stop the view to prevent timeout
         self.parent_view.stop()
         # Delete the rules message after 10 seconds
         if self.parent_view.rules_msg:
             await self.parent_view.rules_msg.delete(delay=10)
+        # Also delete the mention message immediately
+        if self.cog and self.member.id in self.cog.active_rules_messages:
+            mention_msg = self.cog.active_rules_messages[self.member.id][0]
+            await mention_msg.delete()  # Delete immediately
+            # Clean up the dict after successful acceptance
+            del self.cog.active_rules_messages[self.member.id]
 
 class AcceptRulesView(discord.ui.View):
     """
@@ -140,6 +184,7 @@ class AcceptRulesView(discord.ui.View):
         self.interest_selected = False
         self.rules_msg = rules_msg  # Store the rules message object
         self.cog = cog  # Reference to the cog for cleanup
+        self.bot = cog.bot if cog else None  # Store bot reference
         self.add_item(InterestSelect(self))  # Dropdown first
         self.add_item(AcceptRulesButton(self))  # Button second
 
@@ -147,7 +192,7 @@ class AcceptRulesView(discord.ui.View):
         """
         Called when the view times out (15 minutes).
         Kicks the user if they haven't accepted the rules and are still in the server.
-        Deletes the rules message.
+        Deletes the rules messages.
         """
         guild = self.member.guild
         if self.member in guild.members:
@@ -159,17 +204,85 @@ class AcceptRulesView(discord.ui.View):
         else:
             Logger.info(f"{self.member} left the server before the 15-minute timeout")
         
-        # Always delete the rules message
-        if self.rules_msg:
+        # Always delete the rules messages
+        if self.cog and self.member.id in self.cog.active_rules_messages:
+            for msg in self.cog.active_rules_messages[self.member.id]:
+                try:
+                    await msg.delete()
+                    Logger.info("Deleted rules messages after timeout")
+                except Exception as e:
+                    Logger.error(f"Failed to delete rules message: {e}")
+            del self.cog.active_rules_messages[self.member.id]
+        
+        # Also delete the rules_msg if set
+        if self.rules_msg and self.rules_msg not in self.cog.active_rules_messages.get(self.member.id, []):
             try:
                 await self.rules_msg.delete()
-                Logger.info("Deleted rules message after timeout")
             except Exception as e:
-                Logger.error(f"Failed to delete rules message: {e}")
-        
-        # Remove from active messages
-        if self.cog and self.member.id in self.cog.active_rules_messages:
-            del self.cog.active_rules_messages[self.member.id]
+                pass
+
+class WelcomeCardView(discord.ui.View):
+    """
+    Persistent view for the welcome card with a welcome button for others.
+    Times out after 1 week to reduce bot load.
+    """
+    def __init__(self, new_member, cog=None):
+        super().__init__(timeout=604800)  # 1 week in seconds
+        self.new_member = new_member
+        self.cog = cog  # Store cog reference
+        self.add_item(WelcomeButton(self))
+
+    async def on_timeout(self):
+        """
+        Called when the view times out (1 week).
+        Disables the button to reduce bot load.
+        """
+        for item in self.children:
+            item.disabled = True
+        # Try to edit the message to show disabled button
+        if hasattr(self, 'message') and self.message:
+            try:
+                await self.message.edit(view=self)
+            except Exception as e:
+                Logger.error(f"Failed to disable welcome button: {e}")
+
+class WelcomeButton(discord.ui.Button):
+    """
+    Button for others to welcome the new member.
+    """
+    def __init__(self, parent_view):
+        super().__init__(label="Welcome!", style=discord.ButtonStyle.primary, emoji="🎉")
+        self.parent_view = parent_view
+        self.cog = parent_view.cog  # Get cog from parent view
+
+    async def callback(self, interaction: discord.Interaction):
+        # Defer the response to allow followup
+        await interaction.response.defer()  # Defer to allow followup
+        user = interaction.user
+        if user == self.parent_view.new_member:
+            await interaction.followup.send("You can't welcome yourself! 😄", ephemeral=True)
+            return
+        # Fun welcome replies with inventory vibe (no mention for welcomer)
+        welcome_replies = [
+            f"Inventory alert: {user.display_name} welcomes {self.parent_view.new_member.mention} to the chillventory! 📦",
+            f"{user.display_name} adds a warm welcome to {self.parent_view.new_member.mention}'s inventory! 🤗",
+            f"New stock in the lounge: {user.display_name} welcomes {self.parent_view.new_member.mention}! 🛋️",
+            f"{user.display_name} unlocks extra vibes for {self.parent_view.new_member.mention}! ✨",
+            f"Chillventory update: {user.display_name} says hi to {self.parent_view.new_member.mention}! 😎",
+            f"{user.display_name} throws positivity confetti for {self.parent_view.new_member.mention}! 🎊",
+            f"Welcome stash expanded: {user.display_name} greets {self.parent_view.new_member.mention}! 🌟",
+            f"{user.display_name} shares good mood from the inventory with {self.parent_view.new_member.mention}! 😁",
+            f"Realm of relaxation welcomes {self.parent_view.new_member.mention} via {user.display_name}! 🧘",
+            f"{user.display_name} discovers {self.parent_view.new_member.mention} in the positivity inventory! 🌿",
+        ]
+        reply = random.choice(welcome_replies)
+        reply_msg = await interaction.followup.send(reply)
+        # Store the reply message for cleanup
+        member_id = self.parent_view.new_member.id
+        if member_id not in self.cog.sent_messages:
+            self.cog.sent_messages[member_id] = []
+        self.cog.sent_messages[member_id].append(reply_msg)
+        Logger.info(f"{user} welcomed {self.parent_view.new_member} via button")
 
 class Welcome(commands.Cog):
     """
@@ -178,6 +291,7 @@ class Welcome(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.active_rules_messages = {}  # Store active rules messages by member ID
+        self.sent_messages = {}  # Store all sent welcome-related messages by member ID for cleanup
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -191,7 +305,7 @@ class Welcome(commands.Cog):
             embed = discord.Embed(
                 title=f"Welcome to {guild.name}! 💖",
                 description=(
-                    f"Hey {member.mention}, glad to have you here!\n\n"
+                    f"Hey there, glad to have you here!\n\n"  # Removed mention from description
                     f"**Server Rules:**\n{RULES_TEXT}\n\n"
                     "**Follow these steps to unlock the server:**\n"
                     "1. Select how you want to contribute (you can choose multiple).\n"
@@ -203,24 +317,39 @@ class Welcome(commands.Cog):
             )
             set_pink_footer(embed, bot=self.bot.user)
             view = AcceptRulesView(member, cog=self)
-            # Save the sent message object and pass it to the view
+            # Send separate mention message first
+            mention_msg = await rules_channel.send(member.mention)
+            # Then send the embed with view
             rules_msg = await rules_channel.send(embed=embed, view=view)
             view.rules_msg = rules_msg
-            self.active_rules_messages[member.id] = rules_msg  # Store for cleanup
+            # Store both messages for cleanup
+            self.active_rules_messages[member.id] = [mention_msg, rules_msg]
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
         """
         Event: Triggered when a member leaves the server.
-        Deletes the rules message if it exists and hasn't been accepted.
+        Deletes the rules messages and all welcome-related messages if they exist.
         """
+        # Delete rules messages
         if member.id in self.active_rules_messages:
-            try:
-                await self.active_rules_messages[member.id].delete()
-                Logger.info(f"Deleted rules message for {member} who left the server")
-            except Exception as e:
-                Logger.error(f"Failed to delete rules message for {member}: {e}")
+            for msg in self.active_rules_messages[member.id]:
+                try:
+                    await msg.delete()
+                    Logger.info(f"Deleted rules message for {member} who left the server")
+                except Exception as e:
+                    Logger.error(f"Failed to delete rules message for {member}: {e}")
             del self.active_rules_messages[member.id]
+        
+        # Delete all sent welcome messages
+        if member.id in self.sent_messages:
+            for msg in self.sent_messages[member.id]:
+                try:
+                    await msg.delete()
+                    Logger.info(f"Deleted welcome message for {member} who left the server")
+                except Exception as e:
+                    Logger.error(f"Failed to delete welcome message for {member}: {e}")
+            del self.sent_messages[member.id]
 
 async def setup(bot):
     """

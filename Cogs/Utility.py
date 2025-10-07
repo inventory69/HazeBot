@@ -25,7 +25,7 @@ class Utility(commands.Cog):
             color=PINK
         )
         # List of commands that have slash versions
-        slash_commands = ["help", "status", "say"]  # Removed "clear"
+        slash_commands = ["help", "status"]  # Removed "say"
         normal_commands = []
         admin_commands = []
         for cog_name, cog in self.bot.cogs.items():
@@ -135,7 +135,7 @@ class Utility(commands.Cog):
         await msg.delete(delay=30)
         log_clear(ctx.channel, ctx.author, len(deleted)-1)
 
-    # !say (Prefix)
+    # !say (Prefix) - Only prefix, no slash
     @commands.command(name="say")
     async def say(self, ctx, *, message: str):
         """
@@ -158,16 +158,7 @@ class Utility(commands.Cog):
             await ctx.send(embed=embed)
         else:
             await ctx.send(message)
-
-    # /say (Slash) - Rollen-Check für Admins
-    @app_commands.command(name="say", description="🗣️ Allows an admin to send a message as the bot in the current channel.")
-    @app_commands.checks.has_role(ADMIN_ROLE_ID)
-    async def say_slash(self, interaction: discord.Interaction, message: str, embed_option: bool = False):
-        if embed_option:
-            embed = self.create_say_embed(message, interaction.client.user)
-            await interaction.response.send_message(embed=embed, ephemeral=False)
-        else:
-            await interaction.response.send_message(message, ephemeral=False)
+        Logger.info(f"Prefix command !say used by {ctx.author} in {ctx.guild}")
 
 async def setup(bot):
     """
