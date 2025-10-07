@@ -1,4 +1,4 @@
-# HazeWorldBot 🌟
+# HazeWorldBot 🌿
 
 A personal Discord bot designed for The Chillventory server, known as Haze in Discord. Built with Python and discord.py, this bot enhances community interactions with welcoming features, utility commands, and a chill vibe. **Note: This is a personal project and not intended for public use or distribution.**
 
