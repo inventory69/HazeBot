@@ -172,6 +172,23 @@ class AcceptRulesButton(discord.ui.Button):
             # Clean up the dict after successful acceptance
             del self.cog.active_rules_messages[self.member.id]
 
+        # Nach view.message = embed_msg
+        import json, os  # Importiere hier oder oben
+        persistent_data = {
+            'member_id': member.id,
+            'channel_id': welcome_channel.id,
+            'message_id': embed_msg.id,
+            'start_time': view.start_time.isoformat()
+        }
+        if not os.path.exists('persistent_views.json'):
+            with open('persistent_views.json', 'w') as f:
+                json.dump([], f)
+        with open('persistent_views.json', 'r') as f:
+            data = json.load(f)
+        data.append(persistent_data)
+        with open('persistent_views.json', 'w') as f:
+            json.dump(data, f)
+
 class AcceptRulesView(discord.ui.View):
     """
     Interactive view with interest selection first, then accept rules button.
@@ -226,10 +243,18 @@ class WelcomeCardView(discord.ui.View):
     Persistent view for the welcome card with a welcome button for others.
     Times out after 1 week to reduce bot load.
     """
-    def __init__(self, new_member, cog=None):
-        super().__init__(timeout=604800)  # 1 week in seconds
+    def __init__(self, new_member, cog=None, start_time=None):
+        from datetime import datetime  # Importiere hier oder oben
+        if start_time:
+            elapsed = (datetime.now() - start_time).total_seconds()
+            remaining = 604800 - elapsed
+            timeout = max(remaining, 0)
+        else:
+            timeout = 604800
+        super().__init__(timeout=timeout)
         self.new_member = new_member
         self.cog = cog  # Store cog reference
+        self.start_time = start_time or datetime.now()
         self.add_item(WelcomeButton(self))
 
     async def on_timeout(self):
@@ -245,6 +270,13 @@ class WelcomeCardView(discord.ui.View):
                 await self.message.edit(view=self)
             except Exception as e:
                 Logger.error(f"Failed to disable welcome button: {e}")
+        # Remove from persistent data
+        import json  # Importiere hier oder oben
+        with open(self.cog.persistent_views_file, 'r') as f:
+            data = json.load(f)
+        data = [d for d in data if not (d['message_id'] == self.message.id)]
+        with open(self.cog.persistent_views_file, 'w') as f:
+            json.dump(data, f)
 
 class WelcomeButton(discord.ui.Button):
     """
@@ -292,6 +324,14 @@ class Welcome(commands.Cog):
         self.bot = bot
         self.active_rules_messages = {}  # Store active rules messages by member ID
         self.sent_messages = {}  # Store all sent welcome-related messages by member ID for cleanup
+        # Neue Zeilen:
+        import json, os  # Importiere hier oder oben
+        self.persistent_views_file = 'persistent_views.json'
+        if os.path.exists(self.persistent_views_file):
+            with open(self.persistent_views_file, 'r') as f:
+                self.persistent_views_data = json.load(f)
+        else:
+            self.persistent_views_data = []
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -350,6 +390,26 @@ class Welcome(commands.Cog):
                 except Exception as e:
                     Logger.error(f"Failed to delete welcome message for {member}: {e}")
             del self.sent_messages[member.id]
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """
+        Restore persistent views when the bot is ready.
+        """
+        for data in self.persistent_views_data:
+            channel = self.bot.get_channel(data['channel_id'])
+            if channel:
+                try:
+                    message = await channel.fetch_message(data['message_id'])
+                    from datetime import datetime
+                    start_time = datetime.fromisoformat(data['start_time'])
+                    member = self.bot.get_user(data['member_id'])  # Oder None, wenn nicht gefunden
+                    view = WelcomeCardView(member, cog=self, start_time=start_time)
+                    view.message = message
+                    await message.edit(view=view)
+                    Logger.info(f"Restored persistent view for message {data['message_id']}")
+                except Exception as e:
+                    Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
 
 async def setup(bot):
     """
