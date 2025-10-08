@@ -72,7 +72,7 @@ class RocketLeague(commands.Cog):
 
     def fetch_stats_sync(self, platform, username):
         """
-        Synchronous fetch using FlareSolverr to bypass Cloudflare.
+        Synchronous fetch using external service.
         """
         url = f"{self.api_base}/standard/profile/{platform}/{username}"
         
@@ -90,21 +90,19 @@ class RocketLeague(commands.Cog):
         try:
             response = requests.post(self.flaresolverr_url, json=payload, timeout=60)
             if response.status_code != 200:
-                Logger.warning(f"❌ FlareSolverr error: {response.status_code}")
+                Logger.warning(f"❌ External service error: {response.status_code}")
                 return None
             data = response.json()
             if data.get('status') != 'ok':
-                Logger.warning(f"❌ FlareSolverr failed: {data.get('message')}")
+                Logger.warning(f"❌ External service failed: {data.get('message')}")
                 return None
             # Get the actual response
             api_response = data['solution']['response']
-            Logger.info(f"API Response length: {len(api_response)}")
-            Logger.info(f"API Response start: {api_response[:500]}")
             # Parse HTML to get JSON
             soup = BeautifulSoup(api_response, 'html.parser')
             pre_tag = soup.find('pre')
             if not pre_tag:
-                Logger.warning("No <pre> tag found in response")
+                Logger.warning("Invalid response format")
                 return None
             json_text = pre_tag.text
             api_data = json.loads(json_text)
@@ -207,6 +205,12 @@ class RocketLeague(commands.Cog):
                 'highest_icon_url': highest_icon_url,
                 'tier_names': tier_names,
             }
+        except requests.exceptions.RequestException as e:
+            Logger.error(f"💥 Connection error: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            Logger.error(f"💥 JSON parse error: {e}")
+            return None
         except Exception as e:
             Logger.error(f"💥 Error fetching stats for {username}: {e}")
             return None
