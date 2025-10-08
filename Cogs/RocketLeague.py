@@ -216,7 +216,7 @@ class RocketLeague(commands.Cog):
             return None
         finally:
             import time
-            time.sleep(2)  # Rate limit to avoid overwhelming the API
+            time.sleep(8)  # Rate limit to avoid overwhelming the API
 
     async def get_player_stats(self, platform, username):
         """
