@@ -1,11 +1,12 @@
 import aiohttp
-import cloudscraper
+import requests
 import os
 import json
 from concurrent.futures import ThreadPoolExecutor
 from discord.ext import commands, tasks
 import discord
 from discord import app_commands
+from bs4 import BeautifulSoup  # Add this
 from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
@@ -50,14 +51,14 @@ def save_rl_accounts(accounts):
 
 class RocketLeague(commands.Cog):
     """
-    🚀 Rocket League Cog: Fetches player stats using requests in thread.
+    🚀 Rocket League Cog: Fetches player stats using FlareSolverr.
     """
 
     def __init__(self, bot):
         self.bot = bot
         self.session = aiohttp.ClientSession()
         self.api_base = os.getenv("ROCKET_API_BASE")
-        #self.api_key = os.getenv("ROCKET_API_KEY")
+        self.flaresolverr_url = os.getenv("FLARESOLVERR_URL")  # Add this
         self.executor = ThreadPoolExecutor(max_workers=5)
         # Do not start task here
 
@@ -71,31 +72,49 @@ class RocketLeague(commands.Cog):
 
     def fetch_stats_sync(self, platform, username):
         """
-        Synchronous fetch using cloudscraper to bypass Cloudflare.
+        Synchronous fetch using FlareSolverr to bypass Cloudflare.
         """
         url = f"{self.api_base}/standard/profile/{platform}/{username}"
-        headers = {
-            'User-Agent': 'Chrome/79',
-            'Accept': 'application/json'
+        
+        payload = {
+            "cmd": "request.get",
+            "url": url,
+            "maxTimeout": 60000,
+            "headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "Accept": "application/json"
+            }
         }
 
-        # if self.api_key:
-        #     headers['Authorization'] = f'Bearer {self.api_key}'
-
         Logger.info(f"🔍 Fetching RL stats for {username} on {platform}: {url}")
-        scraper = cloudscraper.create_scraper()
         try:
-            response = scraper.get(url, headers=headers, timeout=10)
+            response = requests.post(self.flaresolverr_url, json=payload, timeout=60)
             if response.status_code != 200:
-                Logger.warning(f"❌ Bad response for {username}: {response.status_code}")
+                Logger.warning(f"❌ FlareSolverr error: {response.status_code}")
                 return None
             data = response.json()
+            if data.get('status') != 'ok':
+                Logger.warning(f"❌ FlareSolverr failed: {data.get('message')}")
+                return None
+            # Get the actual response
+            api_response = data['solution']['response']
+            Logger.info(f"API Response length: {len(api_response)}")
+            Logger.info(f"API Response start: {api_response[:500]}")
+            # Parse HTML to get JSON
+            soup = BeautifulSoup(api_response, 'html.parser')
+            pre_tag = soup.find('pre')
+            if not pre_tag:
+                Logger.warning("No <pre> tag found in response")
+                return None
+            json_text = pre_tag.text
+            api_data = json.loads(json_text)
             
-            if 'errors' in data and data['errors'][0]['code'] == 'CollectorResultStatus::NotFound':
+            # Now process api_data as before
+            if 'errors' in api_data and api_data['errors'][0]['code'] == 'CollectorResultStatus::NotFound':
                 Logger.warning(f"🚫 Player {username} not found")
                 return None
             
-            profile = data['data']
+            profile = api_data['data']
             segments = profile['segments']
             overview = next((s for s in segments if s['type'] == 'overview'), None)
             if not overview:
