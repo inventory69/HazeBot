@@ -144,3 +144,6 @@ temp/
 
 # Persistent views file
 persistent_views.json
+
+# Rocket League Cog additions
+rl_accounts.json

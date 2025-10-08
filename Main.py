@@ -19,7 +19,7 @@ import os
 import pathlib
 import discord
 from discord.ext import commands
-from Config import CommandPrefix, Intents, BotName
+from Config import CommandPrefix, Intents, BotName, SLASH_COMMANDS
 from Utils.Logger import Logger
 from dotenv import load_dotenv
 
@@ -49,7 +49,7 @@ class HazeWorldBot(commands.Bot):
             Logger.warning("⚠️ No Cogs loaded!")
         Logger.info("🎯 Cog loading sequence complete.")
         # List available ! commands and their slash availability
-        slash_commands = ["help", "status"]  # List of commands with slash versions
+        slash_commands = SLASH_COMMANDS  # List of commands with slash versions
         Logger.info("📋 Available ! commands:")
         for cog_name, cog in self.cogs.items():
             for cmd in cog.get_commands():
@@ -57,12 +57,19 @@ class HazeWorldBot(commands.Bot):
                     slash_available = cmd.name in slash_commands
                     Logger.info(f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}")
         # Debug: Check commands in tree
-        Logger.info(f"Commands in tree before copy/sync: {[cmd.name for cmd in self.tree.get_commands()]}")
+        #Logger.info(f"Commands in tree before copy/sync: {[cmd.name for cmd in self.tree.get_commands()]}")
+        #Logger.info(f"DISCORD_GUILD_ID env: {os.getenv('DISCORD_GUILD_ID')}")
+        # Clear global commands to prevent duplicates
+        self.tree.clear_commands(guild=None)
         # Copy global commands to guild and sync
         guild = discord.Object(id=int(os.getenv("DISCORD_GUILD_ID")))
+        #Logger.info(f"Guild ID: {guild.id}")
+        #Logger.info(f"Guild commands in tree before sync: {[cmd.name for cmd in self.tree.get_commands(guild=guild)]}")
         self.tree.copy_global_to(guild=guild)
         synced = await self.tree.sync(guild=guild)
-        Logger.info(f"🔗 Synced {len(synced)} slash commands to guild {guild.id}.")
+        Logger.info(f"Synced commands: {[cmd.name for cmd in synced]}")
+        #Logger.info(f"Guild commands in tree after sync: {[cmd.name for cmd in self.tree.get_commands(guild=guild)]}")
+        Logger.info(f"🔗 Synced {len(synced)} guild slash commands.")
 
     async def on_ready(self):
         Logger.info(f'{BotName} is online as {self.user}!')

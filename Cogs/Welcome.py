@@ -396,6 +396,7 @@ class Welcome(commands.Cog):
         """
         Restore persistent views when the bot is ready.
         """
+        restored_count = 0
         for data in self.persistent_views_data:
             channel = self.bot.get_channel(data['channel_id'])
             if channel:
@@ -407,9 +408,10 @@ class Welcome(commands.Cog):
                     view = WelcomeCardView(member, cog=self, start_time=start_time)
                     view.message = message
                     await message.edit(view=view)
-                    Logger.info(f"Restored persistent view for message {data['message_id']}")
+                    restored_count += 1
                 except Exception as e:
                     Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
+        Logger.info(f"Restored {restored_count} persistent views.")
 
 async def setup(bot):
     """

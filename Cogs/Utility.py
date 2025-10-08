@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-from Config import BotName, PINK
+from Config import BotName, PINK, SLASH_COMMANDS
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
 from discord import app_commands
@@ -25,7 +25,7 @@ class Utility(commands.Cog):
             color=PINK
         )
         # List of commands that have slash versions
-        slash_commands = ["help", "status"]  # Removed "say"
+        slash_commands = SLASH_COMMANDS  # Removed "say"
         normal_commands = []
         admin_commands = []
         for cog_name, cog in self.bot.cogs.items():
@@ -93,6 +93,7 @@ class Utility(commands.Cog):
 
     # /help (Slash) - Öffentlich, aber zeigt mehr für Admins
     @app_commands.command(name="help", description="📖 Shows all available commands with their descriptions.")
+    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def help_slash(self, interaction: discord.Interaction):
         is_admin = any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
         embed = self.create_help_embed(interaction, is_admin)
@@ -109,6 +110,7 @@ class Utility(commands.Cog):
 
     # /status (Slash)
     @app_commands.command(name="status", description="💖 Shows bot status and basic info in pink.")
+    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def status_slash(self, interaction: discord.Interaction):
         embed = self.create_status_embed(interaction.client.user, interaction.client.latency, len(interaction.client.guilds))
         await interaction.response.send_message(embed=embed, ephemeral=False)
@@ -116,9 +118,9 @@ class Utility(commands.Cog):
 
     # !clear (Prefix) - Only prefix, no slash
     @commands.command(name="clear")
-    async def clear(self, ctx, amount: int = 10):
+    async def clear(self, ctx, amount: str = "10"):
         """
-        🧹 Deletes the last X messages in the channel (default: 10).
+        🧹 Deletes the last X messages in the channel (default: 10). Use 'all' to delete all messages.
         Only allowed for users with the Admin role.
         """
         if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
@@ -129,11 +131,21 @@ class Utility(commands.Cog):
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed, delete_after=5)
             return
-        deleted = await ctx.channel.purge(limit=amount + 1)
-        embed = self.create_clear_embed(len(deleted)-1, self.bot.user)
+        if amount.lower() == "all":
+            limit = None
+            deleted_count = len(await ctx.channel.purge())
+        else:
+            try:
+                limit = int(amount) + 1
+                deleted = await ctx.channel.purge(limit=limit)
+                deleted_count = len(deleted) - 1
+            except ValueError:
+                await ctx.send("❌ Invalid amount. Use a number or 'all'.")
+                return
+        embed = self.create_clear_embed(deleted_count, self.bot.user)
         msg = await ctx.send(embed=embed)
         await msg.delete(delay=30)
-        log_clear(ctx.channel, ctx.author, len(deleted)-1)
+        log_clear(ctx.channel, ctx.author, deleted_count)
 
     # !say (Prefix) - Only prefix, no slash
     @commands.command(name="say")
