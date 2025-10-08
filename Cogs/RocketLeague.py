@@ -286,11 +286,20 @@ class RocketLeague(commands.Cog):
                     for playlist, new_tier in new_ranks.items():
                         old_tier = old_ranks.get(playlist, 'Unranked')
                         if new_tier != old_tier and tier_order.index(new_tier) > tier_order.index(old_tier):
-                            await channel.send(f"Congratulations! {user.mention} Your {playlist} rank has improved to {new_tier}!")
+                            # Hole Emoji
+                            emoji = RANK_EMOJIS.get(new_tier, '<:unranked:1425389712276721725>')
+                            # Erstelle Embed mit Emoji
+                            embed = discord.Embed(
+                                title=f"🎉 Rank Promotion! 🎉",
+                                description=f"Congratulations {user.mention}! Your {playlist} rank has improved to {emoji} {new_tier}!",
+                                color=PINK
+                            )
+                            set_pink_footer(embed, bot=self.bot.user)
+                            await channel.send(embed=embed)
                             Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
-                # Update ranks
-                data['ranks'] = new_ranks
-                save_rl_accounts(accounts)
+            # Update ranks
+            data['ranks'] = new_ranks
+            save_rl_accounts(accounts)
 
     @commands.command(name="setrlaccount")
     async def setrlaccount(self, ctx, platform: str, *, username: str):
