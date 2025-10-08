@@ -57,6 +57,7 @@ class RocketLeague(commands.Cog):
         self.bot = bot
         self.session = aiohttp.ClientSession()
         self.api_base = os.getenv("ROCKET_API_BASE")
+        self.api_key = os.getenv("ROCKET_API_KEY")
         self.executor = ThreadPoolExecutor(max_workers=5)
         # Do not start task here
 
@@ -77,6 +78,9 @@ class RocketLeague(commands.Cog):
             'User-Agent': 'Chrome/79',
             'Accept': 'application/json'
         }
+
+        if self.api_key:
+            headers['Authorization'] = f'Bearer {self.api_key}'
 
         Logger.info(f"🔍 Fetching RL stats for {username} on {platform}: {url}")
         scraper = cloudscraper.create_scraper()
