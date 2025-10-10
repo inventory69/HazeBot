@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup  # Add this
 from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
+from datetime import datetime, timedelta
 
 RANK_EMOJIS = {
     'Supersonic Legend': '<:ssl:1425389967030489139>',
@@ -267,6 +268,7 @@ class RocketLeague(commands.Cog):
         Check for rank promotions every hour.
         """
         accounts = load_rl_accounts()
+        now = datetime.now()
         guild = self.bot.get_guild(int(os.getenv("DISCORD_GUILD_ID")))
         if not guild:
             return
@@ -275,6 +277,11 @@ class RocketLeague(commands.Cog):
             return
         tier_order = ['Unranked', 'Bronze I', 'Bronze II', 'Bronze III', 'Silver I', 'Silver II', 'Silver III', 'Gold I', 'Gold II', 'Gold III', 'Platinum I', 'Platinum II', 'Platinum III', 'Diamond I', 'Diamond II', 'Diamond III', 'Champion I', 'Champion II', 'Champion III', 'Grand Champion I', 'Grand Champion II', 'Grand Champion III', 'Supersonic Legend']
         for user_id, data in accounts.items():
+            last_fetched_str = data.get('last_fetched')
+            if last_fetched_str:
+                last_fetched = datetime.fromisoformat(last_fetched_str)
+                if now - last_fetched < timedelta(hours=1):
+                    continue  # Skip if less than 1 hour
             platform = data['platform']
             username = data['username']
             old_ranks = data.get('ranks', {})
@@ -297,9 +304,10 @@ class RocketLeague(commands.Cog):
                             set_pink_footer(embed, bot=self.bot.user)
                             await channel.send(embed=embed)
                             Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
-            # Update ranks
-            data['ranks'] = new_ranks
-            save_rl_accounts(accounts)
+                # Update ranks and last_fetched
+                data['ranks'] = new_ranks
+                data['last_fetched'] = now.isoformat()
+                save_rl_accounts(accounts)
 
     @commands.command(name="setrlaccount")
     async def setrlaccount(self, ctx, platform: str, *, username: str):
