@@ -9,7 +9,7 @@ from email.message import EmailMessage
 import smtplib
 import asyncio
 import re
-from Config import PINK, SLASH_COMMANDS
+from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
@@ -138,6 +138,23 @@ def create_transcript_embed(transcript, bot_user):
     set_pink_footer(embed, bot=bot_user)
     return embed
 
+# === Modal for initial message ===
+class InitialMessageModal(discord.ui.Modal, title="Provide additional details (optional)"):
+    initial_message = discord.ui.TextInput(
+        label="Describe your issue or question briefly",
+        placeholder="E.g., 'My game crashes when...' or leave empty",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=500
+    )
+
+    def __init__(self, ticket_type):
+        super().__init__()
+        self.ticket_type = ticket_type
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await create_ticket(interaction, self.ticket_type, self.initial_message.value or None)
+
 # === Dropdown for ticket type selection ===
 class TicketTypeSelect(discord.ui.Select):
     def __init__(self):
@@ -150,7 +167,8 @@ class TicketTypeSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         ticket_type = self.values[0]
-        await create_ticket(interaction, ticket_type)
+        # Open modal for optional message
+        await interaction.response.send_modal(InitialMessageModal(ticket_type))
 
 # === View with dropdown ===
 class TicketView(discord.ui.View):
@@ -159,17 +177,16 @@ class TicketView(discord.ui.View):
         self.add_item(TicketTypeSelect())
 
 # === Ticket creation ===
-async def create_ticket(interaction: discord.Interaction, ticket_type: str):
+async def create_ticket(interaction: discord.Interaction, ticket_type: str, initial_message: str = None):
     # Check cooldown: 1 hour between ticket creations per user
     tickets = load_tickets()
     now = datetime.now()
     user_tickets = [t for t in tickets if t["user_id"] == interaction.user.id]
-    # Temporarily disabled for testing:
-    # if user_tickets:
-    #     last_ticket = max(user_tickets, key=lambda t: datetime.fromisoformat(t["created_at"]))
-    #     if now - datetime.fromisoformat(last_ticket["created_at"]) < timedelta(hours=1):
-    #         await interaction.response.send_message("You can only create a new ticket every 1 hour.", ephemeral=True)
-    #         return
+    if user_tickets:
+        last_ticket = max(user_tickets, key=lambda t: datetime.fromisoformat(t["created_at"]))
+        if now - datetime.fromisoformat(last_ticket["created_at"]) < timedelta(hours=1):
+            await interaction.response.send_message("You can only create a new ticket every 1 hour.", ephemeral=True)
+            return
 
     guild = interaction.guild
     category = guild.get_channel(TICKETS_CATEGORY_ID)
@@ -201,13 +218,15 @@ async def create_ticket(interaction: discord.Interaction, ticket_type: str):
         "embed_message_id": None,
         "reopen_count": 0
     }
+    # Add initial_message to ticket_data
+    ticket_data["initial_message"] = initial_message
     save_ticket(ticket_data)
     embed = create_ticket_embed(ticket_data, interaction.client.user)
     view = TicketControlView()  # Buttons are active
     msg = await channel.send(f"{interaction.user.mention}, your ticket has been opened!", embed=embed, view=view)
     ticket_data["embed_message_id"] = msg.id
     update_ticket(channel.id, {"embed_message_id": msg.id})
-    await interaction.response.send_message("Ticket created!", ephemeral=True)
+    await interaction.response.send_message(f"Ticket created! {channel.mention}", ephemeral=True)
     # Notify Admins/Moderators in the ticket channel
     admin_role = discord.utils.get(guild.roles, id=ADMIN_ROLE_ID)
     moderator_role = discord.utils.get(guild.roles, id=MODERATOR_ROLE_ID) if MODERATOR_ROLE_ID else None
@@ -226,6 +245,9 @@ async def create_ticket(interaction: discord.Interaction, ticket_type: str):
         Logger.warning("Admin or Moderator role not found.")
     # Info for the creator
     await channel.send("Please describe your problem, application, or support request in detail here. An admin or moderator will handle it soon.")
+    # If initial_message provided, send it in the channel
+    if initial_message:
+        await channel.send(f"**Initial details from {interaction.user.name}:**\n{initial_message}")
     Logger.info(f"Ticket #{ticket_num} created by {interaction.user}.")
 
 # === Modal for assignment ===
@@ -246,6 +268,43 @@ class AssignModal(discord.ui.Modal, title="Assign ticket"):
             Logger.info(f"Ticket in {interaction.channel} assigned to {user_id}.")
         except ValueError:
             await interaction.response.send_message("Invalid User ID.", ephemeral=True)
+
+# === Select for assignment ===
+class AssignSelect(discord.ui.Select):
+    def __init__(self, available_users):
+        options = [
+            discord.SelectOption(label=user.name, value=str(user.id), description=f"ID: {user.id}")
+            for user in available_users
+        ]
+        if not options:
+            options = [discord.SelectOption(label="No moderators available", value="none")]
+        super().__init__(placeholder="Choose a moderator to assign...", options=options[:25])  # Max 25
+
+    async def callback(self, interaction: discord.Interaction):
+        if self.values[0] == "none":
+            await interaction.response.send_message("No moderators available.", ephemeral=True)
+            return
+        user_id = int(self.values[0])
+        tickets = load_tickets()
+        ticket = next((t for t in tickets if t["channel_id"] == interaction.channel.id), None)
+        if not ticket:
+            await interaction.response.send_message("Ticket not found.", ephemeral=True)
+            return
+        update_ticket(interaction.channel.id, {"assigned_to": user_id})
+        await update_embed_and_disable_buttons(interaction)
+        await interaction.response.send_message(f"Ticket assigned to <@{user_id}>.", ephemeral=False)
+        # Delete the select message
+        try:
+            await interaction.message.delete()
+        except:
+            pass
+        Logger.info(f"Ticket in {interaction.channel} assigned to {user_id}.")
+
+# === View for assignment ===
+class AssignView(discord.ui.View):
+    def __init__(self, available_users):
+        super().__init__(timeout=300)  # 5 minutes timeout
+        self.add_item(AssignSelect(available_users))
 
 # === Helper function to update embed and disable buttons ===
 async def update_embed_and_disable_buttons(interaction):
@@ -363,7 +422,18 @@ class TicketControlView(discord.ui.View):
         if not ticket or not is_allowed_for_ticket_actions(interaction.user, ticket, "Assign"):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
-        await interaction.response.send_modal(AssignModal())
+        # Get available moderators/admins
+        guild = interaction.guild
+        available_users = [
+            member for member in guild.members
+            if any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
+        ]
+        if not available_users:
+            await interaction.response.send_message("No moderators available to assign.", ephemeral=True)
+            return
+        # Send view with select
+        view = AssignView(available_users)
+        await interaction.response.send_message("Select a moderator to assign:", view=view, ephemeral=True)
 
     @discord.ui.button(label="Status", style=discord.ButtonStyle.green, emoji="📊")
     async def status(self, interaction: discord.Interaction, button: discord.ui.Button):
