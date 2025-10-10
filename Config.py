@@ -7,4 +7,4 @@ Intents.members = True
 Intents.message_content = True
 PINK = discord.Color(0xAD1457)  # Hot Pink für Embeds
 
-SLASH_COMMANDS = ["help", "status", "rlstats", "setrlaccount", "ticket"]
+SLASH_COMMANDS = ["help", "status", "rlstats", "setrlaccount", "ticket", "preferences"]  # Liste der Befehle mit Slash-Version
