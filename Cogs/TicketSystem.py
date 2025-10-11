@@ -529,8 +529,13 @@ class TicketSystem(commands.Cog):
     async def on_ready(self):
         Logger.info("TicketSystem Cog ready. Restoring views for open tickets...")
         tickets = load_tickets()
+        now = datetime.now()
         for ticket in tickets:
             if ticket["status"] == "Open":
+                # Only restore if created within the last 7 days to avoid rate limits
+                created_at = datetime.fromisoformat(ticket.get("created_at"))
+                if now - created_at > timedelta(days=7):
+                    continue
                 try:
                     channel = self.bot.get_channel(ticket["channel_id"])
                     if channel and ticket.get("embed_message_id"):
@@ -548,7 +553,7 @@ class TicketSystem(commands.Cog):
                                     item.disabled = True
                         await msg.edit(embed=embed, view=view)
                         Logger.info(f"View for ticket #{ticket['ticket_num']} restored.")
-                    await asyncio.sleep(1)  # Avoid rate limits
+                    await asyncio.sleep(2)  # Increased sleep to avoid rate limits
                 except Exception as e:
                     Logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
         # Start cleanup task
