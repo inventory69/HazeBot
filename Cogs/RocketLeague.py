@@ -131,6 +131,7 @@ class RocketLeague(commands.Cog):
             # Extract ranks
             ranks = {}
             tier_names = {}
+            icon_urls = {}  # Add this
             highest_tier_val = 0
             highest_tier_name = 'Unranked'
             highest_icon_url = None
@@ -144,48 +145,48 @@ class RocketLeague(commands.Cog):
                         emoji = RANK_EMOJIS.get(tier_name, '<:unranked:1425389712276721725>')
                         ranks['1v1'] = f"{emoji} {div_name}"
                         tier_names['1v1'] = tier_name
+                        icon_urls['1v1'] = segment['stats']['tier']['metadata']['iconUrl']  # Add this
                         tier_val = segment['stats']['tier']['value']
-                        icon_url = segment['stats']['tier']['metadata']['iconUrl']
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
                             highest_tier_name = tier_name
-                            highest_icon_url = icon_url
+                            highest_icon_url = segment['stats']['tier']['metadata']['iconUrl']  # Fix: Use the correct variable
                     elif pid == 11 or name == 'Ranked Doubles 2v2':  # 2v2
                         tier_name = segment['stats']['tier']['metadata']['name']
                         div_name = segment['stats']['division']['metadata']['name']
                         emoji = RANK_EMOJIS.get(tier_name, '<:unranked:1425389712276721725>')
                         ranks['2v2'] = f"{emoji} {div_name}"
                         tier_names['2v2'] = tier_name
+                        icon_urls['2v2'] = segment['stats']['tier']['metadata']['iconUrl']  # Add this
                         tier_val = segment['stats']['tier']['value']
-                        icon_url = segment['stats']['tier']['metadata']['iconUrl']
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
                             highest_tier_name = tier_name
-                            highest_icon_url = icon_url
+                            highest_icon_url = segment['stats']['tier']['metadata']['iconUrl']  # Fix: Use the correct variable
                     elif pid == 13 or name == 'Ranked Standard 3v3':  # 3v3
                         tier_name = segment['stats']['tier']['metadata']['name']
                         div_name = segment['stats']['division']['metadata']['name']
                         emoji = RANK_EMOJIS.get(tier_name, '<:unranked:1425389712276721725>')
                         ranks['3v3'] = f"{emoji} {div_name}"
                         tier_names['3v3'] = tier_name
+                        icon_urls['3v3'] = segment['stats']['tier']['metadata']['iconUrl']  # Add this
                         tier_val = segment['stats']['tier']['value']
-                        icon_url = segment['stats']['tier']['metadata']['iconUrl']
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
                             highest_tier_name = tier_name
-                            highest_icon_url = icon_url
+                            highest_icon_url = segment['stats']['tier']['metadata']['iconUrl']  # Fix: Use the correct variable
                     elif name == 'Ranked 4v4 Quads':  # 4v4
                         tier_name = segment['stats']['tier']['metadata']['name']
                         div_name = segment['stats']['division']['metadata']['name']
                         emoji = RANK_EMOJIS.get(tier_name, '<:unranked:1425389712276721725>')
                         ranks['4v4'] = f"{emoji} {div_name}"
                         tier_names['4v4'] = tier_name
+                        icon_urls['4v4'] = segment['stats']['tier']['metadata']['iconUrl']  # Add this
                         tier_val = segment['stats']['tier']['value']
-                        icon_url = segment['stats']['tier']['metadata']['iconUrl']
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
                             highest_tier_name = tier_name
-                            highest_icon_url = icon_url
+                            highest_icon_url = segment['stats']['tier']['metadata']['iconUrl']  # Fix: Use the correct variable
             
             # Set unavailable ranks to Unranked
             for key in ['1v1', '2v2', '3v3', '4v4']:
@@ -205,6 +206,7 @@ class RocketLeague(commands.Cog):
                 'rank_4v4': ranks['4v4'],
                 'highest_icon_url': highest_icon_url,
                 'tier_names': tier_names,
+                'icon_urls': icon_urls,  # Add this
             }
         except requests.exceptions.RequestException as e:
             Logger.error(f"💥 Connection error: {e}")
@@ -288,6 +290,7 @@ class RocketLeague(commands.Cog):
             stats = await self.get_player_stats(platform, username)
             if stats:
                 new_ranks = stats['tier_names']
+                new_icon_urls = stats.get('icon_urls', {})  # Add this
                 user = self.bot.get_user(int(user_id))
                 if user:
                     for playlist, new_tier in new_ranks.items():
@@ -295,17 +298,21 @@ class RocketLeague(commands.Cog):
                         if new_tier != old_tier and tier_order.index(new_tier) > tier_order.index(old_tier):
                             # Hole Emoji
                             emoji = RANK_EMOJIS.get(new_tier, '<:unranked:1425389712276721725>')
+                            icon_url = new_icon_urls.get(playlist)  # Get icon for this playlist
                             # Erstelle Embed mit Emoji
                             embed = discord.Embed(
                                 title=f"🎉 Rank Promotion! 🎉",
                                 description=f"Congratulations {user.mention}! Your {playlist} rank has improved to {emoji} {new_tier}!",
                                 color=PINK
                             )
+                            if icon_url:
+                                embed.set_thumbnail(url=icon_url)  # Set thumbnail for large emoji-like display
                             set_pink_footer(embed, bot=self.bot.user)
                             await channel.send(embed=embed)
                             Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
                 # Update ranks and last_fetched
                 data['ranks'] = new_ranks
+                data['icon_urls'] = new_icon_urls  # Save icon_urls
                 data['last_fetched'] = now.isoformat()
                 save_rl_accounts(accounts)
 

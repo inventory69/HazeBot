@@ -376,10 +376,11 @@ async def close_ticket_async(bot, channel, ticket, followup, closing_msg):
             Logger.warning(f"Could not send notification to {creator} (DMs disabled).")
     # Update ticket status
     ticket["status"] = "Closed"
+    ticket["closed_at"] = datetime.now().isoformat()  # Add closed timestamp
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
     # Send success message in channel
-    await channel.send("Ticket successfully closed and archived.")
+    await channel.send("Ticket successfully closed and archived. It will be deleted after 7 days.")
     # Delete the closing message
     try:
         await closing_msg.delete()
@@ -523,30 +524,6 @@ class TicketSystem(commands.Cog):
         embed = self.get_ticket_help_embed(interaction)
         await interaction.response.send_message(embed=embed, view=TicketView(), ephemeral=True)
 
-    # Background task for automatic deletion of old tickets
-    async def cleanup_old_tickets(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            Logger.info("Checking old tickets for deletion...")
-            tickets = load_tickets()
-            now = datetime.now()
-            to_delete = []
-            for ticket in tickets:
-                if ticket["status"] == "Closed":
-                    closed_at = datetime.fromisoformat(ticket.get("created_at", ticket["created_at"]))
-                    if now - closed_at > timedelta(days=7):
-                        to_delete.append(ticket)
-            for ticket in to_delete:
-                try:
-                    channel = self.bot.get_channel(ticket["channel_id"])
-                    if channel:
-                        await channel.delete()
-                    delete_ticket(ticket["channel_id"])
-                    Logger.info(f"Old ticket #{ticket['ticket_num']} deleted.")
-                except Exception as e:
-                    Logger.error(f"Error deleting ticket #{ticket['ticket_num']}: {e}")
-            await asyncio.sleep(86400)  # Wait 24 hours
-
     # On ready: Restore views for open tickets and start cleanup
     @commands.Cog.listener()
     async def on_ready(self):
@@ -571,10 +548,44 @@ class TicketSystem(commands.Cog):
                                     item.disabled = True
                         await msg.edit(embed=embed, view=view)
                         Logger.info(f"View for ticket #{ticket['ticket_num']} restored.")
+                    await asyncio.sleep(1)  # Avoid rate limits
                 except Exception as e:
                     Logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
         # Start cleanup task
         self.bot.loop.create_task(self.cleanup_old_tickets())
+
+    # Background task for automatic deletion of old tickets
+    async def cleanup_old_tickets(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            Logger.info("Checking old tickets for deletion...")
+            tickets = load_tickets()
+            now = datetime.now()
+            to_delete = []
+            for ticket in tickets:
+                if ticket["status"] == "Closed":
+                    closed_at_str = ticket.get("closed_at", ticket.get("created_at"))
+                    closed_at = datetime.fromisoformat(closed_at_str)
+                    if now - closed_at > timedelta(days=7):
+                        to_delete.append(ticket)
+            for ticket in to_delete:
+                try:
+                    # Try to get the channel, even if archived
+                    channel = self.bot.get_channel(ticket["channel_id"])
+                    if not channel:
+                        # If not in cache, try to fetch from guild
+                        guild = self.bot.get_guild(int(os.getenv("DISCORD_GUILD_ID")))
+                        if guild:
+                            channel = await guild.fetch_channel(ticket["channel_id"])
+                    if channel:
+                        await channel.delete()
+                        Logger.info(f"Old ticket #{ticket['ticket_num']} deleted.")
+                    else:
+                        Logger.warning(f"Channel for ticket #{ticket['ticket_num']} not found.")
+                    delete_ticket(ticket["channel_id"])
+                except Exception as e:
+                    Logger.error(f"Error deleting ticket #{ticket['ticket_num']}: {e}")
+            await asyncio.sleep(86400)  # Wait 24 hours
 
 # === Setup function ===
 async def setup(bot):

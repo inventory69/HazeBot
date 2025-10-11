@@ -147,3 +147,6 @@ persistent_views.json
 
 # Rocket League Cog additions
 rl_accounts.json
+
+# Ticket System Cog additions
+tickets.json
