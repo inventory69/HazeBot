@@ -76,9 +76,7 @@ class Utility(commands.Cog):
     async def help_command(self, ctx):
         """
         📖 Shows all available commands with their descriptions.
-        Admins receive the help message as a DM, normal users see it in the channel.
-        Only admin-only commands are shown to users with the Admin role.
-        Admin commands are listed separately at the bottom for admins.
+        Admins receive the help message without anyone being able to see it.
         """
         is_admin = any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles)
         embed = self.create_help_embed(ctx, is_admin)
