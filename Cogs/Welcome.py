@@ -1,4 +1,5 @@
 import random
+import asyncio
 from discord.ext import commands
 import discord
 from Config import PINK
@@ -409,6 +410,7 @@ class Welcome(commands.Cog):
                     view.message = message
                     await message.edit(view=view)
                     restored_count += 1
+                    await asyncio.sleep(3)  # Avoid rate limits
                 except Exception as e:
                     Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
         Logger.info(f"Restored {restored_count} persistent views.")
