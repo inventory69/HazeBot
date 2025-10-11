@@ -553,7 +553,7 @@ class TicketSystem(commands.Cog):
                                     item.disabled = True
                         await msg.edit(embed=embed, view=view)
                         Logger.info(f"View for ticket #{ticket['ticket_num']} restored.")
-                    await asyncio.sleep(3)  # Further increased sleep to avoid rate limits on server
+                    await asyncio.sleep(6)  # Further increased sleep to avoid rate limits on server
                 except Exception as e:
                     Logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
         # Start cleanup task
