@@ -1,0 +1,99 @@
+import discord
+from discord.ext import commands
+import openai
+import os
+from Utils.Logger import Logger
+from Config import PINK
+from Utils.EmbedUtils import set_pink_footer
+
+class ChangelogCog(commands.Cog):
+    """
+    📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4 Turbo.
+    """
+
+    def __init__(self, bot):
+        self.bot = bot
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    async def generate_changelog_text(self, text: str, project: str, author: str) -> str:
+        """
+        Generate changelog text using OpenAI GPT-4 Turbo.
+        """
+        if not openai.api_key:
+            raise ValueError("OpenAI API key not configured.")
+
+        prompt = f"""
+Format the following PR text as a compact Discord-Markdown changelog.
+- Do NOT repeat the title in the text.
+- Directly below the title, add these lines (with Discord markdown):
+  **Project:** `{project}`
+  **Author:** `{author}`
+- After a blank line, list the changes as bullet points. Each change must start with a small bullet point (•), then an emoji, then a short description.
+- Format file names, command names, variables, and settings in backticks (`).
+- Do not add a summary or extra text at the end.
+- Do not use paragraphs. Only use bullet points as shown below.
+
+Example:
+**Project:** `HazeWorldBot`
+**Author:** `inventory69`
+
+• 🎮 Added dynamic Presence cog with hourly inventory-themed status updates
+• 🌍 Introduced `Env.py` for environment variable loading and validation with logging
+• 🎨 Replaced legacy logging with Rich-based Logger (emojis, regex highlights, pastel themes, tracebacks)
+• 🛠️ Enhanced `Main.py` with fuzzy command matching, cooldowns, error handling, and edit/delete logging
+• 📁 Organized JSON files into `Data/` folder (`rl_accounts.json`, `tickets.json`, `persistent_views.json`)
+• ⚙️ Updated `Config.py` with new settings: `PresenceUpdateInterval`, `FuzzyMatchingThreshold`, `MessageCooldown`, `LogLevel`
+• 📦 Added `rich` to `requirements.txt`
+• 🔧 Improved JSON persistence with automatic directory creation
+• 📊 Better command syncing, cog loading logs, and user feedback
+
+PR-Text:
+{text}
+"""
+
+        response = openai.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1000,
+            temperature=0.5
+        )
+        return response.choices[0].message.content.strip()
+
+    def create_changelog_embed(self, changelog: str, title: str, date: str, project: str, author: str) -> discord.Embed:
+        embed = discord.Embed(
+            title=f"🆕 {title} – {date}",
+            description=changelog + "\n\u200b",  # Fügt einen kleinen Abstand vor dem Footer hinzu
+            color=PINK
+        )
+        set_pink_footer(embed, bot=self.bot.user)
+        return embed
+
+    @commands.command(name="generatechangelog")
+    @commands.has_permissions(administrator=True)
+    async def generatechangelog_prefix(self, ctx, *, args: str):
+        """
+        📝 Generate a changelog from PR text. (Admin only)
+        Usage: !generatechangelog title:"Title" date:"2025-10-13" project:"HazeWorldBot" author:"inventory69" text:PR text here
+        """
+        params = {}
+        for part in args.split(' '):
+            if ':' in part:
+                key, value = part.split(':', 1)
+                params[key] = value
+
+        title = params.get('title', 'Bot Modernization & UX Upgrade')
+        date = params.get('date', '2025-10-13')
+        project = params.get('project', 'HazeWorldBot')
+        author = params.get('author', 'inventory69')
+        text = params.get('text', args)
+
+        try:
+            changelog = await self.generate_changelog_text(text, project, author)
+            embed = self.create_changelog_embed(changelog, title, date, project, author)
+            await ctx.send(embed=embed)
+        except Exception as e:
+            Logger.error(f"Error generating changelog: {e}")
+            await ctx.send("❌ Failed to generate changelog. Check logs.")
+
+async def setup(bot):
+    await bot.add_cog(ChangelogCog(bot))
