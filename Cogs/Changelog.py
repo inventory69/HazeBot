@@ -90,10 +90,51 @@ PR-Text:
         try:
             changelog = await self.generate_changelog_text(text, project, author)
             embed = self.create_changelog_embed(changelog, title, date, project, author)
-            await ctx.send(embed=embed)
+            view = ChangelogChannelView(embed)
+            await ctx.send(embed=embed, view=view)
         except Exception as e:
             Logger.error(f"Error generating changelog: {e}")
             await ctx.send("❌ Failed to generate changelog. Check logs.")
+
+# --- Button & Channel Select View ---
+class ChangelogChannelView(discord.ui.View):
+    def __init__(self, embed):
+        super().__init__(timeout=120)
+        self.embed = embed
+
+    @discord.ui.button(label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢")
+    async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Open channel select menu
+        await interaction.response.send_message(
+            "Select a channel to post the changelog:",
+            view=ChannelSelectView(self.embed),
+            ephemeral=True
+        )
+
+class ChannelSelectView(discord.ui.View):
+    def __init__(self, embed):
+        super().__init__(timeout=60)
+        self.embed = embed
+        self.add_item(ChannelDropdown(self.embed))
+
+class ChannelDropdown(discord.ui.Select):
+    def __init__(self, embed):
+        # Only show text channels
+        options = [
+            discord.SelectOption(label=channel.name, value=str(channel.id))
+            for channel in embed._state._get_guild().text_channels
+        ]
+        super().__init__(placeholder="Choose a channel...", min_values=1, max_values=1, options=options)
+        self.embed = embed
+
+    async def callback(self, interaction: discord.Interaction):
+        channel_id = int(self.values[0])
+        channel = interaction.guild.get_channel(channel_id)
+        if channel:
+            await channel.send(embed=self.embed)
+            await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(ChangelogCog(bot))
