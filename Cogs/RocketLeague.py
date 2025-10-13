@@ -298,17 +298,17 @@ class RocketLeague(commands.Cog):
                     for playlist, new_tier in new_ranks.items():
                         old_tier = old_ranks.get(playlist, 'Unranked')
                         if new_tier != old_tier and tier_order.index(new_tier) > tier_order.index(old_tier):
-                            # Hole Emoji
                             emoji = RANK_EMOJIS.get(new_tier, '<:unranked:1425389712276721725>')
-                            icon_url = new_icon_urls.get(playlist)  # Get icon for this playlist
-                            # Erstelle Embed mit Emoji
+                            icon_url = new_icon_urls.get(playlist)
+                            # Sende die Notification als separate Nachricht vor dem Embed
+                            await channel.send(f"{user.mention} 🚀 Rank Promotion Notification!")
                             embed = discord.Embed(
                                 title=f"🎉 Rank Promotion! 🎉",
                                 description=f"Congratulations {user.mention}! Your {playlist} rank has improved to {emoji} {new_tier}!",
                                 color=PINK
                             )
                             if icon_url:
-                                embed.set_thumbnail(url=icon_url)  # Set thumbnail for large emoji-like display
+                                embed.set_thumbnail(url=icon_url)
                             set_pink_footer(embed, bot=self.bot.user)
                             await channel.send(embed=embed)
                             Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
