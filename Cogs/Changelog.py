@@ -6,6 +6,9 @@ from Utils.Logger import Logger
 from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
 
+ROLE_ID_CHANGELOG = 1426314743278473307  # Changelog Notifications Role ID
+CHANNEL_ID_CHANGELOG = 1424859282284871752  # Ziel-Channel-ID
+
 class ChangelogCog(commands.Cog):
     """
     📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4 Turbo.
@@ -104,10 +107,10 @@ class ChangelogChannelView(discord.ui.View):
 
     @discord.ui.button(label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢")
     async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Direkt in den gewünschten Channel posten
-        channel_id = 1424859282284871752  # Ziel-Channel-ID
-        channel = interaction.guild.get_channel(channel_id)
+        channel = interaction.guild.get_channel(CHANNEL_ID_CHANGELOG)
         if channel:
+            # Sende die Mention-Nachricht vor dem Embed
+            await channel.send(f"Role Mention: <@&{ROLE_ID_CHANGELOG}> Changelog Notifications ...")
             await channel.send(embed=self.embed)
             await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
         else:
