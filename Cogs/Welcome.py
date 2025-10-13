@@ -1,5 +1,6 @@
 import random
 import asyncio
+import os
 from discord.ext import commands
 import discord
 from Config import PINK
@@ -175,19 +176,17 @@ class AcceptRulesButton(discord.ui.Button):
 
         # Nach view.message = embed_msg
         import json, os  # Importiere hier oder oben
+        os.makedirs(os.path.dirname(self.persistent_views_file), exist_ok=True)
         persistent_data = {
             'member_id': member.id,
             'channel_id': welcome_channel.id,
             'message_id': embed_msg.id,
             'start_time': view.start_time.isoformat()
         }
-        if not os.path.exists('persistent_views.json'):
-            with open('persistent_views.json', 'w') as f:
-                json.dump([], f)
-        with open('persistent_views.json', 'r') as f:
+        with open(self.persistent_views_file, 'r') as f:
             data = json.load(f)
         data.append(persistent_data)
-        with open('persistent_views.json', 'w') as f:
+        with open(self.persistent_views_file, 'w') as f:
             json.dump(data, f)
 
 class AcceptRulesView(discord.ui.View):
@@ -273,10 +272,11 @@ class WelcomeCardView(discord.ui.View):
                 Logger.error(f"Failed to disable welcome button: {e}")
         # Remove from persistent data
         import json  # Importiere hier oder oben
-        with open(self.cog.persistent_views_file, 'r') as f:
+        os.makedirs(os.path.dirname(self.persistent_views_file), exist_ok=True)
+        with open(self.persistent_views_file, 'r') as f:
             data = json.load(f)
         data = [d for d in data if not (d['message_id'] == self.message.id)]
-        with open(self.cog.persistent_views_file, 'w') as f:
+        with open(self.persistent_views_file, 'w') as f:
             json.dump(data, f)
 
 class WelcomeButton(discord.ui.Button):
@@ -327,11 +327,12 @@ class Welcome(commands.Cog):
         self.sent_messages = {}  # Store all sent welcome-related messages by member ID for cleanup
         # Neue Zeilen:
         import json, os  # Importiere hier oder oben
-        self.persistent_views_file = 'persistent_views.json'
+        self.persistent_views_file = 'Data/persistent_views.json'
         if os.path.exists(self.persistent_views_file):
             with open(self.persistent_views_file, 'r') as f:
                 self.persistent_views_data = json.load(f)
         else:
+            os.makedirs(os.path.dirname(self.persistent_views_file), exist_ok=True)
             self.persistent_views_data = []
 
     @commands.Cog.listener()

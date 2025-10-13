@@ -4,3 +4,4 @@ aiohttp
 requests
 bs4
 uuid
+rich

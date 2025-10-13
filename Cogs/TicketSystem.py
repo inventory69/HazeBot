@@ -22,10 +22,11 @@ NORMAL_ROLE_ID = 1424161475718807562  # For future use if needed
 TICKETS_CATEGORY_ID = 1426113555974979625
 
 # === Path to JSON file ===
-TICKET_FILE = "tickets.json"
+TICKET_FILE = "Data/tickets.json"
 
 # === Helper functions for JSON persistence ===
 def load_tickets():
+    os.makedirs(os.path.dirname(TICKET_FILE), exist_ok=True)
     if not os.path.exists(TICKET_FILE):
         with open(TICKET_FILE, "w") as f:
             json.dump([], f)
@@ -33,16 +34,18 @@ def load_tickets():
         with open(TICKET_FILE, "r") as f:
             return json.load(f)
     except json.JSONDecodeError:
-        Logger.error("Error loading tickets.json – resetting file.")
+        Logger.error("Error loading Data/tickets.json – resetting file.")
         return []
 
 def save_ticket(ticket):
+    os.makedirs(os.path.dirname(TICKET_FILE), exist_ok=True)
     tickets = load_tickets()
     tickets.append(ticket)
     with open(TICKET_FILE, "w") as f:
         json.dump(tickets, f, indent=2)
 
 def update_ticket(channel_id, updates):
+    os.makedirs(os.path.dirname(TICKET_FILE), exist_ok=True)
     tickets = load_tickets()
     for ticket in tickets:
         if ticket["channel_id"] == channel_id:
@@ -52,6 +55,7 @@ def update_ticket(channel_id, updates):
         json.dump(tickets, f, indent=2)
 
 def delete_ticket(channel_id):
+    os.makedirs(os.path.dirname(TICKET_FILE), exist_ok=True)
     tickets = load_tickets()
     tickets = [t for t in tickets if t["channel_id"] != channel_id]
     with open(TICKET_FILE, "w") as f:
