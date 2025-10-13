@@ -1,12 +1,13 @@
 from discord.ext import commands
 import discord
-from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS
+from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS, MOD_COMMANDS
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
 from discord import app_commands
 import os
 
 ADMIN_ROLE_ID = 1424466881862959294  # Admin role ID
+MODERATOR_ROLE_ID = 1427219729960931449  # Slot Keeper role ID
 
 class Utility(commands.Cog):
     """
@@ -18,7 +19,7 @@ class Utility(commands.Cog):
         self.bot = bot
 
     # Gemeinsame Helper-Funktionen für Logik
-    def create_help_embed(self, ctx_or_interaction, is_admin=False):
+    def create_help_embed(self, ctx_or_interaction, is_admin=False, is_mod=False):
         embed = discord.Embed(
             title=f"{BotName} Help",
             description="Here are all available commands:\n",
@@ -28,9 +29,11 @@ class Utility(commands.Cog):
         slash_commands = SLASH_COMMANDS  # Removed "say"
         normal_commands = []
         admin_commands = []
+        mod_commands = []
         for cog_name, cog in self.bot.cogs.items():
             for cmd in cog.get_commands():
                 is_admin_only = cmd.name in ADMIN_COMMANDS  # Use from Config
+                is_mod_only = cmd.name in MOD_COMMANDS
                 if not cmd.hidden:
                     entry = f"**!{cmd.name}**\n{cmd.help or 'No description'}"
                     if cmd.name in slash_commands:
@@ -38,10 +41,14 @@ class Utility(commands.Cog):
                     entry += f"\n{'─'*24}"
                     if is_admin_only and is_admin:
                         admin_commands.append(entry)
-                    elif not is_admin_only:
+                    elif is_mod_only and (is_admin or is_mod):
+                        mod_commands.append(entry)
+                    elif not is_admin_only and not is_mod_only:
                         normal_commands.append(entry)
         if normal_commands:
             embed.add_field(name="✨ User Commands", value="\n".join(normal_commands), inline=False)
+        if mod_commands:
+            embed.add_field(name="📦 Mod Commands", value="\n".join(mod_commands), inline=False)
         if admin_commands:
             embed.add_field(name="🛡️ Admin Commands", value="\n".join(admin_commands), inline=False)
         embed.set_footer(text="Powered by Haze World 💖", icon_url=getattr(self.bot.user.avatar, 'url', None))
@@ -76,11 +83,12 @@ class Utility(commands.Cog):
     async def help_command(self, ctx):
         """
         📖 Shows all available commands with their descriptions.
-        Admins receive the help message without anyone being able to see it.
+        Admins and mods receive the help message without anyone being able to see it.
         """
         is_admin = any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles)
-        embed = self.create_help_embed(ctx, is_admin)
-        if is_admin:
+        is_mod = any(role.id == MODERATOR_ROLE_ID for role in ctx.author.roles)
+        embed = self.create_help_embed(ctx, is_admin, is_mod)
+        if is_admin or is_mod:
             try:
                 await ctx.author.send(embed=embed)
                 await ctx.message.add_reaction("📬")
@@ -94,8 +102,9 @@ class Utility(commands.Cog):
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def help_slash(self, interaction: discord.Interaction):
         is_admin = any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
-        embed = self.create_help_embed(interaction, is_admin)
-        await interaction.response.send_message(embed=embed, ephemeral=True if is_admin else False)
+        is_mod = any(role.id == MODERATOR_ROLE_ID for role in interaction.user.roles)
+        embed = self.create_help_embed(interaction, is_admin, is_mod)
+        await interaction.response.send_message(embed=embed, ephemeral=True if is_admin or is_mod else False)
 
     # !status (Prefix)
     @commands.command(name="status")
@@ -119,9 +128,9 @@ class Utility(commands.Cog):
     async def clear(self, ctx, amount: str = "10"):
         """
         🧹 Deletes the last X messages in the channel (default: 10). Use 'all' to delete all messages.
-        Only allowed for users with the Admin role.
+        Only allowed for users with the Admin or Slot Keeper (Mod) role.
         """
-        if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
+        if not any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in ctx.author.roles):
             embed = discord.Embed(
                 description="🚫 You do not have permission to use this command.",
                 color=discord.Color.red()

@@ -15,7 +15,7 @@ from Utils.Logger import Logger
 
 # === Role IDs ===
 ADMIN_ROLE_ID = 1424466881862959294
-MODERATOR_ROLE_ID = 0  # Placeholder, to be set later
+MODERATOR_ROLE_ID = 1427219729960931449  # Slot Keeper (new mod role)
 NORMAL_ROLE_ID = 1424161475718807562  # For future use if needed
 
 # === Category ID ===
@@ -68,9 +68,12 @@ def is_allowed_for_ticket_actions(user: discord.User, ticket_data, action: str):
         if action == "Reopen":
             return user.id == ticket_data["user_id"]
         return False
-    # Claim and Assign only for Admins or Moderators
-    if action in ["Claim", "Assign"]:
+    # Claim only for Admins or Moderators
+    if action == "Claim":
         return any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
+    # Assign only for Admins
+    if action == "Assign":
+        return any(role.id == ADMIN_ROLE_ID for role in user.roles)
     # Close for creator, Admins, or Moderators
     elif action == "Close":
         return user.id == ticket_data["user_id"] or any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
@@ -203,6 +206,9 @@ async def create_ticket(interaction: discord.Interaction, ticket_type: str, init
         interaction.user: discord.PermissionOverwrite(view_channel=True),
         guild.me: discord.PermissionOverwrite(view_channel=True)
     }
+    moderator_role = discord.utils.get(guild.roles, id=MODERATOR_ROLE_ID)
+    if moderator_role:
+        overwrites[moderator_role] = discord.PermissionOverwrite(view_channel=True)
     ticket_num = len(tickets) + 1
     channel = await guild.create_text_channel(
         name=f"ticket-{ticket_num}-{ticket_type}-{interaction.user.name}",
