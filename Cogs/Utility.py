@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-from Config import BotName, PINK, SLASH_COMMANDS
+from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
 from discord import app_commands
@@ -30,7 +30,7 @@ class Utility(commands.Cog):
         admin_commands = []
         for cog_name, cog in self.bot.cogs.items():
             for cmd in cog.get_commands():
-                is_admin_only = cmd.name in ["clear", "say"]  # Add more admin-only commands here
+                is_admin_only = cmd.name in ADMIN_COMMANDS  # Use from Config
                 if not cmd.hidden:
                     entry = f"**!{cmd.name}**\n{cmd.help or 'No description'}"
                     if cmd.name in slash_commands:
