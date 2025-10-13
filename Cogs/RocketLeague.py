@@ -38,15 +38,17 @@ RANK_EMOJIS = {
     'Unranked': '<:unranked:1425389712276721725>',
 }
 
-RL_ACCOUNTS_FILE = 'rl_accounts.json'
+RL_ACCOUNTS_FILE = 'Data/rl_accounts.json'
 
 def load_rl_accounts():
+    os.makedirs(os.path.dirname(RL_ACCOUNTS_FILE), exist_ok=True)
     if os.path.exists(RL_ACCOUNTS_FILE):
         with open(RL_ACCOUNTS_FILE, 'r') as f:
             return json.load(f)
     return {}
 
 def save_rl_accounts(accounts):
+    os.makedirs(os.path.dirname(RL_ACCOUNTS_FILE), exist_ok=True)
     with open(RL_ACCOUNTS_FILE, 'w') as f:
         json.dump(accounts, f, indent=4)
 
