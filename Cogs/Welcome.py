@@ -176,17 +176,18 @@ class AcceptRulesButton(discord.ui.Button):
 
         # Nach view.message = embed_msg
         import json, os  # Importiere hier oder oben
-        os.makedirs(os.path.dirname(self.persistent_views_file), exist_ok=True)
+        persistent_views_file = self.cog.persistent_views_file
+        os.makedirs(os.path.dirname(persistent_views_file), exist_ok=True)
         persistent_data = {
             'member_id': member.id,
             'channel_id': welcome_channel.id,
             'message_id': embed_msg.id,
             'start_time': view.start_time.isoformat()
         }
-        with open(self.persistent_views_file, 'r') as f:
+        with open(persistent_views_file, 'r') as f:
             data = json.load(f)
         data.append(persistent_data)
-        with open(self.persistent_views_file, 'w') as f:
+        with open(persistent_views_file, 'w') as f:
             json.dump(data, f)
 
 class AcceptRulesView(discord.ui.View):
@@ -226,9 +227,9 @@ class AcceptRulesView(discord.ui.View):
             for msg in self.cog.active_rules_messages[self.member.id]:
                 try:
                     await msg.delete()
-                    Logger.info("Deleted rules messages after timeout")
+                    Logger.info(f"Deleted rules message for {self.member} (timeout/leave)")
                 except Exception as e:
-                    Logger.error(f"Failed to delete rules message: {e}")
+                    Logger.warning(f"Could not delete rules message for {self.member}: {e}")
             del self.cog.active_rules_messages[self.member.id]
         
         # Also delete the rules_msg if set
@@ -378,9 +379,9 @@ class Welcome(commands.Cog):
             for msg in self.active_rules_messages[member.id]:
                 try:
                     await msg.delete()
-                    Logger.info(f"Deleted rules message for {member} who left the server")
+                    Logger.info(f"Deleted rules message for {member} (timeout/leave)")
                 except Exception as e:
-                    Logger.error(f"Failed to delete rules message for {member}: {e}")
+                    Logger.warning(f"Could not delete rules message for {member}: {e}")
             del self.active_rules_messages[member.id]
         
         # Delete all sent welcome messages

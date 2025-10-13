@@ -343,6 +343,7 @@ class RocketLeague(commands.Cog):
         if platform.lower() not in ['steam', 'epic', 'psn', 'xbl', 'switch']:
             await interaction.response.send_message("❌ Invalid platform.", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)  # <--- Defer first!
         stats = await self.get_player_stats(platform.lower(), username)
         initial_ranks = {'1v1': 'Unranked', '2v2': 'Unranked', '3v3': 'Unranked', '4v4': 'Unranked'}
         if stats:
@@ -350,7 +351,7 @@ class RocketLeague(commands.Cog):
         accounts = load_rl_accounts()
         accounts[str(interaction.user.id)] = {'platform': platform.lower(), 'username': username, 'ranks': initial_ranks}
         save_rl_accounts(accounts)
-        await interaction.response.send_message(f"✅ Set your RL account to {username} on {platform}.", ephemeral=True)
+        await interaction.followup.send(f"✅ Set your RL account to {username} on {platform}.", ephemeral=True)
 
     @commands.command(name="rlstats")
     async def rlstats(self, ctx, platform: str = None, *, username: str = None):
