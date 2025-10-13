@@ -104,31 +104,8 @@ class ChangelogChannelView(discord.ui.View):
 
     @discord.ui.button(label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢")
     async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Open channel select menu
-        await interaction.response.send_message(
-            "Select a channel to post the changelog:",
-            view=ChannelSelectView(self.embed),
-            ephemeral=True
-        )
-
-class ChannelSelectView(discord.ui.View):
-    def __init__(self, embed):
-        super().__init__(timeout=60)
-        self.embed = embed
-        self.add_item(ChannelDropdown(self.embed))
-
-class ChannelDropdown(discord.ui.Select):
-    def __init__(self, embed):
-        # Only show text channels
-        options = [
-            discord.SelectOption(label=channel.name, value=str(channel.id))
-            for channel in embed._state._get_guild().text_channels
-        ]
-        super().__init__(placeholder="Choose a channel...", min_values=1, max_values=1, options=options)
-        self.embed = embed
-
-    async def callback(self, interaction: discord.Interaction):
-        channel_id = int(self.values[0])
+        # Direkt in den gewünschten Channel posten
+        channel_id = 1424859282284871752  # Ziel-Channel-ID
         channel = interaction.guild.get_channel(channel_id)
         if channel:
             await channel.send(embed=self.embed)
