@@ -110,7 +110,7 @@ class ChangelogChannelView(discord.ui.View):
         channel = interaction.guild.get_channel(CHANNEL_ID_CHANGELOG)
         if channel:
             # Sende die Mention-Nachricht vor dem Embed
-            await channel.send(f"Role Mention: <@&{ROLE_ID_CHANGELOG}> Changelog Notifications ...")
+            await channel.send(f"Role Mention: <@&{ROLE_ID_CHANGELOG}> ...")
             await channel.send(embed=self.embed)
             await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
         else:
