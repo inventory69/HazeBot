@@ -132,6 +132,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+Logs/
 
 # Database files (if any)
 *.db
@@ -143,10 +144,13 @@ tmp/
 temp/
 
 # Persistent views file
-persistent_views.json
+Data/persistent_views.json
 
 # Rocket League Cog additions
-rl_accounts.json
+Data/rl_accounts.json
 
 # Ticket System Cog additions
-tickets.json
+Data/tickets.json
+
+# Moderation Data
+Data/mod_data.json

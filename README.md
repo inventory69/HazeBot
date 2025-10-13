@@ -1,77 +1,127 @@
 # HazeWorldBot 🌿
 
-A personal Discord bot designed for The Chillventory server, known as Haze in Discord. Built with Python and discord.py, this bot enhances community interactions with welcoming features, utility commands, and a chill vibe. **Note: This is a personal project and not intended for public use or distribution.**
+**Note:** This bot is not intended for public use.
+A personal Discord bot designed for The Chillventory server ("Haze" on Discord). Built with Python and discord.py, HazeWorldBot enhances moderation, onboarding, changelogs, and community engagement with a modular, inventory-themed experience.  
 
-## ✨ Description
+---
 
-HazeWorldBot (Haze) is crafted to make The Chillventory Discord server more engaging and user-friendly. It handles new member onboarding with interactive rule acceptance, role assignments, and fun welcome messages. The bot also provides essential utility commands for moderation and information.
+## ✨ Features
 
-## 🚀 Features
+### 🛠️ Utility & Moderation
+- **Prefix & Slash Commands:** Both `!` and `/` commands for all major features.
+- **Help System:** `/help` and `!help` show all commands, with mod/admin commands only visible to authorized users.
+- **Status:** `/status` and `!status` display bot latency and server count.
+- **Message Management:** `!clear` for admins and Slot Keepers (mods) to purge messages.
+- **Say Command:** `!say` lets admins send bot messages (with embed option).
+- **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Warnings are tracked per user and stored in `Data/mod_data.json`.
+- **Centralized Command Lists:** All admin/mod commands are managed in `Config.py` for consistency.
 
-- **Welcome System** 🎉
-  - Interactive rule acceptance with role selection
-  - Polished welcome cards with inventory-themed messages
-  - Persistent welcome buttons for community engagement
-  - Automatic cleanup of messages when members leave
+### 🎫 Ticket System
+- **Create Tickets:** `/ticket` and `!ticket` for support, bugs, or applications.
+- **Interactive Controls:** Claim, assign, close, and reopen tickets with buttons.
+- **Role-Based Permissions:** Slot Keepers (mods) and Admins can claim/close; only Admins can assign.
+- **Transcript & Email:** Closed tickets generate transcripts and can send via email.
+- **Automatic Cleanup:** Old tickets are deleted after 7 days.
 
-- **Utility Commands** 🛠️
-  - `/help` and `!help`: Display available commands
-  - `/status` and `!status`: Show bot latency and guild count
-  - `!clear`: Admin-only message purging
-  - `!say`: Admin-only message sending (with embed option)
+### 🚀 Rocket League Integration
+- **Stats Fetching:** `/rlstats` and `!rlstats` show player stats for 1v1, 2v2, 3v3, 4v4.
+- **Account Linking:** `/setrlaccount` and `!setrlaccount` to save your RL account.
+- **Rank Promotion Notifications:** Automatic notifications and congratulation embeds for rank-ups.
 
-- **Logging & Monitoring** 📊
-  - Custom emoji-based logging for easy tracking
-  - Startup command overview for debugging
+### 📝 Changelog System
+- **Automated Changelog Generation:** `!generatechangelog` uses GPT-4 Turbo to format PR/commit text as Discord embeds.
+- **Post to Channel Button:** Instantly post changelogs to the designated channel with a notification.
+- **Role Mention:** Changelog notification role can be toggled by users in preferences.
 
-- **Modular Design** 🔧
-  - Cog-based architecture for easy extension
-  - Support for both prefix (`!`) and slash (`/`) commands
+### 📦 Role Info
+- **Role Descriptions:** `/roleinfo` and `!roleinfo` show readable info, permissions, and usage tips for Admin, Slot Keeper (mod), and Lootling (member) roles.
+- **Autocomplete:** Only main roles selectable in slash command.
+- **Command List:** Shows relevant commands for each role.
+
+### 🛠️ Preferences System
+- **Changelog Notification Opt-In:** `/preferences` and `!preferences` let users toggle the changelog notification role.
+
+### 🎮 Dynamic Presence
+- **Inventory-Themed Status:** Bot presence updates hourly with fun inventory messages and emojis.
+
+### 🎉 Welcome System
+- **Interactive Rule Acceptance:** New members select interests and accept rules via dropdown and button.
+- **Polished Welcome Cards:** Personalized welcome embeds with inventory vibes.
+- **Persistent Welcome Buttons:** Community can greet new members with themed replies.
+- **Automatic Cleanup:** Welcome messages are deleted when members leave.
+
+### 📊 Logging & Monitoring
+- **Rich Logging:** Emoji-based, color-highlighted logs for all major actions.
+- **Startup Overview:** Lists all loaded cogs and available commands.
+
+---
 
 ## 🛠️ Setup (Personal Use Only)
 
-This bot is configured for a specific server and is not set up for general deployment. If you're forking for personal use:
+This bot is tailored for The Chillventory and not intended for public deployment. If you fork for personal use:
 
-1. **Clone the Repository** 📥
-   ```
-   git clone https://github.com/inventory69/HazeWorldBot.git
-   cd HazeWorldBot
-   ```
+1. **Clone the Repository**
+    ```
+    git clone https://github.com/inventory69/HazeWorldBot.git
+    cd HazeWorldBot
+    ```
 
-2. **Install Dependencies** 📦
-   ```
-   pip install -r requirements.txt
-   ```
+2. **Install Dependencies**
+    ```
+    pip install -r requirements.txt
+    ```
 
-3. **Environment Variables** 🔐
-   - Create a `.env` file with your bot token and guild ID:
-     ```
-     DISCORD_BOT_TOKEN=your_bot_token_here
-     DISCORD_GUILD_ID=your_guild_id_here
-     ```
-   - Update role and channel IDs in the code as needed.
+3. **Environment Variables**
+    - Create a `.env` file with your bot token, guild ID, and required API keys:
+      ```
+      DISCORD_BOT_TOKEN=your_bot_token_here
+      DISCORD_GUILD_ID=your_guild_id_here
+      ROCKET_API_BASE=your_rocket_api_base
+      ROCKET_API_KEY=your_rocket_api_key
+      FLARESOLVERR_URL=your_flaresolverr_url
+      SMTP_SERVER=your_smtp_server
+      SMTP_PORT=your_smtp_port
+      SMTP_USER=your_smtp_user
+      SMTP_PASS=your_smtp_pass
+      SUPPORT_EMAIL=your_support_email
+      ```
+    - Update role and channel IDs in the code as needed.
 
-4. **Run the Bot** ▶️
-   ```
-   python Main.py
-   ```
+4. **Run the Bot**
+    ```
+    python Main.py
+    ```
+
+---
 
 ## 📖 Usage
 
-- **For Admins**: Use `!clear` to manage messages, `!say` to send announcements.
-- **For Users**: Interact with welcome flows, use `/help` for command info.
-- **Logging**: Check console output for bot activities with custom emojis.
+- **Admins:** Use `!clear`, `!say`, `!generatechangelog`, manage tickets, and access the mod panel.
+- **Slot Keepers (Mods):** Use `!clear`, claim/close tickets, access the mod panel, and mod-only help.
+- **Members (Lootlings):** Use `/help`, `/status`, `/rlstats`, `/preferences`, and enjoy the onboarding flow.
+- **Changelog Notifications:** Opt-in via `/preferences` to get notified for bot updates.
+
+---
 
 ## 📋 Requirements
 
 - Python 3.8+
 - discord.py
 - python-dotenv
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. (Though it's personal, feel free to adapt!)
+- aiohttp
+- requests
+- bs4
+- uuid
+- rich
+- openai
 
 ---
 
-Made with 💖 for The Chillventory community. If you have questions, reach out personally! 🌿
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+Made with 💖 for The Chillventory community.  
+Questions? Reach out personally! 🌿
