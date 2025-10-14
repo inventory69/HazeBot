@@ -9,7 +9,7 @@ from email.message import EmailMessage
 import smtplib
 import asyncio
 import re
-from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, NORMAL_ROLE_ID
+from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, NORMAL_ROLE_ID, TICKETS_CATEGORY_ID
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
@@ -17,9 +17,6 @@ from Utils.Logger import Logger
 # ADMIN_ROLE_ID = 1424466881862959294
 # MODERATOR_ROLE_ID = 1427219729960931449  # Slot Keeper (new mod role)
 # NORMAL_ROLE_ID = 1424161475718807562  # For future use if needed
-
-# === Category ID ===
-TICKETS_CATEGORY_ID = 1426113555974979625
 
 # === Path to JSON file ===
 TICKET_FILE = "Data/tickets.json"

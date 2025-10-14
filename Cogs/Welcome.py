@@ -3,7 +3,7 @@ import asyncio
 import os
 from discord.ext import commands
 import discord
-from Config import PINK
+from Config import PINK, INTEREST_ROLES, WELCOME_RULES_CHANNEL_ID, WELCOME_PUBLIC_CHANNEL_ID, MEMBER_ROLE_ID, PERSISTENT_VIEWS_FILE
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
@@ -16,22 +16,6 @@ RULES_TEXT = (
     "💖 **5. Keep the vibes chill and positive!**\n\n"
     "By clicking 'Accept Rules', you agree to follow these guidelines and unlock full access to the server. Welcome to the lounge!"
 )
-
-# Channel and role IDs (replace with your actual IDs)
-WELCOME_RULES_CHANNEL_ID = 1424724535923703968  # Channel where rules are shown
-WELCOME_PUBLIC_CHANNEL_ID = 1424164269775392858  # Public welcome channel
-MEMBER_ROLE_ID = 1424161475718807562            # Member role ID
-
-# Improved interest roles mapping (replace IDs with your actual role IDs)
-INTEREST_ROLES = {
-    "Chat & Memes": 1424465865297887345,
-    "Creative Vibes": 1424465951792828477,
-    "Gaming & Chill": 1424466003102007359,
-    "Ideas & Projects": 1424466081547817183,
-    "Development": 1424466456866852956,
-    "Tech & Support": 1424466150330466434,
-    "Just Browsing": 1424466239618810019,
-}
 
 # Funny welcome messages for public channel (use {name} for username)
 WELCOME_MESSAGES = [
@@ -328,7 +312,7 @@ class Welcome(commands.Cog):
         self.sent_messages = {}  # Store all sent welcome-related messages by member ID for cleanup
         # Neue Zeilen:
         import json, os  # Importiere hier oder oben
-        self.persistent_views_file = 'Data/persistent_views.json'
+        self.persistent_views_file = PERSISTENT_VIEWS_FILE
         if os.path.exists(self.persistent_views_file):
             with open(self.persistent_views_file, 'r') as f:
                 self.persistent_views_data = json.load(f)
