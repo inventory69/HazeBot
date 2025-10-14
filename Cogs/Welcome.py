@@ -196,15 +196,16 @@ class AcceptRulesView(discord.ui.View):
         Kicks the user if they haven't accepted the rules and are still in the server.
         Deletes the rules messages.
         """
+        Logger.info(f"Rules acceptance timed out for: {self.member.display_name} ({self.member.id})")  # Added logging for timeouts
         guild = self.member.guild
         if self.member in guild.members:
             try:
                 await self.member.kick(reason="Did not accept rules within 15 minutes")
-                Logger.info(f"Kicked {self.member} for not accepting rules in time")
+                Logger.info(f"Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time")
             except Exception as e:
                 Logger.error(f"Failed to kick {self.member}: {e}")
         else:
-            Logger.info(f"{self.member} left the server before the 15-minute timeout")
+            Logger.info(f"{self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout")
         
         # Always delete the rules messages
         if self.cog:
@@ -212,9 +213,9 @@ class AcceptRulesView(discord.ui.View):
             for msg in messages:
                 try:
                     await msg.delete()
-                    Logger.info(f"Deleted rules message for {self.member} (timeout/leave)")
+                    Logger.info(f"Deleted rules message for {self.member.display_name} ({self.member.id}) (timeout/leave)")
                 except Exception as e:
-                    Logger.warning(f"Could not delete rules message for {self.member}: {e}")
+                    Logger.warning(f"Could not delete rules message for {self.member.display_name} ({self.member.id}): {e}")
         
         # Also delete the rules_msg if set
         if self.rules_msg:
@@ -330,6 +331,7 @@ class Welcome(commands.Cog):
         Event: Triggered when a new member joins the server.
         Sends rules embed and interactive view.
         """
+        Logger.info(f"New member joined: {member.display_name} ({member.id})")  # Added logging for joins
         guild = member.guild
         rules_channel = guild.get_channel(WELCOME_RULES_CHANNEL_ID)
         if rules_channel:
@@ -363,24 +365,22 @@ class Welcome(commands.Cog):
         Deletes the rules messages and all welcome-related messages if they exist.
         """
         # Delete rules messages
-        if member.id in self.active_rules_messages:
-            for msg in self.active_rules_messages[member.id]:
-                try:
-                    await msg.delete()
-                    Logger.info(f"Deleted rules message for {member} (timeout/leave)")
-                except Exception as e:
-                    Logger.warning(f"Could not delete rules message for {member}: {e}")
-            del self.active_rules_messages[member.id]
+        messages = self.active_rules_messages.pop(member.id, [])  # Safe removal with pop
+        for msg in messages:
+            try:
+                await msg.delete()
+                Logger.info(f"Deleted rules message for {member} (timeout/leave)")
+            except Exception as e:
+                Logger.warning(f"Could not delete rules message for {member}: {e}")
         
         # Delete all sent welcome messages
-        if member.id in self.sent_messages:
-            for msg in self.sent_messages[member.id]:
-                try:
-                    await msg.delete()
-                    Logger.info(f"Deleted welcome message for {member} who left the server")
-                except Exception as e:
-                    Logger.error(f"Failed to delete welcome message for {member}: {e}")
-            del self.sent_messages[member.id]
+        sent_msgs = self.sent_messages.pop(member.id, [])  # Safe removal with pop
+        for msg in sent_msgs:
+            try:
+                await msg.delete()
+                Logger.info(f"Deleted welcome message for {member} who left the server")
+            except Exception as e:
+                Logger.error(f"Failed to delete welcome message for {member}: {e}")
 
     @commands.Cog.listener()
     async def on_ready(self):
