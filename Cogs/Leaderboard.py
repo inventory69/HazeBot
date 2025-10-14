@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import json
-from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE
+from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
 from Utils.EmbedUtils import set_pink_footer
 from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
 from Cogs.TicketSystem import load_tickets
@@ -96,7 +96,10 @@ class Leaderboard(commands.Cog):
                     for key in ["claimed_by", "assigned_to"]:
                         uid = ticket.get(key)
                         if uid:
-                            data[str(uid)] = data.get(str(uid), 0) + 1
+                            # Check if user is mod or admin
+                            member = ctx_or_interaction.guild.get_member(int(uid)) if hasattr(ctx_or_interaction, 'guild') else None
+                            if member and any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles):
+                                data[str(uid)] = data.get(str(uid), 0) + 1
             sorted_data = sorted(data.items(), key=lambda x: x[1], reverse=True)
             embed = self.create_leaderboard_embed("Resolved Tickets", sorted_data)
         elif category == "messages":

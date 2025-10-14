@@ -82,9 +82,13 @@ class Profile(commands.Cog):
         
         changelog_opt_in = "✅ Yes" if any(role.id == CHANGELOG_ROLE_ID for role in member.roles) else "❌ No"
         warning_count = get_warning_count(member.id)
-        resolved_tickets = get_resolved_ticket_count(member.id)
         
-        embed.add_field(name="Custom Stats", value=f"{rl_text}\n🔔 Changelog Opt-in: {changelog_opt_in}\n⚠️ Warnings: {warning_count}\n🎫 Resolved Tickets: {resolved_tickets}", inline=False)
+        custom_stats = f"{rl_text}\n🔔 Changelog Opt-in: {changelog_opt_in}\n⚠️ Warnings: {warning_count}"
+        if any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles):
+            resolved_tickets = get_resolved_ticket_count(member.id)
+            custom_stats += f"\n🎫 Resolved Tickets: {resolved_tickets}"
+        
+        embed.add_field(name="Custom Stats", value=custom_stats, inline=False)
         
         # Activity stats
         activity = get_user_activity(member.id)
