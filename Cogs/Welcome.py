@@ -366,21 +366,27 @@ class Welcome(commands.Cog):
         """
         # Delete rules messages
         messages = self.active_rules_messages.pop(member.id, [])  # Safe removal with pop
+        deleted_count = 0
         for msg in messages:
             try:
                 await msg.delete()
-                Logger.info(f"Deleted rules message for {member} (timeout/leave)")
+                deleted_count += 1
             except Exception as e:
                 Logger.warning(f"Could not delete rules message for {member}: {e}")
+        if deleted_count > 0:
+            Logger.info(f"Deleted {deleted_count} rules message(s) for {member.display_name} ({member.id}) who left the server")
         
         # Delete all sent welcome messages
         sent_msgs = self.sent_messages.pop(member.id, [])  # Safe removal with pop
+        deleted_welcome_count = 0
         for msg in sent_msgs:
             try:
                 await msg.delete()
-                Logger.info(f"Deleted welcome message for {member} who left the server")
+                deleted_welcome_count += 1
             except Exception as e:
                 Logger.error(f"Failed to delete welcome message for {member}: {e}")
+        if deleted_welcome_count > 0:
+            Logger.info(f"Deleted {deleted_welcome_count} welcome message(s) for {member.display_name} ({member.id}) who left the server")
 
     @commands.Cog.listener()
     async def on_ready(self):
