@@ -7,38 +7,11 @@ from discord.ext import commands, tasks
 import discord
 from discord import app_commands
 from bs4 import BeautifulSoup  # Add this
-from Config import PINK
+from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS
+
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 from datetime import datetime, timedelta
-
-RANK_EMOJIS = {
-    'Supersonic Legend': '<:ssl:1425389967030489139>',
-    'Grand Champion III': '<:gc3:1425389956796518420>',
-    'Grand Champion II': '<:gc2:1425389941810266162>',
-    'Grand Champion I': '<:gc1:1425389930225471499>',
-    'Champion III': '<:c3:1425389912651464824>',
-    'Champion II': '<:c2:1425389901670776842>',
-    'Champion I': '<:c1:1425389889796706374>',
-    'Diamond III': '<:d3:1425389878673149962>',
-    'Diamond II': '<:d2:1425389867197665361>',
-    'Diamond I': '<:d1:1425389856229691462>',
-    'Platinum III': '<:p3:1425389845328433213>',
-    'Platinum II': '<:p2:1425389833706278923>',
-    'Platinum I': '<:p1:1425389821706113055>',
-    'Gold III': '<:g3:1425389810968690749>',
-    'Gold II': '<:g2:1425389799463981217>',
-    'Gold I': '<:g1:1425389788885811380>',
-    'Silver III': '<:s3:1425389776852221982>',
-    'Silver II': '<:s2:1425389768425996341>',
-    'Silver I': '<:s1:1425389757940367411>',
-    'Bronze III': '<:b3:1425389747282382919>',
-    'Bronze II': '<:b2:1425389735819350056>',
-    'Bronze I': '<:b1:1425389725652615209>',
-    'Unranked': '<:unranked:1425389712276721725>',
-}
-
-RL_ACCOUNTS_FILE = 'Data/rl_accounts.json'
 
 def load_rl_accounts():
     os.makedirs(os.path.dirname(RL_ACCOUNTS_FILE), exist_ok=True)
@@ -51,6 +24,21 @@ def save_rl_accounts(accounts):
     os.makedirs(os.path.dirname(RL_ACCOUNTS_FILE), exist_ok=True)
     with open(RL_ACCOUNTS_FILE, 'w') as f:
         json.dump(accounts, f, indent=4)
+
+def get_highest_rl_rank(user_id):
+    """
+    Helper to get the highest RL rank for a user from local file.
+    """
+    accounts = load_rl_accounts()
+    user_data = accounts.get(str(user_id))
+    if not user_data:
+        return None
+    ranks = user_data.get('ranks', {})
+    highest_tier = 'Unranked'
+    for playlist, tier in ranks.items():
+        if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
+            highest_tier = tier
+    return highest_tier
 
 class RocketLeague(commands.Cog):
     """

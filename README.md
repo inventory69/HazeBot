@@ -14,6 +14,7 @@ A personal Discord bot designed for The Chillventory server ("Haze" on Discord).
 - **Message Management:** `!clear` for admins and Slot Keepers (mods) to purge messages.
 - **Say Command:** `!say` lets admins send bot messages (with embed option).
 - **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Warnings are tracked per user and stored in `Data/mod_data.json`.
+- **Mod Overview:** `/modoverview` and `!modoverview` for Slot Keepers and Admins to view top users by moderation actions (warnings, kicks, bans, mutes).
 - **Centralized Command Lists:** All admin/mod commands are managed in `Config.py` for consistency.
 
 ### 🎫 Ticket System
@@ -40,6 +41,12 @@ A personal Discord bot designed for The Chillventory server ("Haze" on Discord).
 
 ### 🛠️ Preferences System
 - **Changelog Notification Opt-In:** `/preferences` and `!preferences` let users toggle the changelog notification role.
+
+### 👤 Profile System
+- **User Profiles:** `/profile` and `!profile` display user avatar, join date, roles, highest RL rank, warnings, resolved tickets, changelog opt-in, and activity stats (messages/images).
+
+### 🏆 Leaderboard System
+- **Various Leaderboards:** `/leaderboard` and `!leaderboard` with categories for RL ranks (overall/1v1/2v2/3v3/4v4), resolved tickets, most messages, and most images posted.
 
 ### 🎮 Dynamic Presence
 - **Inventory-Themed Status:** Bot presence updates hourly with fun inventory messages and emojis.
@@ -96,9 +103,9 @@ This bot is tailored for The Chillventory and not intended for public deployment
 
 ## 📖 Usage
 
-- **Admins:** Use `!clear`, `!say`, `!generatechangelog`, manage tickets, and access the mod panel.
-- **Slot Keepers (Mods):** Use `!clear`, claim/close tickets, access the mod panel, and mod-only help.
-- **Members (Lootlings):** Use `/help`, `/status`, `/rlstats`, `/preferences`, and enjoy the onboarding flow.
+- **Admins:** Use `!clear`, `!say`, `!generatechangelog`, manage tickets, access mod panel and overview.
+- **Slot Keepers (Mods):** Use `!clear`, claim/close tickets, access mod panel and overview, view leaderboards.
+- **Members (Lootlings):** Use `/help`, `/status`, `/rlstats`, `/preferences`, `/profile`, `/leaderboard`, enjoy onboarding.
 - **Changelog Notifications:** Opt-in via `/preferences` to get notified for bot updates.
 
 ---

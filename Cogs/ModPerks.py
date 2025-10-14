@@ -5,7 +5,7 @@ import os
 import logging
 import json
 from datetime import datetime
-from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, MOD_DATA_FILE
 from Utils.EmbedUtils import set_pink_footer
 
 # === File Logger for this cog only ===
@@ -19,19 +19,30 @@ modpanel_logger.handlers.clear()  # Clear any existing handlers
 modpanel_logger.addHandler(file_handler)
 
 # === Mod data ===
-DATA_DIR = "Data"
-MOD_DATA_FILE = os.path.join(DATA_DIR, "mod_data.json")
-
 def load_mod_data():
     if not os.path.exists(MOD_DATA_FILE):
-        return {}
+        return {"warnings": {}, "kicks": {}, "bans": {}, "mutes": {}}
     with open(MOD_DATA_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        data = json.load(f)
+        # Ensure all keys exist
+        data.setdefault("warnings", {})
+        data.setdefault("kicks", {})
+        data.setdefault("bans", {})
+        data.setdefault("mutes", {})
+        return data
 
 def save_mod_data(data):
-    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(MOD_DATA_FILE), exist_ok=True)
     with open(MOD_DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
+
+# Helper to increment mod action count
+def increment_mod_count(action, user_id):
+    mod_data = load_mod_data()
+    if str(user_id) not in mod_data[action]:
+        mod_data[action][str(user_id)] = 0
+    mod_data[action][str(user_id)] += 1
+    save_mod_data(mod_data)
 
 def create_modpanel_embed(bot_user):
     embed = discord.Embed(
@@ -136,6 +147,7 @@ class ModActionView(discord.ui.View):
     async def mute(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await self.member.edit(mute=True)
+            increment_mod_count("mutes", self.member.id)
             await interaction.response.send_message(f"🔇 Muted {self.member.mention}.", ephemeral=True)
             modpanel_logger.info(f"Muted {self.member} by {interaction.user}")
         except Exception as e:
@@ -146,6 +158,7 @@ class ModActionView(discord.ui.View):
     async def kick(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await self.member.kick()
+            increment_mod_count("kicks", self.member.id)
             await interaction.response.send_message(f"👢 Kicked {self.member.mention}.", ephemeral=True)
             modpanel_logger.info(f"Kicked {self.member} by {interaction.user}")
         except Exception as e:
@@ -156,6 +169,7 @@ class ModActionView(discord.ui.View):
     async def ban(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await self.member.ban()
+            increment_mod_count("bans", self.member.id)
             await interaction.response.send_message(f"🔨 Banned {self.member.mention}.", ephemeral=True)
             modpanel_logger.info(f"Banned {self.member} by {interaction.user}")
         except Exception as e:
@@ -250,6 +264,49 @@ class ModPanel(commands.Cog):
         view = ModPanelView(members)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         modpanel_logger.info(f"Mod panel opened by {interaction.user}")
+
+    # 🧩 Shared handler for modoverview logic
+    async def handle_modoverview(self, ctx_or_interaction):
+        if not is_mod_or_admin(ctx_or_interaction.author if hasattr(ctx_or_interaction, 'author') else ctx_or_interaction.user):
+            message = "❌ You do not have permission to use this command."
+            if hasattr(ctx_or_interaction, 'send'):
+                await ctx_or_interaction.send(message, delete_after=5)
+            else:
+                await ctx_or_interaction.response.send_message(message, ephemeral=True)
+            return
+        mod_data = load_mod_data()
+        embed = discord.Embed(
+            title="📊 Moderation Overview",
+            description="Overview of moderation actions taken.",
+            color=PINK
+        )
+        actions = ["warnings", "kicks", "bans", "mutes"]
+        for action in actions:
+            data = mod_data.get(action, {})
+            if data:
+                top_users = sorted(data.items(), key=lambda x: x[1], reverse=True)[:5]  # Top 5
+                text = "\n".join([f"<@{uid}>: {count}" for uid, count in top_users])
+            else:
+                text = "No actions recorded."
+            embed.add_field(name=f"{action.capitalize()}", value=text, inline=True)
+        set_pink_footer(embed, bot=self.bot.user)
+        if hasattr(ctx_or_interaction, 'send'):
+            await ctx_or_interaction.send(embed=embed)
+        else:
+            await ctx_or_interaction.response.send_message(embed=embed, ephemeral=True)
+        modpanel_logger.info(f"Mod overview requested by {ctx_or_interaction.author if hasattr(ctx_or_interaction, 'author') else ctx_or_interaction.user}")
+
+    @commands.command(name="modoverview")
+    async def modoverview_command(self, ctx):
+        """
+        📊 Shows an overview of moderation actions for mods.
+        """
+        await self.handle_modoverview(ctx)
+
+    @app_commands.command(name="modoverview", description="📊 Shows an overview of moderation actions for mods.")
+    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    async def modoverview_slash(self, interaction: discord.Interaction):
+        await self.handle_modoverview(interaction)
 
 async def setup(bot):
     await bot.add_cog(ModPanel(bot))
