@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import openai
 import os
+from datetime import datetime
 from Utils.Logger import Logger
 from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
@@ -17,6 +18,23 @@ class ChangelogCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    async def generate_changelog_title(self, text: str) -> str:
+        """
+        Generate a concise title from PR text using OpenAI GPT-4 Turbo.
+        """
+        if not openai.api_key:
+            raise ValueError("OpenAI API key not configured.")
+
+        prompt = f"Generate a concise, catchy title for this PR changelog based on the text. Keep it under 10 words.\n\nPR Text:\n{text}"
+
+        response = openai.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=50,
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip().strip('"').strip("'")
 
     async def generate_changelog_text(self, text: str, project: str, author: str) -> str:
         """
@@ -71,12 +89,13 @@ PR-Text:
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 
-    @commands.command(name="generatechangelog")
+    @commands.command(name="changelog")
     @commands.has_permissions(administrator=True)
-    async def generatechangelog_prefix(self, ctx, *, args: str):
+    async def changelog_prefix(self, ctx, *, args: str):
         """
         📝 Generate a changelog from PR text. (Admin only)
-        Usage: !generatechangelog title:"Title" date:"2025-10-13" project:"HazeWorldBot" author:"inventory69" text:PR text here
+        Usage: !changelog title:"Title" date:"2025-10-13" project:"HazeWorldBot" author:"inventory69" text:PR text here
+        If title is omitted, it will be generated from the PR text. Date defaults to today.
         """
         params = {}
         for part in args.split(' '):
@@ -84,11 +103,22 @@ PR-Text:
                 key, value = part.split(':', 1)
                 params[key] = value
 
-        title = params.get('title', 'Bot Modernization & UX Upgrade')
-        date = params.get('date', '2025-10-13')
+        text = params.get('text', args)
         project = params.get('project', 'HazeWorldBot')
         author = params.get('author', 'inventory69')
-        text = params.get('text', args)
+
+        # Generate title if not provided
+        if 'title' not in params:
+            try:
+                title = await self.generate_changelog_title(text)
+            except Exception as e:
+                Logger.error(f"Error generating title: {e}")
+                title = 'Bot Update'
+        else:
+            title = params['title']
+
+        # Use today's date if not provided
+        date = params.get('date', datetime.now().strftime("%Y-%m-%d"))
 
         try:
             changelog = await self.generate_changelog_text(text, project, author)

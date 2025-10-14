@@ -154,3 +154,6 @@ Data/tickets.json
 
 # Moderation Data
 Data/mod_data.json
+
+# Activity Cog additions
+Data/activity.json

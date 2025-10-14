@@ -42,7 +42,7 @@ INTEREST_ROLES = {
 
 # === Commands ===
 SLASH_COMMANDS = ["help", "status", "rlstats", "setrlaccount", "ticket", "preferences", "roleinfo", "profile", "modpanel", "modoverview", "leaderboard"]  # Commands that have slash (/) versions
-ADMIN_COMMANDS = ["clear", "modpanel", "modoverview", "say", "generatechangelog"]  # Commands restricted to Admins only
+ADMIN_COMMANDS = ["clear", "modpanel", "modoverview", "say", "changelog"]  # Commands restricted to Admins only
 MOD_COMMANDS = ["clear", "modpanel", "modoverview"]  # Commands restricted to Moderators (Slot Keepers) only
 
 # === Rocket League ===
