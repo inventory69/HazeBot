@@ -8,6 +8,7 @@ from Cogs.RocketLeague import get_highest_rl_rank, RANK_EMOJIS
 from Cogs.Preferences import CHANGELOG_ROLE_ID
 from Cogs.ModPerks import load_mod_data
 from Cogs.TicketSystem import load_tickets
+from Cogs.Leaderboard import load_activity
 
 # Helper to get warning count for a user
 def get_warning_count(user_id):
@@ -27,8 +28,7 @@ def get_resolved_ticket_count(user_id):
 
 # Helper to get user activity (messages and images sent)
 def get_user_activity(user_id):
-    mod_data = load_mod_data()
-    activity_data = mod_data.get("activity", {})
+    activity_data = load_activity()
     user_activity = activity_data.get(str(user_id), {})
     return {
         "messages": user_activity.get("messages", 0),
