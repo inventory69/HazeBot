@@ -2,7 +2,7 @@ from discord.ext import commands
 from discord import app_commands
 import discord
 import os
-from Config import PINK, MOD_COMMANDS, ADMIN_COMMANDS
+from Config import PINK, MOD_COMMANDS, ADMIN_COMMANDS, SLASH_COMMANDS
 from Utils.EmbedUtils import set_pink_footer
 
 ADMIN_ROLE_ID = 1424466881862959294
@@ -15,7 +15,8 @@ ROLE_DESCRIPTIONS = {
         "Admins manage the server, configure settings, assign roles, and resolve escalated issues. "
         "They have full access to all moderation and configuration features."
         f"\n**Role ID:** `{ADMIN_ROLE_ID}`"
-        "\n**Admin Commands:**\n" + "\n".join(f"• !{cmd}" for cmd in ADMIN_COMMANDS)
+        "\n**Admin Commands:**\n" + "\n".join(f"• !{cmd}" + (" /" + cmd if cmd in SLASH_COMMANDS else "") for cmd in ADMIN_COMMANDS) +
+        "\n*Note: Slash commands (/) are only visible to you.*"
     ),
     MODERATOR_ROLE_ID: (
         "📦 **Slot Keeper (Moderator)**\n"
@@ -23,7 +24,8 @@ ROLE_DESCRIPTIONS = {
         "manage roles (including assigning roles), and handle tickets (claim, close, support). "
         "Slot Keepers are the first contact for ticket support and community questions."
         f"\n**Role ID:** `{MODERATOR_ROLE_ID}`"
-        "\n**Mod Commands:**\n" + "\n".join(f"• !{cmd}" for cmd in MOD_COMMANDS)
+        "\n**Mod Commands:**\n" + "\n".join(f"• !{cmd}" + (" /" + cmd if cmd in SLASH_COMMANDS else "") for cmd in MOD_COMMANDS) +
+        "\n*Note: Slash commands (/) are only visible to you.*"
     ),
     NORMAL_ROLE_ID: (
         "🎒 **Lootling**\n"
