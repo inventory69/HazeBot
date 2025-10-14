@@ -38,19 +38,28 @@ class Utility(commands.Cog):
                     entry = f"**!{cmd.name}**\n{cmd.help or 'No description'}"
                     if cmd.name in slash_commands:
                         entry += " (Slash available)"
-                    entry += f"\n{'─'*24}"
+                    entry += "\n"  # Removed long separator to save space
                     if is_admin_only and is_admin:
                         admin_commands.append(entry)
                     elif is_mod_only and (is_admin or is_mod):
                         mod_commands.append(entry)
                     elif not is_admin_only and not is_mod_only:
                         normal_commands.append(entry)
-        if normal_commands:
-            embed.add_field(name="✨ User Commands", value="\n".join(normal_commands), inline=False)
-        if mod_commands:
-            embed.add_field(name="📦 Mod Commands", value="\n".join(mod_commands), inline=False)
-        if admin_commands:
-            embed.add_field(name="🛡️ Admin Commands", value="\n".join(admin_commands), inline=False)
+        
+        # Function to add fields in chunks to avoid 1024 char limit
+        def add_chunked_fields(name_prefix, commands_list):
+            if not commands_list:
+                return
+            chunk_size = 8  # Adjust as needed to stay under 1024 chars
+            chunks = [commands_list[i:i + chunk_size] for i in range(0, len(commands_list), chunk_size)]
+            for idx, chunk in enumerate(chunks):
+                field_name = f"{name_prefix}" if len(chunks) == 1 else f"{name_prefix} ({idx+1}/{len(chunks)})"
+                embed.add_field(name=field_name, value="\n".join(chunk), inline=False)
+        
+        add_chunked_fields("✨ User Commands", normal_commands)
+        add_chunked_fields("📦 Mod Commands", mod_commands)
+        add_chunked_fields("🛡️ Admin Commands", admin_commands)
+        
         embed.set_footer(text="Powered by Haze World 💖", icon_url=getattr(self.bot.user.avatar, 'url', None))
         return embed
 
@@ -104,7 +113,34 @@ class Utility(commands.Cog):
         is_admin = any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
         is_mod = any(role.id == MODERATOR_ROLE_ID for role in interaction.user.roles)
         embed = self.create_help_embed(interaction, is_admin, is_mod)
-        await interaction.response.send_message(embed=embed, ephemeral=True if is_admin or is_mod else False)
+        if is_admin or is_mod:
+            try:
+                await interaction.user.send(embed=embed)
+                await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
+            except discord.Forbidden:
+                await interaction.response.send_message("❌ I couldn't send you a DM. Please check your privacy settings.", ephemeral=True)
+        else:
+            # Check if embed is too large (over 2000 chars total)
+            embed_length = len(embed.title or "") + len(embed.description or "") + sum(len(field.name) + len(field.value) for field in embed.fields)
+            if embed_length > 1900:  # Buffer for safety
+                # Split into multiple embeds if needed (simple split by fields)
+                embeds = []
+                current_embed = discord.Embed(title=embed.title, description=embed.description, color=embed.color)
+                for field in embed.fields:
+                    if len(current_embed.fields) >= 5 or (len(current_embed.title or "") + len(current_embed.description or "") + sum(len(f.name) + len(f.value) for f in current_embed.fields) + len(field.name) + len(field.value)) > 1900:
+                        embeds.append(current_embed)
+                        current_embed = discord.Embed(title=embed.title, description="", color=embed.color)
+                    current_embed.add_field(name=field.name, value=field.value, inline=field.inline)
+                if current_embed.fields:
+                    embeds.append(current_embed)
+                for e in embeds:
+                    set_pink_footer(e, bot=interaction.client.user)
+                # Send first embed with response, then followups for the rest
+                await interaction.response.send_message(embed=embeds[0], ephemeral=False)
+                for additional_embed in embeds[1:]:
+                    await interaction.followup.send(embed=additional_embed, ephemeral=False)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=False)
 
     # !status (Prefix)
     @commands.command(name="status")
