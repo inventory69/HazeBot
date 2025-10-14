@@ -207,20 +207,20 @@ class AcceptRulesView(discord.ui.View):
             Logger.info(f"{self.member} left the server before the 15-minute timeout")
         
         # Always delete the rules messages
-        if self.cog and self.member.id in self.cog.active_rules_messages:
-            for msg in self.cog.active_rules_messages[self.member.id]:
+        if self.cog:
+            messages = self.cog.active_rules_messages.pop(self.member.id, [])  # Safe removal with pop
+            for msg in messages:
                 try:
                     await msg.delete()
                     Logger.info(f"Deleted rules message for {self.member} (timeout/leave)")
                 except Exception as e:
                     Logger.warning(f"Could not delete rules message for {self.member}: {e}")
-            del self.cog.active_rules_messages[self.member.id]
         
         # Also delete the rules_msg if set
-        if self.rules_msg and self.rules_msg not in self.cog.active_rules_messages.get(self.member.id, []):
+        if self.rules_msg:
             try:
                 await self.rules_msg.delete()
-            except Exception as e:
+            except Exception:
                 pass
 
 class WelcomeCardView(discord.ui.View):
@@ -257,11 +257,15 @@ class WelcomeCardView(discord.ui.View):
                 Logger.error(f"Failed to disable welcome button: {e}")
         # Remove from persistent data
         import json  # Importiere hier oder oben
-        os.makedirs(os.path.dirname(self.persistent_views_file), exist_ok=True)
-        with open(self.persistent_views_file, 'r') as f:
-            data = json.load(f)
+        persistent_views_file = self.cog.persistent_views_file  # Use cog's attribute instead of self
+        os.makedirs(os.path.dirname(persistent_views_file), exist_ok=True)
+        try:
+            with open(persistent_views_file, 'r') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = []
         data = [d for d in data if not (d['message_id'] == self.message.id)]
-        with open(self.persistent_views_file, 'w') as f:
+        with open(persistent_views_file, 'w') as f:
             json.dump(data, f)
 
 class WelcomeButton(discord.ui.Button):
@@ -330,7 +334,7 @@ class Welcome(commands.Cog):
         rules_channel = guild.get_channel(WELCOME_RULES_CHANNEL_ID)
         if rules_channel:
             embed = discord.Embed(
-                title=f"Welcome to {guild.name}! 💖",
+                title=f"Welcome to {guild.name} ! 💖",
                 description=(
                     f"Hey there, glad to have you here!\n\n"  # Removed mention from description
                     f"**Server Rules:**\n{RULES_TEXT}\n\n"
@@ -394,9 +398,13 @@ class Welcome(commands.Cog):
                     member = self.bot.get_user(data['member_id'])  # Oder None, wenn nicht gefunden
                     view = WelcomeCardView(member, cog=self, start_time=start_time)
                     view.message = message
-                    await message.edit(view=view)
-                    restored_count += 1
-                    await asyncio.sleep(3)  # Avoid rate limits
+                    # Check if the view is already attached to avoid unnecessary edits
+                    if not message.components or not any(isinstance(comp, discord.ui.View) for comp in message.components):
+                        await message.edit(view=view)
+                        restored_count += 1
+                    else:
+                        restored_count += 1  # Still count as restored if no edit needed
+                    await asyncio.sleep(6)  # Increased sleep to avoid rate limits (adjust as needed)
                 except Exception as e:
                     Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
         Logger.info(f"Restored {restored_count} persistent views.")
