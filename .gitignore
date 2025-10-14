@@ -157,3 +157,6 @@ Data/mod_data.json
 
 # Activity Cog additions
 Data/activity.json
+
+# Active Rules Views
+Data/active_rules_views.json

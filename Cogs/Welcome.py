@@ -1,9 +1,10 @@
 import random
 import asyncio
 import os
+import json
 from discord.ext import commands
 import discord
-from Config import PINK, INTEREST_ROLES, WELCOME_RULES_CHANNEL_ID, WELCOME_PUBLIC_CHANNEL_ID, MEMBER_ROLE_ID, PERSISTENT_VIEWS_FILE
+from Config import PINK, INTEREST_ROLES, WELCOME_RULES_CHANNEL_ID, WELCOME_PUBLIC_CHANNEL_ID, MEMBER_ROLE_ID, PERSISTENT_VIEWS_FILE, ACTIVE_RULES_VIEWS_FILE
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
@@ -181,6 +182,8 @@ class AcceptRulesView(discord.ui.View):
     Deletes the rules message.
     """
     def __init__(self, member, rules_msg=None, cog=None):
+        from datetime import datetime
+        self.start_time = datetime.now()  # Speichere Startzeit
         super().__init__(timeout=900)  # 15 minutes
         self.member = member
         self.interest_selected = False
@@ -217,12 +220,11 @@ class AcceptRulesView(discord.ui.View):
                 except Exception as e:
                     Logger.warning(f"Could not delete rules message for {self.member.display_name} ({self.member.id}): {e}")
         
-        # Also delete the rules_msg if set
-        if self.rules_msg:
-            try:
-                await self.rules_msg.delete()
-            except Exception:
-                pass
+        # Entferne aus persistenten Daten
+        if self.cog:
+            self.cog.active_rules_views_data = [d for d in self.cog.active_rules_views_data if not (d['member_id'] == self.member.id)]
+            with open(self.cog.active_rules_views_file, 'w') as f:
+                json.dump(self.cog.active_rules_views_data, f)
 
 class WelcomeCardView(discord.ui.View):
     """
@@ -324,6 +326,15 @@ class Welcome(commands.Cog):
         else:
             os.makedirs(os.path.dirname(self.persistent_views_file), exist_ok=True)
             self.persistent_views_data = []
+        
+        # Neue Zeilen für active_rules_views
+        self.active_rules_views_file = ACTIVE_RULES_VIEWS_FILE
+        if os.path.exists(self.active_rules_views_file):
+            with open(self.active_rules_views_file, 'r') as f:
+                self.active_rules_views_data = json.load(f)
+        else:
+            os.makedirs(os.path.dirname(self.active_rules_views_file), exist_ok=True)
+            self.active_rules_views_data = []
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -357,6 +368,18 @@ class Welcome(commands.Cog):
             view.rules_msg = rules_msg
             # Store both messages for cleanup
             self.active_rules_messages[member.id] = [mention_msg, rules_msg]
+            
+            # Neue Zeilen: Speichere View-Daten persistent
+            import json
+            active_data = {
+                'member_id': member.id,
+                'channel_id': rules_channel.id,
+                'message_id': rules_msg.id,
+                'start_time': view.start_time.isoformat()  # Verwende start_time aus View
+            }
+            self.active_rules_views_data.append(active_data)
+            with open(self.active_rules_views_file, 'w') as f:
+                json.dump(self.active_rules_views_data, f)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member):
@@ -388,6 +411,11 @@ class Welcome(commands.Cog):
         if deleted_welcome_count > 0:
             Logger.info(f"Deleted {deleted_welcome_count} welcome message(s) for {member.display_name} ({member.id}) who left the server")
 
+        # Neue Zeilen: Entferne aus active_rules_views_data
+        self.active_rules_views_data = [d for d in self.active_rules_views_data if d['member_id'] != member.id]
+        with open(self.active_rules_views_file, 'w') as f:
+            json.dump(self.active_rules_views_data, f)
+
     @commands.Cog.listener()
     async def on_ready(self):
         """
@@ -413,7 +441,35 @@ class Welcome(commands.Cog):
                     await asyncio.sleep(6)  # Increased sleep to avoid rate limits (adjust as needed)
                 except Exception as e:
                     Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
-        Logger.info(f"Restored {restored_count} persistent views.")
+        Logger.info(f"Restored {restored_count} persistent welcome views.")
+        
+        # Stelle active_rules_views wieder her
+        restored_rules_count = 0  # Separater Zähler
+        for data in self.active_rules_views_data:
+            channel = self.bot.get_channel(data['channel_id'])
+            if channel:
+                try:
+                    message = await channel.fetch_message(data['message_id'])
+                    from datetime import datetime
+                    start_time = datetime.fromisoformat(data['start_time'])
+                    member = channel.guild.get_member(data['member_id'])  # Hole Member aus Guild statt User
+                    if member:
+                        view = AcceptRulesView(member, rules_msg=message, cog=self)
+                        view.start_time = start_time  # Setze start_time
+                        # Berechne verbleibende Timeout-Zeit
+                        elapsed = (datetime.now() - start_time).total_seconds()
+                        remaining = 900 - elapsed  # 15 Minuten = 900 Sekunden
+                        if remaining > 0:
+                            view.timeout = remaining
+                            await message.edit(view=view)
+                            restored_rules_count += 1
+                        else:
+                            # Timeout bereits erreicht, trigger on_timeout
+                            await view.on_timeout()
+                    await asyncio.sleep(6)  # Sleep to avoid rate limits
+                except Exception as e:
+                    Logger.error(f"Failed to restore rules view for message {data['message_id']}: {e}")
+        Logger.info(f"Restored {restored_rules_count} active rules views.")
 
 async def setup(bot):
     """

@@ -86,4 +86,5 @@ TICKETS_CATEGORY_ID = 1426113555974979625
 # === Welcome ===
 WELCOME_RULES_CHANNEL_ID = 1424724535923703968
 WELCOME_PUBLIC_CHANNEL_ID = 1424164269775392858
-PERSISTENT_VIEWS_FILE = 'Data/persistent_views.json'
+PERSISTENT_VIEWS_FILE = 'Data/persistent_views.json'  # File for persistent welcome card views
+ACTIVE_RULES_VIEWS_FILE = 'Data/active_rules_views.json'  # File for active rules acceptance views
