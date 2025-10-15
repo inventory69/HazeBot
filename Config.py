@@ -21,6 +21,8 @@ ADMIN_ROLE_ID = 1424466881862959294  # Role ID for Admins (full permissions)
 MODERATOR_ROLE_ID = 1427219729960931449  # Role ID for Slot Keepers (Moderators)
 NORMAL_ROLE_ID = 1424161475718807562  # Role ID for Lootlings (regular members)
 MEMBER_ROLE_ID = 1424161475718807562  # Alias for NORMAL_ROLE_ID, used in Welcome
+CHANGELOG_ROLE_ID = 1426314743278473307  # Role ID for Changelog Notifications
+
 INTEREST_ROLE_IDS = [
     1424465865297887345,  # Chat & Memes
     1424465951792828477,  # Creative Vibes
@@ -41,9 +43,9 @@ INTEREST_ROLES = {
 }
 
 # === Commands ===
-SLASH_COMMANDS = ["help", "status", "rlstats", "setrlaccount", "ticket", "preferences", "roleinfo", "profile", "modpanel", "modoverview", "leaderboard"]  # Commands that have slash (/) versions
-ADMIN_COMMANDS = ["clear", "modpanel", "modoverview", "say", "changelog"]  # Commands restricted to Admins only
-MOD_COMMANDS = ["clear", "modpanel", "modoverview"]  # Commands restricted to Moderators (Slot Keepers) only
+SLASH_COMMANDS = ["help", "status", "rlstats", "setrlaccount", "ticket", "preferences", "roleinfo", "profile", "mod", "modpanel", "modoverview", "moddetails", "leaderboard", "optins"]  # Commands that have slash (/) versions
+ADMIN_COMMANDS = ["clear", "mod", "modpanel", "modoverview", "moddetails", "say", "changelog", "optins"]  # Commands restricted to Admins only
+MOD_COMMANDS = ["clear", "mod", "modpanel", "modoverview", "moddetails", "optins"]  # Commands restricted to Moderators (Slot Keepers) only
 
 # === Rocket League ===
 RL_TIER_ORDER = ['Unranked', 'Bronze I', 'Bronze II', 'Bronze III', 'Silver I', 'Silver II', 'Silver III', 'Gold I', 'Gold II', 'Gold III', 'Platinum I', 'Platinum II', 'Platinum III', 'Diamond I', 'Diamond II', 'Diamond III', 'Champion I', 'Champion II', 'Champion III', 'Grand Champion I', 'Grand Champion II', 'Grand Champion III', 'Supersonic Legend']
