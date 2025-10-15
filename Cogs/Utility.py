@@ -50,8 +50,21 @@ class Utility(commands.Cog):
         def add_chunked_fields(name_prefix, commands_list):
             if not commands_list:
                 return
-            chunk_size = 8  # Adjust as needed to stay under 1024 chars
-            chunks = [commands_list[i:i + chunk_size] for i in range(0, len(commands_list), chunk_size)]
+            chunks = []
+            current_chunk = []
+            current_length = 0
+            max_length = 800  # Safe under 1024
+            for entry in commands_list:
+                if current_length + len(entry) > max_length:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = [entry]
+                    current_length = len(entry)
+                else:
+                    current_chunk.append(entry)
+                    current_length += len(entry)
+            if current_chunk:
+                chunks.append(current_chunk)
             for idx, chunk in enumerate(chunks):
                 field_name = f"{name_prefix}" if len(chunks) == 1 else f"{name_prefix} ({idx+1}/{len(chunks)})"
                 embed.add_field(name=field_name, value="\n".join(chunk), inline=False)
@@ -114,11 +127,34 @@ class Utility(commands.Cog):
         is_mod = any(role.id == MODERATOR_ROLE_ID for role in interaction.user.roles)
         embed = self.create_help_embed(interaction, is_admin, is_mod)
         if is_admin or is_mod:
-            try:
-                await interaction.user.send(embed=embed)
-                await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
-            except discord.Forbidden:
-                await interaction.response.send_message("❌ I couldn't send you a DM. Please check your privacy settings.", ephemeral=True)
+            # Check if embed is too large (over 2000 chars total)
+            embed_length = len(embed.title or "") + len(embed.description or "") + sum(len(field.name) + len(field.value) for field in embed.fields)
+            if embed_length > 1900:  # Buffer for safety
+                # Split into multiple embeds if needed (simple split by fields)
+                embeds = []
+                current_embed = discord.Embed(title=embed.title, description=embed.description, color=embed.color)
+                for field in embed.fields:
+                    if len(current_embed.fields) >= 5 or (len(current_embed.title or "") + len(current_embed.description or "") + sum(len(f.name) + len(f.value) for f in current_embed.fields) + len(field.name) + len(field.value)) > 1900:
+                        embeds.append(current_embed)
+                        current_embed = discord.Embed(title=embed.title, description="", color=embed.color)
+                    current_embed.add_field(name=field.name, value=field.value, inline=field.inline)
+                if current_embed.fields:
+                    embeds.append(current_embed)
+                for e in embeds:
+                    set_pink_footer(e, bot=interaction.client.user)
+                # Send embeds via DM
+                try:
+                    for additional_embed in embeds:
+                        await interaction.user.send(embed=additional_embed)
+                    await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
+                except discord.Forbidden:
+                    await interaction.response.send_message("❌ I couldn't send you a DM. Please check your privacy settings.", ephemeral=True)
+            else:
+                try:
+                    await interaction.user.send(embed=embed)
+                    await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
+                except discord.Forbidden:
+                    await interaction.response.send_message("❌ I couldn't send you a DM. Please check your privacy settings.", ephemeral=True)
         else:
             # Check if embed is too large (over 2000 chars total)
             embed_length = len(embed.title or "") + len(embed.description or "") + sum(len(field.name) + len(field.value) for field in embed.fields)

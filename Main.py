@@ -24,6 +24,8 @@ from Utils.Logger import Logger
 from dotenv import load_dotenv
 from Utils.Env import LoadEnv
 import difflib  # For fuzzy matching
+from Utils.EmbedUtils import set_pink_footer  # Import the missing function
+import asyncio  # For async sleep
 
 load_dotenv()
 Token = os.getenv("DISCORD_BOT_TOKEN")
@@ -88,7 +90,7 @@ class HazeWorldBot(commands.Bot):
         if isinstance(error, commands.CommandNotFound):
             # Fuzzy matching for unknown commands
             cmd_name = ctx.message.content.split()[0][len(CommandPrefix):]
-            all_cmds = [cmd.name for cmd in self.commands if not cmd.hidden]
+            all_cmds = [cmd.name for cog in self.cogs.values() for cmd in cog.get_commands() if not cmd.hidden]
             matches = difflib.get_close_matches(cmd_name, all_cmds, n=1, cutoff=FuzzyMatchingThreshold)
             if matches:
                 embed = discord.Embed(
@@ -96,35 +98,70 @@ class HazeWorldBot(commands.Bot):
                     description=f"Did you mean `!{matches[0]}`?",
                     color=discord.Color.orange()
                 )
-                await ctx.send(embed=embed, delete_after=10)
+                set_pink_footer(embed, bot=self.user)
+                embed_message = await ctx.send(embed=embed)
+                await asyncio.sleep(10)
+                try:
+                    await embed_message.delete()
+                    await ctx.message.delete()
+                except Exception:
+                    pass
             else:
                 embed = discord.Embed(
                     title="❓ Command not found",
                     description="Use `!help` for a list of commands.",
                     color=discord.Color.red()
                 )
-                await ctx.send(embed=embed, delete_after=10)
+                set_pink_footer(embed, bot=self.user)
+                embed_message = await ctx.send(embed=embed)
+                await asyncio.sleep(10)
+                try:
+                    await embed_message.delete()
+                    await ctx.message.delete()
+                except Exception:
+                    pass
         elif isinstance(error, commands.MissingPermissions):
             embed = discord.Embed(
                 title="🚫 Missing Permissions",
                 description="You don't have the required permissions to use this command.",
                 color=discord.Color.red()
             )
-            await ctx.send(embed=embed, delete_after=5)
+            set_pink_footer(embed, bot=self.user)
+            embed_message = await ctx.send(embed=embed)
+            await asyncio.sleep(5)
+            try:
+                await embed_message.delete()
+                await ctx.message.delete()
+            except Exception:
+                pass
         elif isinstance(error, commands.BadArgument):
             embed = discord.Embed(
                 title="⚠️ Bad Argument",
                 description="Invalid argument provided. Check the command usage.",
                 color=discord.Color.yellow()
             )
-            await ctx.send(embed=embed, delete_after=5)
+            set_pink_footer(embed, bot=self.user)
+            embed_message = await ctx.send(embed=embed)
+            await asyncio.sleep(5)
+            try:
+                await embed_message.delete()
+                await ctx.message.delete()
+            except Exception:
+                pass
         elif isinstance(error, commands.CommandOnCooldown):
             embed = discord.Embed(
                 title="⏳ Command on Cooldown",
                 description=f"This command is on cooldown. Try again in {error.retry_after:.1f} seconds.",
                 color=discord.Color.blue()
             )
-            await ctx.send(embed=embed, delete_after=5)
+            set_pink_footer(embed, bot=self.user)
+            embed_message = await ctx.send(embed=embed)
+            await asyncio.sleep(5)
+            try:
+                await embed_message.delete()
+                await ctx.message.delete()
+            except Exception:
+                pass
         else:
             Logger.error(f"Unhandled command error: {error}")
             embed = discord.Embed(
@@ -132,7 +169,14 @@ class HazeWorldBot(commands.Bot):
                 description="Something went wrong. Please try again later.",
                 color=discord.Color.red()
             )
-            await ctx.send(embed=embed, delete_after=5)
+            set_pink_footer(embed, bot=self.user)
+            embed_message = await ctx.send(embed=embed)
+            await asyncio.sleep(5)
+            try:
+                await embed_message.delete()
+                await ctx.message.delete()
+            except Exception:
+                pass
 
     async def on_message(self, message):
         """Handle messages with cooldowns."""

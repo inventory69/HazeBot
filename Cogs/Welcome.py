@@ -289,16 +289,16 @@ class WelcomeButton(discord.ui.Button):
             return
         # Fun welcome replies with inventory vibe (no mention for welcomer)
         welcome_replies = [
-            f"Inventory alert: {user.display_name} welcomes {self.parent_view.new_member.mention} to the chillventory! 📦",
-            f"{user.display_name} adds a warm welcome to {self.parent_view.new_member.mention}'s inventory! 🤗",
-            f"New stock in the lounge: {user.display_name} welcomes {self.parent_view.new_member.mention}! 🛋️",
-            f"{user.display_name} unlocks extra vibes for {self.parent_view.new_member.mention}! ✨",
-            f"Chillventory update: {user.display_name} says hi to {self.parent_view.new_member.mention}! 😎",
-            f"{user.display_name} throws positivity confetti for {self.parent_view.new_member.mention}! 🎊",
-            f"Welcome stash expanded: {user.display_name} greets {self.parent_view.new_member.mention}! 🌟",
-            f"{user.display_name} shares good mood from the inventory with {self.parent_view.new_member.mention}! 😁",
-            f"Realm of relaxation welcomes {self.parent_view.new_member.mention} via {user.display_name}! 🧘",
-            f"{user.display_name} discovers {self.parent_view.new_member.mention} in the positivity inventory! 🌿",
+            f"Inventory alert: {user.mention} welcomes {self.parent_view.new_member.mention} to the chillventory! 📦",
+            f"{user.mention} adds a warm welcome to {self.parent_view.new_member.mention}'s inventory! 🤗",
+            f"New stock in the lounge: {user.mention} welcomes {self.parent_view.new_member.mention}! 🛋️",
+            f"{user.mention} unlocks extra vibes for {self.parent_view.new_member.mention}! ✨",
+            f"Chillventory update: {user.mention} says hi to {self.parent_view.new_member.mention}! 😎",
+            f"{user.mention} throws positivity confetti for {self.parent_view.new_member.mention}! 🎊",
+            f"Welcome stash expanded: {user.mention} greets {self.parent_view.new_member.mention}! 🌟",
+            f"{user.mention} shares good mood from the inventory with {self.parent_view.new_member.mention}! 😁",
+            f"Realm of relaxation welcomes {self.parent_view.new_member.mention} via {user.mention}! 🧘",
+            f"{user.mention} discovers {self.parent_view.new_member.mention} in the positivity inventory! 🌿",
         ]
         reply = random.choice(welcome_replies)
         reply_msg = await interaction.followup.send(reply)
@@ -369,12 +369,15 @@ class Welcome(commands.Cog):
             # Store both messages for cleanup
             self.active_rules_messages[member.id] = [mention_msg, rules_msg]
             
-            # Neue Zeilen: Speichere View-Daten persistent
+            # Neue Zeilen: Entferne alte Einträge für diesen Member, um Duplikate zu vermeiden
+            self.active_rules_views_data = [d for d in self.active_rules_views_data if d['member_id'] != member.id]
+            # Speichere View-Daten persistent, inklusive mention_message_id
             import json
             active_data = {
                 'member_id': member.id,
                 'channel_id': rules_channel.id,
                 'message_id': rules_msg.id,
+                'mention_message_id': mention_msg.id,
                 'start_time': view.start_time.isoformat()  # Verwende start_time aus View
             }
             self.active_rules_views_data.append(active_data)
@@ -422,6 +425,7 @@ class Welcome(commands.Cog):
         Restore persistent views when the bot is ready.
         """
         restored_count = 0
+        cleaned_persistent_views_data = []  # Neue Liste für bereinigte Daten
         for data in self.persistent_views_data:
             channel = self.bot.get_channel(data['channel_id'])
             if channel:
@@ -436,39 +440,66 @@ class Welcome(commands.Cog):
                     if not message.components or not any(isinstance(comp, discord.ui.View) for comp in message.components):
                         await message.edit(view=view)
                         restored_count += 1
+                        cleaned_persistent_views_data.append(data)  # Behalte gültige Einträge
                     else:
                         restored_count += 1  # Still count as restored if no edit needed
-                    await asyncio.sleep(6)  # Increased sleep to avoid rate limits (adjust as needed)
+                        cleaned_persistent_views_data.append(data)  # Behalte gültige Einträge
+                    await asyncio.sleep(5)  # Increased sleep to avoid rate limits (adjust as needed)
+                except discord.NotFound:
+                    # Nachricht existiert nicht mehr, überspringe und entferne aus Daten
+                    Logger.warning(f"Message {data['message_id']} not found, removing from persistent views data.")
                 except Exception as e:
                     Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
+                    cleaned_persistent_views_data.append(data)  # Behalte bei anderen Fehlern
+            else:
+                cleaned_persistent_views_data.append(data)  # Behalte, wenn Channel nicht gefunden
+        # Speichere die bereinigte Liste
+        self.persistent_views_data = cleaned_persistent_views_data
+        with open(self.persistent_views_file, 'w') as f:
+            json.dump(self.persistent_views_data, f)
         Logger.info(f"Restored {restored_count} persistent welcome views.")
         
         # Stelle active_rules_views wieder her
         restored_rules_count = 0  # Separater Zähler
+        cleaned_active_rules_views_data = []  # Neue Liste für bereinigte Daten
         for data in self.active_rules_views_data:
             channel = self.bot.get_channel(data['channel_id'])
             if channel:
                 try:
-                    message = await channel.fetch_message(data['message_id'])
+                    rules_msg = await channel.fetch_message(data['message_id'])
+                    mention_msg = await channel.fetch_message(data['mention_message_id'])
                     from datetime import datetime
                     start_time = datetime.fromisoformat(data['start_time'])
                     member = channel.guild.get_member(data['member_id'])  # Hole Member aus Guild statt User
                     if member:
-                        view = AcceptRulesView(member, rules_msg=message, cog=self)
+                        view = AcceptRulesView(member, rules_msg=rules_msg, cog=self)
                         view.start_time = start_time  # Setze start_time
                         # Berechne verbleibende Timeout-Zeit
                         elapsed = (datetime.now() - start_time).total_seconds()
                         remaining = 900 - elapsed  # 15 Minuten = 900 Sekunden
                         if remaining > 0:
                             view.timeout = remaining
-                            await message.edit(view=view)
+                            await rules_msg.edit(view=view)
                             restored_rules_count += 1
+                            cleaned_active_rules_views_data.append(data)  # Behalte gültige Einträge
+                            # Stelle active_rules_messages wieder her
+                            self.active_rules_messages[data['member_id']] = [mention_msg, rules_msg]
                         else:
                             # Timeout bereits erreicht, trigger on_timeout
                             await view.on_timeout()
-                    await asyncio.sleep(6)  # Sleep to avoid rate limits
+                    await asyncio.sleep(5)  # Sleep to avoid rate limits
+                except discord.NotFound:
+                    # Nachricht existiert nicht mehr, überspringe und entferne aus Daten
+                    Logger.warning(f"Message {data['message_id']} or mention message not found, removing from active rules views data.")
                 except Exception as e:
                     Logger.error(f"Failed to restore rules view for message {data['message_id']}: {e}")
+                    cleaned_active_rules_views_data.append(data)  # Behalte bei anderen Fehlern
+            else:
+                cleaned_active_rules_views_data.append(data)  # Behalte, wenn Channel nicht gefunden
+        # Speichere die bereinigte Liste
+        self.active_rules_views_data = cleaned_active_rules_views_data
+        with open(self.active_rules_views_file, 'w') as f:
+            json.dump(self.active_rules_views_data, f)
         Logger.info(f"Restored {restored_rules_count} active rules views.")
 
 async def setup(bot):
