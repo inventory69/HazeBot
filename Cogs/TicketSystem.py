@@ -61,10 +61,12 @@ async def delete_ticket(channel_id: int) -> None:
 # === Permission helper function ===
 # Checks if a user is allowed to perform a specific action on a ticket
 def is_allowed_for_ticket_actions(user: discord.User, ticket_data: Dict[str, Any], action: str) -> bool:
-    # If ticket is closed, only allow Reopen for creator
+    # If ticket is closed, only allow Reopen for creator, admins, or moderators
     if ticket_data["status"] == "Closed":
         if action == "Reopen":
-            return user.id == ticket_data["user_id"]
+            return user.id == ticket_data["user_id"] or any(
+                role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles
+            )
         return False
     # Claim only for Admins or Moderators
     if action == "Claim":
@@ -419,7 +421,7 @@ async def disable_buttons_for_closed_ticket(channel: discord.TextChannel, ticket
 
 
 # === Asynchronous function for ticket closing ===
-async def close_ticket_async(bot: commands.Bot, channel: discord.TextChannel, ticket: Dict[str, Any], followup: Any, closing_msg: discord.Message) -> None:
+async def close_ticket_async(bot: commands.Bot, channel: discord.TextChannel, ticket: Dict[str, Any], followup: Any, closing_msg: discord.Message, close_message: Optional[str] = None) -> None:
     transcript = await create_transcript(channel)
     embed = create_transcript_embed(transcript, bot.user)
     # Send transcript to handler
@@ -431,13 +433,17 @@ async def close_ticket_async(bot: commands.Bot, channel: discord.TextChannel, ti
                 await user.send(embed=embed)
             except discord.Forbidden:
                 Logger.warning(f"Could not send transcript to {user} (DMs disabled).")
-    # Send notification to creator with details
+    # Send notification to creator with details and optional message
     creator = bot.get_user(ticket["user_id"])
     if creator:
         try:
+            description = f"Server: {channel.guild.name}\nType: {ticket['type']}\n\n"
+            if close_message:
+                description += f"**Closing Message:** {close_message}\n\n"
+            description += f"Transcript:\n{transcript[:1900 - len(description)]}"  # Adjust limit
             dm_embed = discord.Embed(
                 title=f"Ticket #{ticket['ticket_num']} closed",
-                description=f"Server: {channel.guild.name}\nType: {ticket['type']}\n\nTranscript:\n{transcript[:1900]}",  # Limit
+                description=description,
                 color=PINK,
             )
             set_pink_footer(dm_embed, bot=bot.user)
@@ -450,15 +456,16 @@ async def close_ticket_async(bot: commands.Bot, channel: discord.TextChannel, ti
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
     # Send success message in channel
-    await channel.send(
-        "Ticket successfully closed and archived. It will be deleted after 7 days."
-    )
+    success_msg = "Ticket successfully closed and archived. It will be deleted after 7 days."
+    if close_message:
+        success_msg += f" **Closing Message:** {close_message}"
+    await channel.send(success_msg)
     # Delete the closing message
     try:
         await closing_msg.delete()
     except Exception as e:
         Logger.error(f"Error deleting closing message: {e}")
-    # Archive
+    # Archive the channel to prevent further writing until reopened
     await channel.edit(archived=True)
     # Get names for email
     creator_user = bot.get_user(ticket["user_id"])
@@ -482,6 +489,45 @@ async def close_ticket_async(bot: commands.Bot, channel: discord.TextChannel, ti
         assigned_name,
     )
     Logger.info(f"Ticket #{ticket['ticket_num']} closed.")
+
+
+# === Modal for optional close message ===
+class CloseMessageModal(
+    discord.ui.Modal, title="Optional close message"
+):
+    close_message = discord.ui.TextInput(
+        label="Optional close message",
+        placeholder="E.g., 'Issue resolved, let me know if you need more help.'",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=500,
+    )
+
+    def __init__(self, ticket: Dict[str, Any]) -> None:
+        super().__init__()
+        self.ticket = ticket
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Proceed with closing, passing the message
+        await close_ticket_with_message(interaction, self.ticket, self.close_message.value or None)
+
+
+# === Asynchronous function for ticket closing with optional message ===
+async def close_ticket_with_message(interaction: discord.Interaction, ticket: Dict[str, Any], close_message: Optional[str] = None) -> None:
+    # Defer the interaction to prevent timeout
+    await interaction.response.defer()
+    # Send closing message and get the message object
+    msg = await interaction.channel.send("Closing ticket...")
+    followup = interaction.followup
+    # Update status
+    await update_ticket(interaction.channel.id, {"status": "Closed"})
+    # Close asynchronously, pass the message to delete it later
+    asyncio.create_task(
+        close_ticket_async(
+            interaction.client, interaction.channel, ticket, followup, msg, close_message
+        )
+    )
+    Logger.info(f"Ticket closing started for {interaction.channel}.")
 
 
 # === View with ticket buttons ===
@@ -561,20 +607,8 @@ class TicketControlView(discord.ui.View):
         ):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
-        # Defer the interaction to prevent timeout
-        await interaction.response.defer()
-        # Send closing message and get the message object
-        msg = await interaction.channel.send("Closing ticket...")
-        followup = interaction.followup
-        # Update status
-        await update_ticket(interaction.channel.id, {"status": "Closed"})
-        # Close asynchronously, pass the message to delete it later
-        asyncio.create_task(
-            close_ticket_async(
-                interaction.client, interaction.channel, ticket, followup, msg
-            )
-        )
-        Logger.info(f"Ticket closing started for {interaction.channel}.")
+        # Open modal for optional close message
+        await interaction.response.send_modal(CloseMessageModal(ticket))
 
     @discord.ui.button(label="Reopen", style=discord.ButtonStyle.secondary, emoji="🔓")
     async def reopen(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -660,37 +694,29 @@ class TicketSystem(commands.Cog):
             embed=embed, view=TicketView(), ephemeral=True
         )
 
-    # On ready: Restore views for open tickets and start cleanup
+    # On ready: Restore views for open and closed tickets and start cleanup
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        Logger.info("TicketSystem Cog ready. Restoring views for open tickets...")
+        Logger.info("TicketSystem Cog ready. Restoring views for open and closed tickets...")
         tickets = await load_tickets()
-        now = datetime.now()
         for ticket in tickets:
-            if ticket["status"] == "Open":
-                # Only restore if created within the last 24 hours to avoid rate limits on server
-                created_at = datetime.fromisoformat(ticket.get("created_at"))
-                if now - created_at > timedelta(hours=24):
-                    continue
+            if ticket["status"] in ["Open", "Closed"]:
+                # Always restore open tickets as user decides when to close
+                # Always restore closed tickets as they are static
                 try:
                     channel = self.bot.get_channel(ticket["channel_id"])
                     if channel and ticket.get("embed_message_id"):
                         msg = await channel.fetch_message(ticket["embed_message_id"])
                         embed = create_ticket_embed(ticket, self.bot.user)
                         view = TicketControlView()
-                        # Disable buttons based on status (general, no user)
+                        # Disable buttons based on status
                         for item in view.children:
                             if isinstance(item, discord.ui.Button):
-                                if (
-                                    ticket["status"] == "Closed"
-                                    and item.label != "Reopen"
-                                ):
+                                if ticket["status"] == "Closed" and item.label != "Reopen":
                                     item.disabled = True
                                 elif item.label == "Claim" and ticket.get("claimed_by"):
                                     item.disabled = True
-                                elif item.label == "Assign" and ticket.get(
-                                    "assigned_to"
-                                ):
+                                elif item.label == "Assign" and ticket.get("assigned_to"):
                                     item.disabled = True
                         await msg.edit(embed=embed, view=view)
                         Logger.info(

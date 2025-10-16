@@ -160,4 +160,13 @@ Data/activity.json
 
 # Active Rules Views
 Data/active_rules_views.json
+
+# Diff files
 my_changes.diff
+
+# Changelog
+CHANGELOG_CURRENT.md
+
+# Cache directory
+Cache/
+cache/
