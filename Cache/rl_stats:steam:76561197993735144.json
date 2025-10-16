@@ -1,0 +1,25 @@
+{
+  "value": {
+    "username": "Inventory",
+    "rank": "Unranked",
+    "season_reward": "<:unranked:1425389712276721725> N/A",
+    "rank_1v1": "<:p3:1425389845328433213> Division I",
+    "rank_2v2": "<:c1:1425389889796706374> Division III",
+    "rank_3v3": "<:d1:1425389856229691462> Division III",
+    "rank_4v4": "<:p1:1425389821706113055> Division III",
+    "highest_icon_url": "https://trackercdn.com/cdn/tracker.gg/rocket-league/ranks/s4-16.png",
+    "tier_names": {
+      "1v1": "Platinum III",
+      "2v2": "Champion I",
+      "3v3": "Diamond I",
+      "4v4": "Platinum I"
+    },
+    "icon_urls": {
+      "1v1": "https://trackercdn.com/cdn/tracker.gg/rocket-league/ranks/s4-12.png",
+      "2v2": "https://trackercdn.com/cdn/tracker.gg/rocket-league/ranks/s4-16.png",
+      "3v3": "https://trackercdn.com/cdn/tracker.gg/rocket-league/ranks/s4-13.png",
+      "4v4": "https://trackercdn.com/cdn/tracker.gg/rocket-league/ranks/s4-10.png"
+    }
+  },
+  "expires": 1760646230.104904
+}

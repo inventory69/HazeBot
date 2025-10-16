@@ -8,14 +8,15 @@ from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
 
 ROLE_ID_CHANGELOG = 1426314743278473307  # Changelog Notifications Role ID
-CHANNEL_ID_CHANGELOG = 1424859282284871752  # Ziel-Channel-ID
+CHANNEL_ID_CHANGELOG = 1424859282284871752  # Target Channel ID
+
 
 class ChangelogCog(commands.Cog):
     """
     📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4 Turbo.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -32,11 +33,13 @@ class ChangelogCog(commands.Cog):
             model="gpt-4-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=50,
-            temperature=0.7
+            temperature=0.7,
         )
         return response.choices[0].message.content.strip().strip('"').strip("'")
 
-    async def generate_changelog_text(self, text: str, project: str, author: str) -> str:
+    async def generate_changelog_text(
+        self, text: str, project: str, author: str
+    ) -> str:
         """
         Generate changelog text using OpenAI GPT-4 Turbo.
         """
@@ -76,49 +79,51 @@ PR-Text:
             model="gpt-4-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1000,
-            temperature=0.5
+            temperature=0.5,
         )
         return response.choices[0].message.content.strip()
 
-    def create_changelog_embed(self, changelog: str, title: str, date: str, project: str, author: str) -> discord.Embed:
+    def create_changelog_embed(
+        self, changelog: str, title: str, date: str, project: str, author: str
+    ) -> discord.Embed:
         embed = discord.Embed(
             title=f"🆕 {title} – {date}",
-            description=changelog + "\n\u200b",  # Fügt einen kleinen Abstand vor dem Footer hinzu
-            color=PINK
+            description=changelog + "\n\u200b",  # Adds a small space before the footer
+            color=PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 
     @commands.command(name="changelog")
     @commands.has_permissions(administrator=True)
-    async def changelog_prefix(self, ctx, *, args: str):
+    async def changelog_prefix(self, ctx: commands.Context, *, args: str) -> None:
         """
         📝 Generate a changelog from PR text. (Admin only)
         Usage: !changelog title:"Title" date:"2025-10-13" project:"HazeWorldBot" author:"inventory69" text:PR text here
         If title is omitted, it will be generated from the PR text. Date defaults to today.
         """
         params = {}
-        for part in args.split(' '):
-            if ':' in part:
-                key, value = part.split(':', 1)
+        for part in args.split(" "):
+            if ":" in part:
+                key, value = part.split(":", 1)
                 params[key] = value
 
-        text = params.get('text', args)
-        project = params.get('project', 'HazeWorldBot')
-        author = params.get('author', 'inventory69')
+        text = params.get("text", args)
+        project = params.get("project", "HazeWorldBot")
+        author = params.get("author", "inventory69")
 
         # Generate title if not provided
-        if 'title' not in params:
+        if "title" not in params:
             try:
                 title = await self.generate_changelog_title(text)
             except Exception as e:
                 Logger.error(f"Error generating title: {e}")
-                title = 'Bot Update'
+                title = "Bot Update"
         else:
-            title = params['title']
+            title = params["title"]
 
         # Use today's date if not provided
-        date = params.get('date', datetime.now().strftime("%Y-%m-%d"))
+        date = params.get("date", datetime.now().strftime("%Y-%m-%d"))
 
         try:
             changelog = await self.generate_changelog_text(text, project, author)
@@ -129,22 +134,32 @@ PR-Text:
             Logger.error(f"Error generating changelog: {e}")
             await ctx.send("❌ Failed to generate changelog. Check logs.")
 
+
 # --- Button & Channel Select View ---
 class ChangelogChannelView(discord.ui.View):
-    def __init__(self, embed):
+    def __init__(self, embed: discord.Embed) -> None:
         super().__init__(timeout=120)
         self.embed = embed
 
-    @discord.ui.button(label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢")
-    async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢"
+    )
+    async def post_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ) -> None:
         channel = interaction.guild.get_channel(CHANNEL_ID_CHANGELOG)
         if channel:
-            # Sende die Mention-Nachricht vor dem Embed
+            # Send the mention message before the embed
             await channel.send(f"Role Mention: <@&{ROLE_ID_CHANGELOG}> ...")
             await channel.send(embed=self.embed)
-            await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
+            await interaction.response.send_message(
+                f"✅ Changelog posted to {channel.mention}.", ephemeral=True
+            )
         else:
-            await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ Channel not found.", ephemeral=True
+            )
 
-async def setup(bot):
+
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ChangelogCog(bot))

@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "HazeWorldBot"
+version = "1.0.0"
+description = "A Discord bot for Haze World community with moderation, Rocket League stats, and more."
+authors = [
+    {name = "inventory69", email = "admin@haze.world"},
+]
+dependencies = [
+    "discord.py",
+    "python-dotenv",
+    "aiohttp",
+    "requests",
+    "bs4",
+    "uuid",
+    "rich",
+    "openai",
+]
+requires-python = ">=3.8"
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pymodules__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+# Same as Black.
+line-length = 120
+indent-width = 4
+
+# Assume Python 3.8+
+target-version = "py38"
+
+[tool.ruff.lint]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+select = ["E", "F"]
+ignore = []
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+known-first-party = ["HazeWorldBot"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Disallow all relative imports.
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and imports.
+"tests/**/*" = ["PLR2004", "S101"]
+"__init__.py" = ["F401"]
+# Ignore line length in files with long strings (embeds, prompts)
+"Cogs/Changelog.py" = ["E501"]
+"Cogs/Leaderboard.py" = ["E501"]
+"Cogs/ModPerks.py" = ["E501"]
+"Cogs/Preferences.py" = ["E501"]
+"Cogs/RocketLeague.py" = ["E501"]
+"Cogs/RoleInfo.py" = ["E501"]
+"Cogs/TicketSystem.py" = ["E501"]
+"Cogs/Welcome.py" = ["E501"]
+"Main.py" = ["E402"]  # Imports after logging setup
