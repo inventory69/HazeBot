@@ -1,13 +1,14 @@
 # 📦 Built-in modules
 import os
-import logging
 
 # 📥 Custom modules
 from dotenv import load_dotenv
+from typing import Dict, Optional
 from Utils.Logger import Logger
 
+
 # 🌱 Load environment variables from .env file
-def LoadEnv():
+def LoadEnv() -> Dict[str, Optional[str]]:
     """
     Loads environment variables from .env file and sets them in os.environ.
     If .env is not found, uses existing os.environ values.
@@ -19,20 +20,22 @@ def LoadEnv():
         load_dotenv()
         Logger.info("📄 .env file loaded successfully.")
     except Exception as e:
-        Logger.warning(f"⚠️ Could not load .env file: {e}. Using existing environment variables.")
+        Logger.warning(
+            f"⚠️ Could not load .env file: {e}. Using existing environment variables."
+        )
 
     # Define required keys (adapted for HazeWorldBot)
     required_keys = [
-        'DISCORD_BOT_TOKEN',
-        'DISCORD_GUILD_ID',
-        'ROCKET_API_BASE',
-        'ROCKET_API_KEY',
-        'FLARESOLVERR_URL',
-        'SMTP_SERVER',
-        'SMTP_PORT',
-        'SMTP_USER',
-        'SMTP_PASS',
-        'SUPPORT_EMAIL'
+        "DISCORD_BOT_TOKEN",
+        "DISCORD_GUILD_ID",
+        "ROCKET_API_BASE",
+        "ROCKET_API_KEY",
+        "FLARESOLVERR_URL",
+        "SMTP_SERVER",
+        "SMTP_PORT",
+        "SMTP_USER",
+        "SMTP_PASS",
+        "SUPPORT_EMAIL",
     ]
 
     # Load and validate keys

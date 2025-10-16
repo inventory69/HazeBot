@@ -1,6 +1,5 @@
 # 📦 Built-in modules
 import random
-import asyncio
 
 # 👾 Discord modules
 from discord.ext import commands, tasks
@@ -11,6 +10,7 @@ from Config import PresenceUpdateInterval  # Assuming you add this to Config.py
 
 # 📥 Custom modules
 from Utils.Logger import Logger
+
 
 class Presence(commands.Cog):
     """
@@ -29,7 +29,7 @@ class Presence(commands.Cog):
             "⚔️ Upgrading Gear",
             "🚀 Inventory Activated",
             "🎉 Rare Finds",
-            "🔥 Epic Drops"
+            "🔥 Epic Drops",
         ]
         self.emojis = ["🗂️", "💎", "🏆", "✨", "🌟", "🔍", "⚔️", "🚀", "🎉", "🔥"]
         self.update_presence.start()
@@ -43,10 +43,12 @@ class Presence(commands.Cog):
             message = random.choice(self.presence_messages)
             emoji = random.choice(self.emojis)
             message = message.format(random_emoji=emoji)
-            
+
             # Set presence
             activity = discord.Game(name=message)
-            await self.bot.change_presence(activity=activity, status=discord.Status.online)
+            await self.bot.change_presence(
+                activity=activity, status=discord.Status.online
+            )
             Logger.info(f"🎮 Presence updated: {message}")
         except Exception as e:
             Logger.error(f"Error updating presence: {e}")
@@ -57,6 +59,7 @@ class Presence(commands.Cog):
 
     def cog_unload(self):
         self.update_presence.cancel()
+
 
 async def setup(bot):
     """

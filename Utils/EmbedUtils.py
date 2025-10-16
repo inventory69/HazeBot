@@ -1,14 +1,24 @@
-def set_pink_footer(embed, bot=None, user=None, text="Powered by Haze World 💖"):
+from typing import Optional
+import discord
+from discord.ext import commands
+
+
+def set_pink_footer(
+    embed: discord.Embed,
+    bot: Optional[commands.Bot] = None,
+    user: Optional[discord.User] = None,
+    text: str = "Powered by Haze World 💖",
+) -> discord.Embed:
     """
-    Setzt einen pinken Footer für Embeds.
-    - Wenn user angegeben: dessen Avatar wird genutzt.
-    - Wenn kein user, aber bot angegeben: Bot-Avatar wird genutzt.
-    - Wenn weder user noch bot: nur Text, kein Avatar.
+    Sets a pink footer for embeds.
+    - If user is specified: uses their avatar.
+    - If no user but bot is specified: uses bot avatar.
+    - If neither user nor bot: only text, no avatar.
     """
     if user is not None:
-        embed.set_footer(text=text, icon_url=getattr(user.avatar, 'url', None))
+        embed.set_footer(text=text, icon_url=getattr(user.avatar, "url", None))
     elif bot is not None:
-        embed.set_footer(text=text, icon_url=getattr(bot.avatar, 'url', None))
+        embed.set_footer(text=text, icon_url=getattr(bot.avatar, "url", None))
     else:
         embed.set_footer(text=text)
     return embed

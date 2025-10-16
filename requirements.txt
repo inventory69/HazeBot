@@ -1,8 +1,27 @@
+# Discord API wrapper for bot functionality
 discord.py
+
+# Loading environment variables from .env file
 python-dotenv
+
+# Asynchronous HTTP client for API requests
 aiohttp
+
+# Synchronous HTTP requests (used in some utilities)
 requests
+
+# HTML parsing for web scraping (e.g., Rocket League stats)
 bs4
+
+# UUID generation (if needed for unique identifiers)
 uuid
+
+# Rich console output for logging and formatting
 rich
+
+# OpenAI API for generating changelogs with GPT-4 Turbo
 openai
+
+# Development dependencies
+# Ruff: Fast Python linter, formatter, and import sorter
+ruff

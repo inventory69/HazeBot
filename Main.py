@@ -2,9 +2,9 @@ import logging
 
 logging.basicConfig(
     level=logging.INFO,
-    format='[{asctime}] 🛈  INFO  │ {message}',
-    datefmt='%H:%M:%S',
-    style='{'
+    format="[{asctime}] 🛈  INFO  │ {message}",
+    datefmt="%H:%M:%S",
+    style="{",
 )
 logging.getLogger("discord").handlers.clear()
 logging.getLogger("discord").propagate = False
@@ -19,7 +19,14 @@ import os
 import pathlib
 import discord
 from discord.ext import commands
-from Config import CommandPrefix, Intents, BotName, SLASH_COMMANDS, FuzzyMatchingThreshold, MessageCooldown
+from Config import (
+    CommandPrefix,
+    Intents,
+    BotName,
+    SLASH_COMMANDS,
+    FuzzyMatchingThreshold,
+    MessageCooldown,
+)
 from Utils.Logger import Logger
 from dotenv import load_dotenv
 from Utils.Env import LoadEnv
@@ -33,15 +40,18 @@ EnvDict = LoadEnv()
 
 # Now log the summary, since Logger is initialized
 loaded_count = sum(1 for v in EnvDict.values() if v is not None)
-Logger.info(f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}")
+Logger.info(
+    f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}"
+)
+
 
 class HazeWorldBot(commands.Bot):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(command_prefix=CommandPrefix, intents=Intents)
-        self.remove_command('help')
+        self.remove_command("help")
         self.UserCooldowns = {}  # For message cooldowns
 
-    async def setup_hook(self):
+    async def setup_hook(self) -> None:
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
         for cog in pathlib.Path("Cogs").glob("*.py"):
@@ -65,7 +75,9 @@ class HazeWorldBot(commands.Bot):
             for cmd in cog.get_commands():
                 if not cmd.hidden:
                     slash_available = cmd.name in slash_commands
-                    Logger.info(f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}")
+                    Logger.info(
+                        f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}"
+                    )
         # Clear global commands to prevent duplicates
         self.tree.clear_commands(guild=None)
         # Copy global commands to guild and sync
@@ -75,28 +87,35 @@ class HazeWorldBot(commands.Bot):
         Logger.info(f"Synced commands: {[cmd.name for cmd in synced]}")
         Logger.info(f"🔗 Synced {len(synced)} guild slash commands.")
 
-    async def on_ready(self):
-        Logger.info(f'{BotName} is online as {self.user}!')
+    async def on_ready(self) -> None:
+        Logger.info(f"{BotName} is online as {self.user}!")
 
-    async def on_command_completion(self, ctx):
-        # Löscht die eingegebene Nachricht nach jedem Command
+    async def on_command_completion(self, ctx: commands.Context) -> None:
+        # Deletes the entered message after each command
         try:
             await ctx.message.delete()
         except Exception:
-            pass  # Ignoriere Fehler, z.B. fehlende Rechte
+            pass  # Ignore errors, e.g., missing permissions
 
-    async def on_command_error(self, ctx, error):
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
         """Handle command errors with detailed responses."""
         if isinstance(error, commands.CommandNotFound):
             # Fuzzy matching for unknown commands
-            cmd_name = ctx.message.content.split()[0][len(CommandPrefix):]
-            all_cmds = [cmd.name for cog in self.cogs.values() for cmd in cog.get_commands() if not cmd.hidden]
-            matches = difflib.get_close_matches(cmd_name, all_cmds, n=1, cutoff=FuzzyMatchingThreshold)
+            cmd_name = ctx.message.content.split()[0][len(CommandPrefix) :]
+            all_cmds = [
+                cmd.name
+                for cog in self.cogs.values()
+                for cmd in cog.get_commands()
+                if not cmd.hidden
+            ]
+            matches = difflib.get_close_matches(
+                cmd_name, all_cmds, n=1, cutoff=FuzzyMatchingThreshold
+            )
             if matches:
                 embed = discord.Embed(
                     title="❓ Command not found",
                     description=f"Did you mean `!{matches[0]}`?",
-                    color=discord.Color.orange()
+                    color=discord.Color.orange(),
                 )
                 set_pink_footer(embed, bot=self.user)
                 embed_message = await ctx.send(embed=embed)
@@ -110,7 +129,7 @@ class HazeWorldBot(commands.Bot):
                 embed = discord.Embed(
                     title="❓ Command not found",
                     description="Use `!help` for a list of commands.",
-                    color=discord.Color.red()
+                    color=discord.Color.red(),
                 )
                 set_pink_footer(embed, bot=self.user)
                 embed_message = await ctx.send(embed=embed)
@@ -124,7 +143,7 @@ class HazeWorldBot(commands.Bot):
             embed = discord.Embed(
                 title="🚫 Missing Permissions",
                 description="You don't have the required permissions to use this command.",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
             set_pink_footer(embed, bot=self.user)
             embed_message = await ctx.send(embed=embed)
@@ -138,7 +157,7 @@ class HazeWorldBot(commands.Bot):
             embed = discord.Embed(
                 title="⚠️ Bad Argument",
                 description="Invalid argument provided. Check the command usage.",
-                color=discord.Color.yellow()
+                color=discord.Color.yellow(),
             )
             set_pink_footer(embed, bot=self.user)
             embed_message = await ctx.send(embed=embed)
@@ -152,7 +171,7 @@ class HazeWorldBot(commands.Bot):
             embed = discord.Embed(
                 title="⏳ Command on Cooldown",
                 description=f"This command is on cooldown. Try again in {error.retry_after:.1f} seconds.",
-                color=discord.Color.blue()
+                color=discord.Color.blue(),
             )
             set_pink_footer(embed, bot=self.user)
             embed_message = await ctx.send(embed=embed)
@@ -167,7 +186,7 @@ class HazeWorldBot(commands.Bot):
             embed = discord.Embed(
                 title="💥 An error occurred",
                 description="Something went wrong. Please try again later.",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
             set_pink_footer(embed, bot=self.user)
             embed_message = await ctx.send(embed=embed)
@@ -178,7 +197,7 @@ class HazeWorldBot(commands.Bot):
             except Exception:
                 pass
 
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message) -> None:
         """Handle messages with cooldowns."""
         if message.author.bot:
             return
@@ -192,17 +211,22 @@ class HazeWorldBot(commands.Bot):
 
         await self.process_commands(message)
 
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         """Log message edits."""
         if before.author.bot or before.content == after.content:
             return
-        Logger.info(f"✏️ Message edited by {before.author} in {before.channel}: '{before.content}' -> '{after.content}'")
+        Logger.info(
+            f"✏️ Message edited by {before.author} in {before.channel}: '{before.content}' -> '{after.content}'"
+        )
 
-    async def on_message_delete(self, message):
+    async def on_message_delete(self, message: discord.Message) -> None:
         """Log message deletions."""
         if message.author.bot:
             return
-        Logger.info(f"🗑️ Message deleted by {message.author} in {message.channel}: '{message.content}'")
+        Logger.info(
+            f"🗑️ Message deleted by {message.author} in {message.channel}: '{message.content}'"
+        )
+
 
 bot = HazeWorldBot()
 bot.run(Token)
