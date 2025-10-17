@@ -62,6 +62,8 @@ SLASH_COMMANDS = [
     "moddetails",
     "leaderboard",
     "optins",
+    "todo-update",
+    "todo-show",
 ]  # Commands that have slash (/) versions
 ADMIN_COMMANDS = [
     "clear",
@@ -72,6 +74,7 @@ ADMIN_COMMANDS = [
     "say",
     "changelog",
     "optins",
+    "todo-update",
 ]  # Commands restricted to Admins only
 MOD_COMMANDS = [
     "clear",
@@ -80,6 +83,7 @@ MOD_COMMANDS = [
     "modoverview",
     "moddetails",
     "optins",
+    "todo-update",
 ]  # Commands restricted to Moderators (Slot Keepers) only
 
 # === Rocket League ===
