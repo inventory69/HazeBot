@@ -143,23 +143,8 @@ Logs/
 tmp/
 temp/
 
-# Persistent views file
-Data/persistent_views.json
-
-# Rocket League Cog additions
-Data/rl_accounts.json
-
-# Ticket System Cog additions
-Data/tickets.json
-
-# Moderation Data
-Data/mod_data.json
-
-# Activity Cog additions
-Data/activity.json
-
-# Active Rules Views
-Data/active_rules_views.json
+# Data files
+Data/
 
 # Diff files
 my_changes.diff
