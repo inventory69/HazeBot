@@ -4,7 +4,7 @@ from discord import app_commands
 import os
 import json
 from typing import Dict, List, Callable, Any
-from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE
 from Utils.EmbedUtils import set_pink_footer
 from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
 from Utils.CacheUtils import cache
@@ -107,24 +107,14 @@ class Leaderboard(commands.Cog):
                 lambda idx: f"{RANK_EMOJIS.get(RL_TIER_ORDER[idx], '<:unranked:1425389712276721725>')} {RL_TIER_ORDER[idx]}",
             )
         elif category == "tickets":
-            tickets = load_tickets()
+            tickets = await load_tickets()
             data = {}
             for ticket in tickets:
                 if ticket["status"] == "Closed":
                     for key in ["claimed_by", "assigned_to"]:
                         uid = ticket.get(key)
                         if uid:
-                            # Check if user is mod or admin
-                            member = (
-                                ctx_or_interaction.guild.get_member(int(uid))
-                                if hasattr(ctx_or_interaction, "guild")
-                                else None
-                            )
-                            if member and any(
-                                role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID]
-                                for role in member.roles
-                            ):
-                                data[str(uid)] = data.get(str(uid), 0) + 1
+                            data[uid] = data.get(uid, 0) + 1
             sorted_data = sorted(data.items(), key=lambda x: x[1], reverse=True)
             embed = self.create_leaderboard_embed("Resolved Tickets", sorted_data)
         elif category == "messages":
