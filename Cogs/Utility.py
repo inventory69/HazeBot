@@ -6,6 +6,7 @@ from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
 from discord import app_commands
 import os
+import json
 
 ADMIN_ROLE_ID = 1424466881862959294  # Admin role ID
 MODERATOR_ROLE_ID = 1427219729960931449  # Slot Keeper role ID
@@ -277,8 +278,10 @@ class Utility(commands.Cog):
     async def say(self, ctx: commands.Context, *, message: str) -> None:
         """
         🗣️ Allows an admin to send a message as the bot in the current channel.
-        Usage: !say --embed your message here
-        If --embed is included directly after !say, the message will be sent as an embed.
+        Usage:
+        - !say your message here (plain text)
+        - !say --embed your message here (simple text embed)
+        - !say --json {"title": "...", "description": "...", "image": {"url": "..."}} (full JSON embed)
         """
         if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
             embed = discord.Embed(
@@ -289,12 +292,40 @@ class Utility(commands.Cog):
             await ctx.send(embed=embed, delete_after=5)
             return
         await ctx.message.delete()
-        if message.startswith("--embed "):
+
+        # JSON Embed Support (Full Control with Images)
+        if message.startswith("--json "):
+            try:
+                json_str = message[7:].strip()
+                embed_data = json.loads(json_str)
+                embed = discord.Embed.from_dict(embed_data)
+                await ctx.send(embed=embed)
+                Logger.info(f"JSON embed sent by {ctx.author} in {ctx.guild}")
+            except json.JSONDecodeError as e:
+                error_embed = discord.Embed(
+                    description=f"❌ Invalid JSON format: {e}",
+                    color=discord.Color.red(),
+                )
+                await ctx.send(embed=error_embed, delete_after=10)
+                Logger.error(f"JSON decode error in !say by {ctx.author}: {e}")
+            except Exception as e:
+                error_embed = discord.Embed(
+                    description=f"❌ Error creating embed: {e}",
+                    color=discord.Color.red(),
+                )
+                await ctx.send(embed=error_embed, delete_after=10)
+                Logger.error(f"Error creating embed in !say by {ctx.author}: {e}")
+        # Simple Text Embed Support
+        elif message.startswith("--embed "):
             message = message[8:].strip()
             embed = self.create_say_embed(message, self.bot.user)
             await ctx.send(embed=embed)
+            Logger.info(f"Simple embed sent by {ctx.author} in {ctx.guild}")
+        # Plain Text
         else:
             await ctx.send(message)
+            Logger.info(f"Plain message sent by {ctx.author} in {ctx.guild}")
+
         Logger.info(f"Prefix command !say used by {ctx.author} in {ctx.guild}")
 
 
