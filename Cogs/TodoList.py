@@ -157,6 +157,7 @@ Rules:
 - Use professional but friendly tone
 - NO markdown formatting in the JSON values themselves
 - Return ONLY the JSON, nothing else
+- Return in english
 """
 
         response = openai.chat.completions.create(
