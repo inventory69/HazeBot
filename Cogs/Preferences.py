@@ -32,9 +32,7 @@ class PreferencesSystem(commands.Cog):
         await ctx.send(embed=embed, view=view)
 
     # /preferences (Slash) - Only synced in guild
-    @app_commands.command(
-        name="preferences", description="🛠️ Open your preferences menu."
-    )
+    @app_commands.command(name="preferences", description="🛠️ Open your preferences menu.")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def preferences_slash(self, interaction: discord.Interaction) -> None:
         embed = self.get_preferences_help_embed(interaction, interaction.user)
@@ -68,11 +66,7 @@ class PreferencesView(discord.ui.View):
         # Check current status
         member = guild.get_member(user_id)
         has_role = member and any(role.id == CHANGELOG_ROLE_ID for role in member.roles)
-        label = (
-            "Disable Changelog Notifications"
-            if has_role
-            else "Enable Changelog Notifications"
-        )
+        label = "Disable Changelog Notifications" if has_role else "Enable Changelog Notifications"
         emoji = "🔕" if has_role else "🔔"
         # Add the button with dynamic label
         self.add_item(ToggleChangelogButton(label, emoji, user_id, guild))
@@ -86,9 +80,7 @@ class ToggleChangelogButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message(
-                "This menu is not for you.", ephemeral=True
-            )
+            await interaction.response.send_message("This menu is not for you.", ephemeral=True)
             return
         member = self.guild.get_member(self.user_id)
         if not member:
@@ -96,9 +88,7 @@ class ToggleChangelogButton(discord.ui.Button):
             return
         role = self.guild.get_role(CHANGELOG_ROLE_ID)
         if not role:
-            await interaction.response.send_message(
-                "Changelog role not found.", ephemeral=True
-            )
+            await interaction.response.send_message("Changelog role not found.", ephemeral=True)
             return
         if role in member.roles:
             await member.remove_roles(role)
@@ -106,9 +96,7 @@ class ToggleChangelogButton(discord.ui.Button):
         else:
             await member.add_roles(role)
             status = "enabled"
-        await interaction.response.send_message(
-            f"Changelog notifications {status}.", ephemeral=True
-        )
+        await interaction.response.send_message(f"Changelog notifications {status}.", ephemeral=True)
         Logger.info(f"User {interaction.user} toggled changelog role to {status}.")
 
         # Note: Since the message is ephemeral, we can't edit it. The status is shown in the button label and embed initially.

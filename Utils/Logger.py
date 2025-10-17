@@ -110,9 +110,7 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
         show_level=False,  # Disable Rich's level since we use custom formatter
     )
 
-    ConsoleHandler.setFormatter(
-        EmojiRichFormatter()
-    )  # Use custom formatter with emojis
+    ConsoleHandler.setFormatter(EmojiRichFormatter())  # Use custom formatter with emojis
 
     logging.basicConfig(level=LogLevel, handlers=[ConsoleHandler], force=True)
 

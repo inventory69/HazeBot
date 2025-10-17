@@ -5,7 +5,8 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 from functools import wraps
 import time
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
+
 
 # === In-memory cache with TTL ===
 class Cache:
@@ -15,17 +16,14 @@ class Cache:
     def get(self, key: str) -> Optional[Any]:
         if key in self._cache:
             entry = self._cache[key]
-            if time.time() < entry['expires']:
-                return entry['value']
+            if time.time() < entry["expires"]:
+                return entry["value"]
             else:
                 del self._cache[key]
         return None
 
     def set(self, key: str, value: Any, ttl_seconds: int) -> None:
-        self._cache[key] = {
-            'value': value,
-            'expires': time.time() + ttl_seconds
-        }
+        self._cache[key] = {"value": value, "expires": time.time() + ttl_seconds}
 
     def clear(self, key: str) -> None:
         if key in self._cache:
@@ -38,19 +36,22 @@ class Cache:
         cached = self.get(key)
         if cached is not None:
             return cached
-        
+
         result = await fetch_func()
         self.set(key, result, ttl)
         return result
 
+
 # Global cache instance
 cache_instance = Cache()
+
 
 def cache(ttl_seconds: int) -> Callable[[F], F]:
     """
     Decorator for caching function results in memory with TTL.
     Usage: @cache(ttl_seconds=30)
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         async def async_wrapper(*args, **kwargs) -> Any:
@@ -59,11 +60,11 @@ def cache(ttl_seconds: int) -> Callable[[F], F]:
             cached = cache_instance.get(key)
             if cached is not None:
                 return cached
-            
+
             result = await func(*args, **kwargs)
             cache_instance.set(key, result, ttl_seconds)
             return result
-        
+
         @wraps(func)
         def sync_wrapper(*args, **kwargs) -> Any:
             # Create a cache key from function name and args
@@ -71,17 +72,18 @@ def cache(ttl_seconds: int) -> Callable[[F], F]:
             cached = cache_instance.get(key)
             if cached is not None:
                 return cached
-            
+
             result = func(*args, **kwargs)
             cache_instance.set(key, result, ttl_seconds)
             return result
-        
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper  # type: ignore
         else:
             return sync_wrapper  # type: ignore
-    
+
     return decorator
+
 
 # === File-based cache for expensive operations ===
 class FileCache:
@@ -96,10 +98,10 @@ class FileCache:
         path = self._get_cache_path(key)
         if os.path.exists(path):
             try:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    if time.time() < data['expires']:
-                        return data['value']
+                    if time.time() < data["expires"]:
+                        return data["value"]
                     else:
                         os.remove(path)
             except (json.JSONDecodeError, KeyError):
@@ -108,11 +110,8 @@ class FileCache:
 
     def set(self, key: str, value: Any, ttl_seconds: int) -> None:
         path = self._get_cache_path(key)
-        data = {
-            'value': value,
-            'expires': time.time() + ttl_seconds
-        }
-        with open(path, 'w', encoding='utf-8') as f:
+        data = {"value": value, "expires": time.time() + ttl_seconds}
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def clear(self, key: str) -> None:
@@ -127,19 +126,22 @@ class FileCache:
         cached = self.get(key)
         if cached is not None:
             return cached
-        
+
         result = await fetch_func()
         self.set(key, result, ttl)
         return result
 
+
 # Global file cache instance
 file_cache = FileCache()
+
 
 def file_cache_decorator(ttl_seconds: int) -> Callable[[F], F]:
     """
     Decorator for caching function results to file with TTL.
     Usage: @file_cache(ttl_seconds=3600)
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         async def async_wrapper(*args, **kwargs) -> Any:
@@ -148,11 +150,11 @@ def file_cache_decorator(ttl_seconds: int) -> Callable[[F], F]:
             cached = file_cache.get(key)
             if cached is not None:
                 return cached
-            
+
             result = await func(*args, **kwargs)
             file_cache.set(key, result, ttl_seconds)
             return result
-        
+
         @wraps(func)
         def sync_wrapper(*args, **kwargs) -> Any:
             # Create a cache key from function name and args
@@ -160,14 +162,14 @@ def file_cache_decorator(ttl_seconds: int) -> Callable[[F], F]:
             cached = file_cache.get(key)
             if cached is not None:
                 return cached
-            
+
             result = func(*args, **kwargs)
             file_cache.set(key, result, ttl_seconds)
             return result
-        
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper  # type: ignore
         else:
             return sync_wrapper  # type: ignore
-    
+
     return decorator

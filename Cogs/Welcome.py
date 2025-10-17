@@ -118,9 +118,7 @@ class AcceptRulesButton(discord.ui.Button):
     """
 
     def __init__(self, parent_view: Any) -> None:
-        super().__init__(
-            label="Step 2: Accept Rules", style=discord.ButtonStyle.success, emoji="✅"
-        )
+        super().__init__(label="Step 2: Accept Rules", style=discord.ButtonStyle.success, emoji="✅")
         self.parent_view = parent_view
         self.bot = parent_view.bot  # Get bot reference from parent view
         self.cog = parent_view.cog  # Get cog reference from parent view
@@ -151,9 +149,7 @@ class AcceptRulesButton(discord.ui.Button):
                 if role and role in member.roles:
                     interest_role_names.append(role_name)
             # Random welcome message with username
-            welcome_message = random.choice(WELCOME_MESSAGES).format(
-                name=member.display_name
-            )
+            welcome_message = random.choice(WELCOME_MESSAGES).format(name=member.display_name)
             embed = discord.Embed(
                 title=f"🎉 Welcome to {guild.name}, {member.display_name}!",
                 description=welcome_message,
@@ -171,9 +167,7 @@ class AcceptRulesButton(discord.ui.Button):
                 value=member.joined_at.strftime("%B %d, %Y"),
                 inline=True,
             )
-            embed.set_thumbnail(
-                url=member.avatar.url if member.avatar else member.default_avatar.url
-            )
+            embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
             embed.set_footer(
                 text="Powered by Haze World 💖",
                 icon_url=self.bot.user.avatar.url if self.bot.user.avatar else None,
@@ -187,12 +181,8 @@ class AcceptRulesButton(discord.ui.Button):
                 if member.id not in self.cog.sent_messages:
                     self.cog.sent_messages[member.id] = []
                 self.cog.sent_messages[member.id].extend([mention_msg, embed_msg])
-                Logger.info(
-                    f"Sent polished welcome embed for {member} in {welcome_channel}"
-                )
-                channel_link = (
-                    f"https://discord.com/channels/{guild.id}/{welcome_channel.id}"
-                )
+                Logger.info(f"Sent polished welcome embed for {member} in {welcome_channel}")
+                channel_link = f"https://discord.com/channels/{guild.id}/{welcome_channel.id}"
                 response_text = (
                     f"You accepted the rules and are now unlocked! 🎉\n"
                     f"Check out your welcome card: {welcome_channel.mention} or [Click here]({channel_link})"
@@ -201,9 +191,7 @@ class AcceptRulesButton(discord.ui.Button):
                 Logger.error(f"Error sending welcome embed: {e}")
                 response_text = "You accepted the rules and are now unlocked! 🎉 (But I couldn't send a welcome card.)"
         else:
-            Logger.warning(
-                f"Public welcome channel not found (ID: {WELCOME_PUBLIC_CHANNEL_ID})"
-            )
+            Logger.warning(f"Public welcome channel not found (ID: {WELCOME_PUBLIC_CHANNEL_ID})")
             response_text = "You accepted the rules and are now unlocked! 🎉"
         await interaction.followup.send(response_text, ephemeral=True)
         # Stop the view to prevent timeout
@@ -241,7 +229,9 @@ class AcceptRulesView(discord.ui.View):
     Deletes the rules message.
     """
 
-    def __init__(self, member: discord.Member, rules_msg: Optional[discord.Message] = None, cog: Optional[Any] = None) -> None:
+    def __init__(
+        self, member: discord.Member, rules_msg: Optional[discord.Message] = None, cog: Optional[Any] = None
+    ) -> None:
         self.start_time = datetime.now()  # Store start time
         super().__init__(timeout=900)  # 15 minutes
         self.member = member
@@ -265,21 +255,15 @@ class AcceptRulesView(discord.ui.View):
         if self.member in guild.members:
             try:
                 await self.member.kick(reason="Did not accept rules within 15 minutes")
-                Logger.info(
-                    f"Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time"
-                )
+                Logger.info(f"Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time")
             except Exception as e:
                 Logger.error(f"Failed to kick {self.member}: {e}")
         else:
-            Logger.info(
-                f"{self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout"
-            )
+            Logger.info(f"{self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout")
 
         # Always delete the rules messages
         if self.cog:
-            messages = self.cog.active_rules_messages.pop(
-                self.member.id, []
-            )  # Safe removal with pop
+            messages = self.cog.active_rules_messages.pop(self.member.id, [])  # Safe removal with pop
             for msg in messages:
                 try:
                     await msg.delete()
@@ -294,9 +278,7 @@ class AcceptRulesView(discord.ui.View):
         # Remove from persistent data
         if self.cog:
             self.cog.active_rules_views_data = [
-                d
-                for d in self.cog.active_rules_views_data
-                if not (d["member_id"] == self.member.id)
+                d for d in self.cog.active_rules_views_data if not (d["member_id"] == self.member.id)
             ]
             with open(self.cog.active_rules_views_file, "w") as f:
                 json.dump(self.cog.active_rules_views_data, f)
@@ -308,7 +290,9 @@ class WelcomeCardView(discord.ui.View):
     Times out after 1 week to reduce bot load.
     """
 
-    def __init__(self, new_member: discord.Member, cog: Optional[Any] = None, start_time: Optional[datetime] = None) -> None:
+    def __init__(
+        self, new_member: discord.Member, cog: Optional[Any] = None, start_time: Optional[datetime] = None
+    ) -> None:
         if start_time:
             elapsed = (datetime.now() - start_time).total_seconds()
             remaining = 604800 - elapsed
@@ -335,9 +319,7 @@ class WelcomeCardView(discord.ui.View):
             except Exception as e:
                 Logger.error(f"Failed to disable welcome button: {e}")
         # Remove from persistent data
-        persistent_views_file = (
-            self.cog.persistent_views_file
-        )  # Use cog's attribute instead of self
+        persistent_views_file = self.cog.persistent_views_file  # Use cog's attribute instead of self
         os.makedirs(os.path.dirname(persistent_views_file), exist_ok=True)
         try:
             with open(persistent_views_file, "r") as f:
@@ -355,9 +337,7 @@ class WelcomeButton(discord.ui.Button):
     """
 
     def __init__(self, parent_view: Any) -> None:
-        super().__init__(
-            label="Welcome!", style=discord.ButtonStyle.primary, emoji="🎉"
-        )
+        super().__init__(label="Welcome!", style=discord.ButtonStyle.primary, emoji="🎉")
         self.parent_view = parent_view
         self.cog = parent_view.cog  # Get cog from parent view
 
@@ -366,9 +346,7 @@ class WelcomeButton(discord.ui.Button):
         await interaction.response.defer()  # Defer to allow followup
         user = interaction.user
         if user == self.parent_view.new_member:
-            await interaction.followup.send(
-                "You can't welcome yourself! 😄", ephemeral=True
-            )
+            await interaction.followup.send("You can't welcome yourself! 😄", ephemeral=True)
             return
         # Fun welcome replies with inventory vibe (no mention for welcomer)
         welcome_replies = [
@@ -426,9 +404,7 @@ class Welcome(commands.Cog):
         Event: Triggered when a new member joins the server.
         Sends rules embed and interactive view.
         """
-        Logger.info(
-            f"New member joined: {member.display_name} ({member.id})"
-        )  # Added logging for joins
+        Logger.info(f"New member joined: {member.display_name} ({member.id})")  # Added logging for joins
         guild = member.guild
         rules_channel = guild.get_channel(WELCOME_RULES_CHANNEL_ID)
         if rules_channel:
@@ -456,9 +432,7 @@ class Welcome(commands.Cog):
             self.active_rules_messages[member.id] = [mention_msg, rules_msg]
 
             # New lines: Remove old entries for this member to avoid duplicates
-            self.active_rules_views_data = [
-                d for d in self.active_rules_views_data if d["member_id"] != member.id
-            ]
+            self.active_rules_views_data = [d for d in self.active_rules_views_data if d["member_id"] != member.id]
             # Save view data persistently, including mention_message_id
             active_data = {
                 "member_id": member.id,
@@ -478,9 +452,7 @@ class Welcome(commands.Cog):
         Deletes the rules messages and all welcome-related messages if they exist.
         """
         # Delete rules messages
-        messages = self.active_rules_messages.pop(
-            member.id, []
-        )  # Safe removal with pop
+        messages = self.active_rules_messages.pop(member.id, [])  # Safe removal with pop
         deleted_count = 0
         for msg in messages:
             try:
@@ -508,9 +480,7 @@ class Welcome(commands.Cog):
             )
 
         # New lines: Remove from active_rules_views_data
-        self.active_rules_views_data = [
-            d for d in self.active_rules_views_data if d["member_id"] != member.id
-        ]
+        self.active_rules_views_data = [d for d in self.active_rules_views_data if d["member_id"] != member.id]
         with open(self.active_rules_views_file, "w") as f:
             json.dump(self.active_rules_views_data, f)
 
@@ -527,9 +497,7 @@ class Welcome(commands.Cog):
                 try:
                     message = await channel.fetch_message(data["message_id"])
                     start_time = datetime.fromisoformat(data["start_time"])
-                    member = self.bot.get_user(
-                        data["member_id"]
-                    )  # Oder None, wenn nicht gefunden
+                    member = self.bot.get_user(data["member_id"])  # Oder None, wenn nicht gefunden
                     view = WelcomeCardView(member, cog=self, start_time=start_time)
                     view.message = message
                     # Check if the view is already attached to avoid unnecessary edits
@@ -542,18 +510,12 @@ class Welcome(commands.Cog):
                     else:
                         restored_count += 1  # Still count as restored if no edit needed
                         cleaned_persistent_views_data.append(data)  # Keep valid entries
-                    await asyncio.sleep(
-                        5
-                    )  # Increased sleep to avoid rate limits (adjust as needed)
+                    await asyncio.sleep(5)  # Increased sleep to avoid rate limits (adjust as needed)
                 except discord.NotFound:
                     # Message no longer exists, skip and remove from data
-                    Logger.warning(
-                        f"Message {data['message_id']} not found, removing from persistent views data."
-                    )
+                    Logger.warning(f"Message {data['message_id']} not found, removing from persistent views data.")
                 except Exception as e:
-                    Logger.error(
-                        f"Failed to restore view for message {data['message_id']}: {e}"
-                    )
+                    Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
                     cleaned_persistent_views_data.append(data)  # Keep on other errors
             else:
                 cleaned_persistent_views_data.append(data)  # Keep if channel not found
@@ -571,13 +533,9 @@ class Welcome(commands.Cog):
             if channel:
                 try:
                     rules_msg = await channel.fetch_message(data["message_id"])
-                    mention_msg = await channel.fetch_message(
-                        data["mention_message_id"]
-                    )
+                    mention_msg = await channel.fetch_message(data["mention_message_id"])
                     start_time = datetime.fromisoformat(data["start_time"])
-                    member = channel.guild.get_member(
-                        data["member_id"]
-                    )  # Get member from guild instead of user
+                    member = channel.guild.get_member(data["member_id"])  # Get member from guild instead of user
                     if member:
                         view = AcceptRulesView(member, rules_msg=rules_msg, cog=self)
                         view.start_time = start_time  # Set start_time
@@ -588,9 +546,7 @@ class Welcome(commands.Cog):
                             view.timeout = remaining
                             await rules_msg.edit(view=view)
                             restored_rules_count += 1
-                            cleaned_active_rules_views_data.append(
-                                data
-                            )  # Keep valid entries
+                            cleaned_active_rules_views_data.append(data)  # Keep valid entries
                             # Restore active_rules_messages
                             self.active_rules_messages[data["member_id"]] = [
                                 mention_msg,
@@ -606,14 +562,10 @@ class Welcome(commands.Cog):
                         f"Message {data['message_id']} or mention message not found, removing from active rules views data."
                     )
                 except Exception as e:
-                    Logger.error(
-                        f"Failed to restore rules view for message {data['message_id']}: {e}"
-                    )
+                    Logger.error(f"Failed to restore rules view for message {data['message_id']}: {e}")
                     cleaned_active_rules_views_data.append(data)  # Keep on other errors
             else:
-                cleaned_active_rules_views_data.append(
-                    data
-                )  # Keep if channel not found
+                cleaned_active_rules_views_data.append(data)  # Keep if channel not found
         # Save the cleaned list
         self.active_rules_views_data = cleaned_active_rules_views_data
         with open(self.active_rules_views_file, "w") as f:

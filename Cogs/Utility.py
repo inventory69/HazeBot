@@ -68,11 +68,7 @@ class Utility(commands.Cog):
             if current_chunk:
                 chunks.append(current_chunk)
             for idx, chunk in enumerate(chunks):
-                field_name = (
-                    f"{name_prefix}"
-                    if len(chunks) == 1
-                    else f"{name_prefix} ({idx + 1}/{len(chunks)})"
-                )
+                field_name = f"{name_prefix}" if len(chunks) == 1 else f"{name_prefix} ({idx + 1}/{len(chunks)})"
                 embed.add_field(name=field_name, value="\n".join(chunk), inline=False)
 
         add_chunked_fields("✨ User Commands", normal_commands)
@@ -97,9 +93,7 @@ class Utility(commands.Cog):
         return embed
 
     def create_clear_embed(self, deleted_count: int, bot_user: discord.User) -> discord.Embed:
-        embed = discord.Embed(
-            description=f"🧹 {deleted_count} messages have been deleted.", color=PINK
-        )
+        embed = discord.Embed(description=f"🧹 {deleted_count} messages have been deleted.", color=PINK)
         set_pink_footer(embed, bot=bot_user)
         return embed
 
@@ -150,30 +144,22 @@ class Utility(commands.Cog):
             if embed_length > 1900:  # Buffer for safety
                 # Split into multiple embeds if needed (simple split by fields)
                 embeds = []
-                current_embed = discord.Embed(
-                    title=embed.title, description=embed.description, color=embed.color
-                )
+                current_embed = discord.Embed(title=embed.title, description=embed.description, color=embed.color)
                 for field in embed.fields:
                     if (
                         len(current_embed.fields) >= 5
                         or (
                             len(current_embed.title or "")
                             + len(current_embed.description or "")
-                            + sum(
-                                len(f.name) + len(f.value) for f in current_embed.fields
-                            )
+                            + sum(len(f.name) + len(f.value) for f in current_embed.fields)
                             + len(field.name)
                             + len(field.value)
                         )
                         > 1900
                     ):
                         embeds.append(current_embed)
-                        current_embed = discord.Embed(
-                            title=embed.title, description="", color=embed.color
-                        )
-                    current_embed.add_field(
-                        name=field.name, value=field.value, inline=field.inline
-                    )
+                        current_embed = discord.Embed(title=embed.title, description="", color=embed.color)
+                    current_embed.add_field(name=field.name, value=field.value, inline=field.inline)
                 if current_embed.fields:
                     embeds.append(current_embed)
                 for e in embeds:
@@ -182,9 +168,7 @@ class Utility(commands.Cog):
                 try:
                     for additional_embed in embeds:
                         await interaction.user.send(embed=additional_embed)
-                    await interaction.response.send_message(
-                        "📬 Help sent to your DMs!", ephemeral=True
-                    )
+                    await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
                 except discord.Forbidden:
                     await interaction.response.send_message(
                         "❌ I couldn't send you a DM. Please check your privacy settings.",
@@ -193,9 +177,7 @@ class Utility(commands.Cog):
             else:
                 try:
                     await interaction.user.send(embed=embed)
-                    await interaction.response.send_message(
-                        "📬 Help sent to your DMs!", ephemeral=True
-                    )
+                    await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
                 except discord.Forbidden:
                     await interaction.response.send_message(
                         "❌ I couldn't send you a DM. Please check your privacy settings.",
@@ -211,42 +193,30 @@ class Utility(commands.Cog):
             if embed_length > 1900:  # Buffer for safety
                 # Split into multiple embeds if needed (simple split by fields)
                 embeds = []
-                current_embed = discord.Embed(
-                    title=embed.title, description=embed.description, color=embed.color
-                )
+                current_embed = discord.Embed(title=embed.title, description=embed.description, color=embed.color)
                 for field in embed.fields:
                     if (
                         len(current_embed.fields) >= 5
                         or (
                             len(current_embed.title or "")
                             + len(current_embed.description or "")
-                            + sum(
-                                len(f.name) + len(f.value) for f in current_embed.fields
-                            )
+                            + sum(len(f.name) + len(f.value) for f in current_embed.fields)
                             + len(field.name)
                             + len(field.value)
                         )
                         > 1900
                     ):
                         embeds.append(current_embed)
-                        current_embed = discord.Embed(
-                            title=embed.title, description="", color=embed.color
-                        )
-                    current_embed.add_field(
-                        name=field.name, value=field.value, inline=field.inline
-                    )
+                        current_embed = discord.Embed(title=embed.title, description="", color=embed.color)
+                    current_embed.add_field(name=field.name, value=field.value, inline=field.inline)
                 if current_embed.fields:
                     embeds.append(current_embed)
                 for e in embeds:
                     set_pink_footer(e, bot=interaction.client.user)
                 # Send first embed with response, then followups for the rest
-                await interaction.response.send_message(
-                    embed=embeds[0], ephemeral=False
-                )
+                await interaction.response.send_message(embed=embeds[0], ephemeral=False)
                 for additional_embed in embeds[1:]:
-                    await interaction.followup.send(
-                        embed=additional_embed, ephemeral=False
-                    )
+                    await interaction.followup.send(embed=additional_embed, ephemeral=False)
             else:
                 await interaction.response.send_message(embed=embed, ephemeral=False)
 
@@ -256,15 +226,11 @@ class Utility(commands.Cog):
         """
         💖 Shows bot status and basic info in pink.
         """
-        embed = self.create_status_embed(
-            self.bot.user, self.bot.latency, len(self.bot.guilds)
-        )
+        embed = self.create_status_embed(self.bot.user, self.bot.latency, len(self.bot.guilds))
         await ctx.send(embed=embed)
 
     # /status (Slash)
-    @app_commands.command(
-        name="status", description="💖 Shows bot status and basic info in pink."
-    )
+    @app_commands.command(name="status", description="💖 Shows bot status and basic info in pink.")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def status_slash(self, interaction: discord.Interaction) -> None:
         embed = self.create_status_embed(
@@ -273,9 +239,7 @@ class Utility(commands.Cog):
             len(interaction.client.guilds),
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
-        Logger.info(
-            f"Slash command /status used by {interaction.user} in {interaction.guild}"
-        )
+        Logger.info(f"Slash command /status used by {interaction.user} in {interaction.guild}")
 
     # !clear (Prefix) - Only prefix, no slash
     @commands.command(name="clear")
@@ -284,9 +248,7 @@ class Utility(commands.Cog):
         🧹 Deletes the last X messages in the channel (default: 10). Use 'all' to delete all messages.
         Only allowed for users with the Admin or Slot Keeper (Mod) role.
         """
-        if not any(
-            role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in ctx.author.roles
-        ):
+        if not any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in ctx.author.roles):
             embed = discord.Embed(
                 description="🚫 You do not have permission to use this command.",
                 color=discord.Color.red(),

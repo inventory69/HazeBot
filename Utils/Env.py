@@ -20,9 +20,7 @@ def LoadEnv() -> Dict[str, Optional[str]]:
         load_dotenv()
         Logger.info("📄 .env file loaded successfully.")
     except Exception as e:
-        Logger.warning(
-            f"⚠️ Could not load .env file: {e}. Using existing environment variables."
-        )
+        Logger.warning(f"⚠️ Could not load .env file: {e}. Using existing environment variables.")
 
     # Define required keys (adapted for HazeWorldBot)
     required_keys = [

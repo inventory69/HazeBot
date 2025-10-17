@@ -41,9 +41,7 @@ def get_highest_rl_rank(user_id: str) -> Optional[str]:
     ranks = user_data.get("ranks", {})
     highest_tier = "Unranked"
     for playlist, tier in ranks.items():
-        if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(
-            highest_tier
-        ):
+        if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
             highest_tier = tier
     return highest_tier
 
@@ -107,10 +105,7 @@ class RocketLeague(commands.Cog):
             api_data = json.loads(json_text)
 
             # Now process api_data as before
-            if (
-                "errors" in api_data
-                and api_data["errors"][0]["code"] == "CollectorResultStatus::NotFound"
-            ):
+            if "errors" in api_data and api_data["errors"][0]["code"] == "CollectorResultStatus::NotFound":
                 Logger.warning(f"🚫 Player {username} not found")
                 return None
 
@@ -123,11 +118,7 @@ class RocketLeague(commands.Cog):
 
             stats = overview["stats"]
             rank = stats.get("tier", {}).get("metadata", {}).get("name", "Unranked")
-            season_reward_name = (
-                stats.get("seasonRewardLevel", {})
-                .get("metadata", {})
-                .get("name", "N/A")
-            )
+            season_reward_name = stats.get("seasonRewardLevel", {}).get("metadata", {}).get("name", "N/A")
 
             # Extract username
             username_display = profile["platformInfo"]["platformUserHandle"]
@@ -139,80 +130,53 @@ class RocketLeague(commands.Cog):
             highest_tier_val = 0
             highest_icon_url = None
             for segment in segments:
-                if (
-                    segment["type"] == "playlist"
-                    and segment["attributes"].get("season") == 34
-                ):
+                if segment["type"] == "playlist" and segment["attributes"].get("season") == 34:
                     pid = segment["attributes"]["playlistId"]
                     name = segment["metadata"]["name"]
                     if pid == 10 or name == "Ranked Duel 1v1":  # 1v1
                         tier_name = segment["stats"]["tier"]["metadata"]["name"]
                         div_name = segment["stats"]["division"]["metadata"]["name"]
-                        emoji = RANK_EMOJIS.get(
-                            tier_name, "<:unranked:1425389712276721725>"
-                        )
+                        emoji = RANK_EMOJIS.get(tier_name, "<:unranked:1425389712276721725>")
                         ranks["1v1"] = f"{emoji} {div_name}"
                         tier_names["1v1"] = tier_name
-                        icon_urls["1v1"] = segment["stats"]["tier"]["metadata"][
-                            "iconUrl"
-                        ]
+                        icon_urls["1v1"] = segment["stats"]["tier"]["metadata"]["iconUrl"]
                         tier_val = segment["stats"]["tier"]["value"]
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
-                            highest_icon_url = segment["stats"]["tier"]["metadata"][
-                                "iconUrl"
-                            ]
+                            highest_icon_url = segment["stats"]["tier"]["metadata"]["iconUrl"]
                     elif pid == 11 or name == "Ranked Doubles 2v2":  # 2v2
                         tier_name = segment["stats"]["tier"]["metadata"]["name"]
                         div_name = segment["stats"]["division"]["metadata"]["name"]
-                        emoji = RANK_EMOJIS.get(
-                            tier_name, "<:unranked:1425389712276721725>"
-                        )
+                        emoji = RANK_EMOJIS.get(tier_name, "<:unranked:1425389712276721725>")
                         ranks["2v2"] = f"{emoji} {div_name}"
                         tier_names["2v2"] = tier_name
-                        icon_urls["2v2"] = segment["stats"]["tier"]["metadata"][
-                            "iconUrl"
-                        ]
+                        icon_urls["2v2"] = segment["stats"]["tier"]["metadata"]["iconUrl"]
                         tier_val = segment["stats"]["tier"]["value"]
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
-                            highest_icon_url = segment["stats"]["tier"]["metadata"][
-                                "iconUrl"
-                            ]
+                            highest_icon_url = segment["stats"]["tier"]["metadata"]["iconUrl"]
                     elif pid == 13 or name == "Ranked Standard 3v3":  # 3v3
                         tier_name = segment["stats"]["tier"]["metadata"]["name"]
                         div_name = segment["stats"]["division"]["metadata"]["name"]
-                        emoji = RANK_EMOJIS.get(
-                            tier_name, "<:unranked:1425389712276721725>"
-                        )
+                        emoji = RANK_EMOJIS.get(tier_name, "<:unranked:1425389712276721725>")
                         ranks["3v3"] = f"{emoji} {div_name}"
                         tier_names["3v3"] = tier_name
-                        icon_urls["3v3"] = segment["stats"]["tier"]["metadata"][
-                            "iconUrl"
-                        ]
+                        icon_urls["3v3"] = segment["stats"]["tier"]["metadata"]["iconUrl"]
                         tier_val = segment["stats"]["tier"]["value"]
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
-                            highest_icon_url = segment["stats"]["tier"]["metadata"][
-                                "iconUrl"
-                            ]
+                            highest_icon_url = segment["stats"]["tier"]["metadata"]["iconUrl"]
                     elif name == "Ranked 4v4 Quads":  # 4v4
                         tier_name = segment["stats"]["tier"]["metadata"]["name"]
                         div_name = segment["stats"]["division"]["metadata"]["name"]
-                        emoji = RANK_EMOJIS.get(
-                            tier_name, "<:unranked:1425389712276721725>"
-                        )
+                        emoji = RANK_EMOJIS.get(tier_name, "<:unranked:1425389712276721725>")
                         ranks["4v4"] = f"{emoji} {div_name}"
                         tier_names["4v4"] = tier_name
-                        icon_urls["4v4"] = segment["stats"]["tier"]["metadata"][
-                            "iconUrl"
-                        ]
+                        icon_urls["4v4"] = segment["stats"]["tier"]["metadata"]["iconUrl"]
                         tier_val = segment["stats"]["tier"]["value"]
                         if tier_val > highest_tier_val:
                             highest_tier_val = tier_val
-                            highest_icon_url = segment["stats"]["tier"]["metadata"][
-                                "iconUrl"
-                            ]
+                            highest_icon_url = segment["stats"]["tier"]["metadata"]["iconUrl"]
 
             # Set unavailable ranks to Unranked
             for key in ["1v1", "2v2", "3v3", "4v4"]:
@@ -220,9 +184,7 @@ class RocketLeague(commands.Cog):
                     ranks[key] = "<:unranked:1425389712276721725> Unranked"
                     tier_names[key] = "Unranked"
 
-            season_emoji = RANK_EMOJIS.get(
-                season_reward_name, "<:unranked:1425389712276721725>"
-            )
+            season_emoji = RANK_EMOJIS.get(season_reward_name, "<:unranked:1425389712276721725>")
 
             return {
                 "username": username_display,
@@ -258,9 +220,7 @@ class RocketLeague(commands.Cog):
 
         async def fetch_and_cache():
             loop = self.bot.loop
-            return await loop.run_in_executor(
-                self.executor, self.fetch_stats_sync, platform, username
-            )
+            return await loop.run_in_executor(self.executor, self.fetch_stats_sync, platform, username)
 
         # Cache for 1 hour (3600 seconds) since RL ranks don't change that frequently
         return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=3600)
@@ -274,9 +234,7 @@ class RocketLeague(commands.Cog):
         user_account = accounts.get(str(user_id))
         if not platform and not username:
             if not user_account:
-                raise ValueError(
-                    "❌ No account set. Use /setrlaccount or !setrlaccount"
-                )
+                raise ValueError("❌ No account set. Use /setrlaccount or !setrlaccount")
             platform = user_account["platform"]
             username = user_account["username"]
         elif not username:
@@ -358,17 +316,11 @@ class RocketLeague(commands.Cog):
                 if user:
                     for playlist, new_tier in new_ranks.items():
                         old_tier = old_ranks.get(playlist, "Unranked")
-                        if new_tier != old_tier and tier_order.index(
-                            new_tier
-                        ) > tier_order.index(old_tier):
-                            emoji = RANK_EMOJIS.get(
-                                new_tier, "<:unranked:1425389712276721725>"
-                            )
+                        if new_tier != old_tier and tier_order.index(new_tier) > tier_order.index(old_tier):
+                            emoji = RANK_EMOJIS.get(new_tier, "<:unranked:1425389712276721725>")
                             icon_url = new_icon_urls.get(playlist)
                             # Sende die Notification als separate Nachricht vor dem Embed
-                            await channel.send(
-                                f"{user.mention} 🚀 Rank Promotion Notification!"
-                            )
+                            await channel.send(f"{user.mention} 🚀 Rank Promotion Notification!")
                             embed = discord.Embed(
                                 title="🎉 Rank Promotion! 🎉",
                                 description=f"Congratulations {user.mention}! Your {playlist} rank has improved to {emoji} {new_tier}!",
@@ -378,9 +330,7 @@ class RocketLeague(commands.Cog):
                                 embed.set_thumbnail(url=icon_url)
                             set_pink_footer(embed, bot=self.bot.user)
                             await channel.send(embed=embed)
-                            Logger.info(
-                                f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}"
-                            )
+                            Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
                 # Update ranks and last_fetched
                 data["ranks"] = new_ranks
                 data["icon_urls"] = new_icon_urls
@@ -414,18 +364,12 @@ class RocketLeague(commands.Cog):
         save_rl_accounts(accounts)
         await ctx.send(f"✅ Set your RL account to {username} on {platform}.")
 
-    @app_commands.command(
-        name="setrlaccount", description="Set your main Rocket League account"
-    )
+    @app_commands.command(name="setrlaccount", description="Set your main Rocket League account")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     @app_commands.describe(platform="Platform", username="Username")
-    async def setrlaccount_slash(
-        self, interaction: discord.Interaction, platform: str, username: str
-    ) -> None:
+    async def setrlaccount_slash(self, interaction: discord.Interaction, platform: str, username: str) -> None:
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
-            await interaction.response.send_message(
-                "❌ Invalid platform.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Invalid platform.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)  # <--- Defer first!
         stats = await self.get_player_stats(platform.lower(), username)
@@ -444,21 +388,19 @@ class RocketLeague(commands.Cog):
             "ranks": initial_ranks,
         }
         save_rl_accounts(accounts)
-        await interaction.followup.send(
-            f"✅ Set your RL account to {username} on {platform}.", ephemeral=True
-        )
+        await interaction.followup.send(f"✅ Set your RL account to {username} on {platform}.", ephemeral=True)
 
     @commands.command(name="rlstats")
-    async def rlstats(self, ctx: commands.Context, platform: Optional[str] = None, *, username: Optional[str] = None) -> None:
+    async def rlstats(
+        self, ctx: commands.Context, platform: Optional[str] = None, *, username: Optional[str] = None
+    ) -> None:
         """
         🚀 Get Rocket League stats for a player or your set account.
         Usage: !rlstats [platform] [username]
         If no args, uses your set account.
         """
         try:
-            platform, username = await self._get_rl_account(
-                ctx.author.id, platform, username
-            )
+            platform, username = await self._get_rl_account(ctx.author.id, platform, username)
         except ValueError as e:
             await ctx.send(str(e))
             return
@@ -478,9 +420,7 @@ class RocketLeague(commands.Cog):
         description="🚀 Get Rocket League stats for a player or your set account",
     )
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
-    @app_commands.describe(
-        platform="Platform (optional if set)", username="Username (optional if set)"
-    )
+    @app_commands.describe(platform="Platform (optional if set)", username="Username (optional if set)")
     async def rlstats_slash(
         self,
         interaction: discord.Interaction,
@@ -491,9 +431,7 @@ class RocketLeague(commands.Cog):
         🚀 Get Rocket League stats for a player.
         """
         try:
-            platform, username = await self._get_rl_account(
-                interaction.user.id, platform, username
-            )
+            platform, username = await self._get_rl_account(interaction.user.id, platform, username)
         except ValueError as e:
             await interaction.response.send_message(str(e), ephemeral=True)
             return
@@ -501,9 +439,7 @@ class RocketLeague(commands.Cog):
         await interaction.response.defer()
         stats = await self.get_player_stats(platform, username)
         if not stats:
-            await interaction.followup.send(
-                "❌ Player not found or error fetching stats."
-            )
+            await interaction.followup.send("❌ Player not found or error fetching stats.")
             return
 
         embed = await self._create_rl_embed(stats, platform)

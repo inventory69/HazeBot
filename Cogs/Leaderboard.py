@@ -55,16 +55,15 @@ class Leaderboard(commands.Cog):
         save_activity(activity)
 
     # Shared helper to create leaderboard embed
-    def create_leaderboard_embed(self, title: str, data_list: List[tuple], value_formatter: Callable[[Any], str] = lambda x: x) -> discord.Embed:
+    def create_leaderboard_embed(
+        self, title: str, data_list: List[tuple], value_formatter: Callable[[Any], str] = lambda x: x
+    ) -> discord.Embed:
         embed = discord.Embed(title=f"🏆 {title}", color=PINK)
         if not data_list:
             embed.add_field(name="No Data", value="No entries found.", inline=False)
         else:
             text = "\n".join(
-                [
-                    f"{i + 1}. <@{uid}>: {value_formatter(val)}"
-                    for i, (uid, val) in enumerate(data_list[:10])
-                ]
+                [f"{i + 1}. <@{uid}>: {value_formatter(val)}" for i, (uid, val) in enumerate(data_list[:10])]
             )
             embed.add_field(name="Top 10", value=text, inline=False)
         set_pink_footer(embed, bot=self.bot.user)
@@ -79,9 +78,7 @@ class Leaderboard(commands.Cog):
                 ranks = acc.get("ranks", {})
                 highest_tier = "Unranked"
                 for tier in ranks.values():
-                    if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(
-                        tier
-                    ) > RL_TIER_ORDER.index(highest_tier):
+                    if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
                         highest_tier = tier
                 if highest_tier != "Unranked":
                     data[uid] = RL_TIER_ORDER.index(highest_tier)
@@ -150,9 +147,7 @@ class Leaderboard(commands.Cog):
         await self.handle_leaderboard(ctx, category.lower())
 
     # /leaderboard (Slash)
-    @app_commands.command(
-        name="leaderboard", description="🏆 Shows a leaderboard for various categories."
-    )
+    @app_commands.command(name="leaderboard", description="🏆 Shows a leaderboard for various categories.")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     @app_commands.describe(category="Choose the leaderboard category")
     @app_commands.choices(

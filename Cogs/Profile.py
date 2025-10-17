@@ -38,8 +38,6 @@ async def get_resolved_ticket_count(user_id: int) -> int:
     return resolved_count
 
 
-
-
 class Profile(commands.Cog):
     """
     👤 Profile Cog: Shows user profile with avatar, join date, roles, and custom stats.
@@ -50,12 +48,8 @@ class Profile(commands.Cog):
 
     async def create_profile_embed(self, member: discord.Member) -> discord.Embed:
         embed = discord.Embed(title=f"👤 Profile: {member.display_name}", color=PINK)
-        embed.set_thumbnail(
-            url=member.avatar.url if member.avatar else member.default_avatar.url
-        )
-        embed.add_field(
-            name="Joined At", value=member.joined_at.strftime("%B %d, %Y"), inline=True
-        )
+        embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
+        embed.add_field(name="Joined At", value=member.joined_at.strftime("%B %d, %Y"), inline=True)
         embed.add_field(
             name="Account Created",
             value=member.created_at.strftime("%B %d, %Y"),
@@ -78,12 +72,8 @@ class Profile(commands.Cog):
         embed.add_field(name="Main Roles", value=main_roles_text, inline=False)
 
         # Interest roles with colored mentions
-        interest_roles = [
-            role.mention for role in member.roles if role.id in INTEREST_ROLE_IDS
-        ]
-        interest_roles_text = (
-            ", ".join(interest_roles) if interest_roles else "No interest roles"
-        )
+        interest_roles = [role.mention for role in member.roles if role.id in INTEREST_ROLE_IDS]
+        interest_roles_text = ", ".join(interest_roles) if interest_roles else "No interest roles"
         embed.add_field(name="Interest Roles", value=interest_roles_text, inline=False)
 
         # Custom stats
@@ -94,11 +84,7 @@ class Profile(commands.Cog):
         else:
             rl_text = "🏆 No RL account linked"
 
-        changelog_opt_in = (
-            "✅ Yes"
-            if any(role.id == CHANGELOG_ROLE_ID for role in member.roles)
-            else "❌ No"
-        )
+        changelog_opt_in = "✅ Yes" if any(role.id == CHANGELOG_ROLE_ID for role in member.roles) else "❌ No"
         warning_count = await get_warning_count(member.id)
 
         custom_stats = f"{rl_text}\n🔔 Changelog Opt-in: {changelog_opt_in}\n⚠️ Warnings: {warning_count}"
@@ -124,11 +110,7 @@ class Profile(commands.Cog):
         if user:
             member = user
         else:
-            member = (
-                ctx_or_interaction.author
-                if hasattr(ctx_or_interaction, "author")
-                else ctx_or_interaction.user
-            )
+            member = ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         embed = await self.create_profile_embed(member)
         if hasattr(ctx_or_interaction, "send"):  # Prefix command
             await ctx_or_interaction.send(embed=embed)
@@ -144,14 +126,10 @@ class Profile(commands.Cog):
         await self.handle_profile(ctx, user)
 
     # /profile (Slash)
-    @app_commands.command(
-        name="profile", description="👤 Shows your profile or another user's profile."
-    )
+    @app_commands.command(name="profile", description="👤 Shows your profile or another user's profile.")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     @app_commands.describe(user="Select a user (optional, defaults to yourself)")
-    async def profile_slash(
-        self, interaction: discord.Interaction, user: Optional[discord.Member] = None
-    ) -> None:
+    async def profile_slash(self, interaction: discord.Interaction, user: Optional[discord.Member] = None) -> None:
         await self.handle_profile(interaction, user)
 
 

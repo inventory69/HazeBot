@@ -17,10 +17,7 @@ ROLE_DESCRIPTIONS: Dict[int, str] = {
         "They have full access to all moderation and configuration features."
         f"\n**Role ID:** `{ADMIN_ROLE_ID}`"
         "\n**Admin Commands:**\n"
-        + "\n".join(
-            f"• !{cmd}" + (" /" + cmd if cmd in SLASH_COMMANDS else "")
-            for cmd in ADMIN_COMMANDS
-        )
+        + "\n".join(f"• !{cmd}" + (" /" + cmd if cmd in SLASH_COMMANDS else "") for cmd in ADMIN_COMMANDS)
         + "\n*Note: Slash commands (/) are only visible to you.*"
     ),
     MODERATOR_ROLE_ID: (
@@ -30,10 +27,7 @@ ROLE_DESCRIPTIONS: Dict[int, str] = {
         "Slot Keepers are the first contact for ticket support and community questions."
         f"\n**Role ID:** `{MODERATOR_ROLE_ID}`"
         "\n**Mod Commands:**\n"
-        + "\n".join(
-            f"• !{cmd}" + (" /" + cmd if cmd in SLASH_COMMANDS else "")
-            for cmd in MOD_COMMANDS
-        )
+        + "\n".join(f"• !{cmd}" + (" /" + cmd if cmd in SLASH_COMMANDS else "") for cmd in MOD_COMMANDS)
         + "\n*Note: Slash commands (/) are only visible to you.*"
     ),
     NORMAL_ROLE_ID: (
@@ -54,12 +48,8 @@ class RoleInfo(commands.Cog):
         self.bot = bot
 
     def create_roleinfo_embed(self, role: discord.Role) -> discord.Embed:
-        perms = [
-            perm.replace("_", " ").title() for perm, value in role.permissions if value
-        ]
-        perms_text = (
-            "\n".join(f"• {p}" for p in perms) if perms else "No special permissions"
-        )
+        perms = [perm.replace("_", " ").title() for perm, value in role.permissions if value]
+        perms_text = "\n".join(f"• {p}" for p in perms) if perms else "No special permissions"
         description = ROLE_DESCRIPTIONS.get(
             role.id,
             f"**{role.name}**\nNo specific description available.\n**Role ID:** `{role.id}`",
@@ -97,9 +87,7 @@ class RoleInfo(commands.Cog):
         """
         role = None
         if role_name:
-            role = discord.utils.find(
-                lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles
-            )
+            role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
         if not role:
             role = self.get_default_role(ctx.author)
         if not role:
@@ -115,33 +103,25 @@ class RoleInfo(commands.Cog):
     )
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     @app_commands.describe(role_id="Select a main server role")
-    async def roleinfo_slash(
-        self, interaction: discord.Interaction, role_id: Optional[str] = None
-    ) -> None:
+    async def roleinfo_slash(self, interaction: discord.Interaction, role_id: Optional[str] = None) -> None:
         """
         Slash command for role info. If no role is selected, shows your main group.
         Only the 3 main roles are selectable.
         """
         guild = interaction.guild
         member = (
-            interaction.user
-            if isinstance(interaction.user, discord.Member)
-            else guild.get_member(interaction.user.id)
+            interaction.user if isinstance(interaction.user, discord.Member) else guild.get_member(interaction.user.id)
         )
         allowed_role_ids = [ADMIN_ROLE_ID, MODERATOR_ROLE_ID, NORMAL_ROLE_ID]
         if role_id:
             role = guild.get_role(int(role_id))
             if not role or role.id not in allowed_role_ids:
-                await interaction.response.send_message(
-                    "❌ Only main roles can be selected.", ephemeral=True
-                )
+                await interaction.response.send_message("❌ Only main roles can be selected.", ephemeral=True)
                 return
         else:
             role = self.get_default_role(member)
         if not role:
-            await interaction.response.send_message(
-                "❌ Role not found.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Role not found.", ephemeral=True)
             return
         embed = self.create_roleinfo_embed(role)
         await interaction.response.send_message(embed=embed, ephemeral=False)

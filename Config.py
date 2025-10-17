@@ -10,12 +10,8 @@ CommandPrefix = "!"  # Prefix for text-based commands (e.g., !help)
 BotName = "Haze World Bot"  # Display name of the bot
 Intents = discord.Intents.default()  # Default intents
 Intents.members = True  # Enable access to member information (e.g., for role checks)
-Intents.message_content = (
-    True  # Enable access to message content (required for command parsing)
-)
-PresenceUpdateInterval = (
-    3600  # Time in seconds between bot presence updates (e.g., status changes)
-)
+Intents.message_content = True  # Enable access to message content (required for command parsing)
+PresenceUpdateInterval = 3600  # Time in seconds between bot presence updates (e.g., status changes)
 PINK = discord.Color(0xAD1457)  # Hot Pink color used for embeds and UI elements
 FuzzyMatchingThreshold = 0.6  # Similarity threshold for fuzzy command matching (0.0 to 1.0, higher = stricter)
 MessageCooldown = 5  # Cooldown in seconds between user messages to prevent spam
@@ -151,9 +147,5 @@ TICKETS_CATEGORY_ID = 1426113555974979625
 # === Welcome ===
 WELCOME_RULES_CHANNEL_ID = 1424724535923703968
 WELCOME_PUBLIC_CHANNEL_ID = 1424164269775392858
-PERSISTENT_VIEWS_FILE = (
-    "Data/persistent_views.json"  # File for persistent welcome card views
-)
-ACTIVE_RULES_VIEWS_FILE = (
-    "Data/active_rules_views.json"  # File for active rules acceptance views
-)
+PERSISTENT_VIEWS_FILE = "Data/persistent_views.json"  # File for persistent welcome card views
+ACTIVE_RULES_VIEWS_FILE = "Data/active_rules_views.json"  # File for active rules acceptance views

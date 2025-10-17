@@ -40,9 +40,7 @@ EnvDict = LoadEnv()
 
 # Now log the summary, since Logger is initialized
 loaded_count = sum(1 for v in EnvDict.values() if v is not None)
-Logger.info(
-    f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}"
-)
+Logger.info(f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}")
 
 
 class HazeWorldBot(commands.Bot):
@@ -75,9 +73,7 @@ class HazeWorldBot(commands.Bot):
             for cmd in cog.get_commands():
                 if not cmd.hidden:
                     slash_available = cmd.name in slash_commands
-                    Logger.info(
-                        f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}"
-                    )
+                    Logger.info(f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}")
         # Clear global commands to prevent duplicates
         self.tree.clear_commands(guild=None)
         # Copy global commands to guild and sync
@@ -102,15 +98,8 @@ class HazeWorldBot(commands.Bot):
         if isinstance(error, commands.CommandNotFound):
             # Fuzzy matching for unknown commands
             cmd_name = ctx.message.content.split()[0][len(CommandPrefix) :]
-            all_cmds = [
-                cmd.name
-                for cog in self.cogs.values()
-                for cmd in cog.get_commands()
-                if not cmd.hidden
-            ]
-            matches = difflib.get_close_matches(
-                cmd_name, all_cmds, n=1, cutoff=FuzzyMatchingThreshold
-            )
+            all_cmds = [cmd.name for cog in self.cogs.values() for cmd in cog.get_commands() if not cmd.hidden]
+            matches = difflib.get_close_matches(cmd_name, all_cmds, n=1, cutoff=FuzzyMatchingThreshold)
             if matches:
                 embed = discord.Embed(
                     title="❓ Command not found",
@@ -215,17 +204,13 @@ class HazeWorldBot(commands.Bot):
         """Log message edits."""
         if before.author.bot or before.content == after.content:
             return
-        Logger.info(
-            f"✏️ Message edited by {before.author} in {before.channel}: '{before.content}' -> '{after.content}'"
-        )
+        Logger.info(f"✏️ Message edited by {before.author} in {before.channel}: '{before.content}' -> '{after.content}'")
 
     async def on_message_delete(self, message: discord.Message) -> None:
         """Log message deletions."""
         if message.author.bot:
             return
-        Logger.info(
-            f"🗑️ Message deleted by {message.author} in {message.channel}: '{message.content}'"
-        )
+        Logger.info(f"🗑️ Message deleted by {message.author} in {message.channel}: '{message.content}'")
 
 
 bot = HazeWorldBot()

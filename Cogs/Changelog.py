@@ -37,9 +37,7 @@ class ChangelogCog(commands.Cog):
         )
         return response.choices[0].message.content.strip().strip('"').strip("'")
 
-    async def generate_changelog_text(
-        self, text: str, project: str, author: str
-    ) -> str:
+    async def generate_changelog_text(self, text: str, project: str, author: str) -> str:
         """
         Generate changelog text using OpenAI GPT-4 Turbo.
         """
@@ -83,9 +81,7 @@ PR-Text:
         )
         return response.choices[0].message.content.strip()
 
-    def create_changelog_embed(
-        self, changelog: str, title: str, date: str, project: str, author: str
-    ) -> discord.Embed:
+    def create_changelog_embed(self, changelog: str, title: str, date: str, project: str, author: str) -> discord.Embed:
         embed = discord.Embed(
             title=f"🆕 {title} – {date}",
             description=changelog + "\n\u200b",  # Adds a small space before the footer
@@ -141,24 +137,16 @@ class ChangelogChannelView(discord.ui.View):
         super().__init__(timeout=120)
         self.embed = embed
 
-    @discord.ui.button(
-        label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢"
-    )
-    async def post_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    @discord.ui.button(label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢")
+    async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         channel = interaction.guild.get_channel(CHANNEL_ID_CHANGELOG)
         if channel:
             # Send the mention message before the embed
             await channel.send(f"Role Mention: <@&{ROLE_ID_CHANGELOG}> ...")
             await channel.send(embed=self.embed)
-            await interaction.response.send_message(
-                f"✅ Changelog posted to {channel.mention}.", ephemeral=True
-            )
+            await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
         else:
-            await interaction.response.send_message(
-                "❌ Channel not found.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -21,14 +21,8 @@ LOG_DIR = "Logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 modpanel_logger = logging.getLogger("modpanel")
 modpanel_logger.setLevel(logging.INFO)
-file_handler = logging.FileHandler(
-    os.path.join(LOG_DIR, "modpanel.log"), encoding="utf-8"
-)
-file_handler.setFormatter(
-    logging.Formatter(
-        "%(asctime)s %(levelname)s │ %(message)s", datefmt="[%Y-%m-%d %H:%M:%S]"
-    )
-)
+file_handler = logging.FileHandler(os.path.join(LOG_DIR, "modpanel.log"), encoding="utf-8")
+file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s │ %(message)s", datefmt="[%Y-%m-%d %H:%M:%S]"))
 modpanel_logger.handlers.clear()  # Clear any existing handlers
 modpanel_logger.addHandler(file_handler)
 
@@ -36,6 +30,7 @@ modpanel_logger.addHandler(file_handler)
 # === Mod data ===
 async def load_mod_data() -> Dict[str, Any]:
     """Load mod data with caching for better performance."""
+
     async def _load():
         if not os.path.exists(MOD_DATA_FILE):
             return {"warnings": {}, "kicks": {}, "bans": {}, "mutes": {}}
@@ -96,12 +91,7 @@ def is_mod_or_admin(member: discord.Member) -> bool:
 
 class UserSelect(discord.ui.Select):
     def __init__(self, members: List[discord.Member]):
-        options = [
-            discord.SelectOption(
-                label=f"{m.display_name}#{m.discriminator}", value=str(m.id)
-            )
-            for m in members
-        ]
+        options = [discord.SelectOption(label=f"{m.display_name}#{m.discriminator}", value=str(m.id)) for m in members]
         super().__init__(
             placeholder="Select a user...",
             min_values=1,
@@ -114,17 +104,11 @@ class UserSelect(discord.ui.Select):
         member_id = int(self.values[0])
         member = interaction.guild.get_member(member_id)
         if not member:
-            await interaction.response.send_message(
-                "❌ User not found.", ephemeral=True
-            )
-            modpanel_logger.warning(
-                f"User not found: {member_id} by {interaction.user}"
-            )
+            await interaction.response.send_message("❌ User not found.", ephemeral=True)
+            modpanel_logger.warning(f"User not found: {member_id} by {interaction.user}")
             return
         if not is_mod_or_admin(interaction.user):
-            await interaction.response.send_message(
-                "❌ You do not have permission.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ You do not have permission.", ephemeral=True)
             modpanel_logger.warning(f"Permission denied for {interaction.user}")
             return
         await interaction.response.send_message(
@@ -149,9 +133,7 @@ class WarnModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
-            reason_text = (
-                self.reason.value if self.reason.value else "No reason provided"
-            )
+            reason_text = self.reason.value if self.reason.value else "No reason provided"
             # Load mod data
             mod_data = await load_mod_data()
             warnings_data = mod_data.get("warnings", {})
@@ -201,18 +183,14 @@ class KickModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
-            reason_text = (
-                self.reason.value if self.reason.value else "No reason provided"
-            )
+            reason_text = self.reason.value if self.reason.value else "No reason provided"
             await self.member.kick(reason=reason_text)
             await add_mod_action("kicks", self.member.id, reason_text, interaction.user)
             await interaction.response.send_message(
                 f"👢 Kicked {self.member.mention}. Reason: {reason_text}",
                 ephemeral=True,
             )
-            modpanel_logger.info(
-                f"Kicked {self.member} by {interaction.user}. Reason: {reason_text}"
-            )
+            modpanel_logger.info(f"Kicked {self.member} by {interaction.user}. Reason: {reason_text}")
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
             modpanel_logger.error(f"Error kicking {self.member}: {e}")
@@ -232,18 +210,14 @@ class BanModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
-            reason_text = (
-                self.reason.value if self.reason.value else "No reason provided"
-            )
+            reason_text = self.reason.value if self.reason.value else "No reason provided"
             await self.member.ban(reason=reason_text)
             await add_mod_action("bans", self.member.id, reason_text, interaction.user)
             await interaction.response.send_message(
                 f"🔨 Banned {self.member.mention}. Reason: {reason_text}",
                 ephemeral=True,
             )
-            modpanel_logger.info(
-                f"Banned {self.member} by {interaction.user}. Reason: {reason_text}"
-            )
+            modpanel_logger.info(f"Banned {self.member} by {interaction.user}. Reason: {reason_text}")
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
             modpanel_logger.error(f"Error banning {self.member}: {e}")
@@ -263,17 +237,13 @@ class MuteModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
-            reason_text = (
-                self.reason.value if self.reason.value else "No reason provided"
-            )
+            reason_text = self.reason.value if self.reason.value else "No reason provided"
             await self.member.edit(mute=True, reason=reason_text)
             await add_mod_action("mutes", self.member.id, reason_text, interaction.user)
             await interaction.response.send_message(
                 f"🔇 Muted {self.member.mention}. Reason: {reason_text}", ephemeral=True
             )
-            modpanel_logger.info(
-                f"Muted {self.member} by {interaction.user}. Reason: {reason_text}"
-            )
+            modpanel_logger.info(f"Muted {self.member} by {interaction.user}. Reason: {reason_text}")
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
             modpanel_logger.error(f"Error muting {self.member}: {e}")
@@ -306,37 +276,23 @@ class ModPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(UserSelect(members))
 
-    @discord.ui.button(
-        label="Lock Channel", style=discord.ButtonStyle.gray, emoji="🔒", row=1
-    )
+    @discord.ui.button(label="Lock Channel", style=discord.ButtonStyle.gray, emoji="🔒", row=1)
     async def lock(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         try:
-            overwrite = interaction.channel.overwrites_for(
-                interaction.guild.default_role
-            )
+            overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
             overwrite.send_messages = False
-            await interaction.channel.set_permissions(
-                interaction.guild.default_role, overwrite=overwrite
-            )
-            await interaction.response.send_message(
-                "🔒 Channel locked.", ephemeral=True
-            )
+            await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+            await interaction.response.send_message("🔒 Channel locked.", ephemeral=True)
             modpanel_logger.info(f"Channel locked by {interaction.user}")
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
             modpanel_logger.error(f"Error locking channel: {e}")
 
-    @discord.ui.button(
-        label="Slowmode", style=discord.ButtonStyle.gray, emoji="🐢", row=1
-    )
-    async def slowmode(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    @discord.ui.button(label="Slowmode", style=discord.ButtonStyle.gray, emoji="🐢", row=1)
+    async def slowmode(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         try:
             await interaction.channel.edit(slowmode_delay=30)
-            await interaction.response.send_message(
-                "🐢 Slowmode set to 30 seconds.", ephemeral=True
-            )
+            await interaction.response.send_message("🐢 Slowmode set to 30 seconds.", ephemeral=True)
             modpanel_logger.info(f"Slowmode set by {interaction.user}")
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
@@ -352,20 +308,14 @@ class ModMainView(discord.ui.View):
         self.add_item(UserSelectForDetails(members))
 
     @discord.ui.button(label="Mod Panel", style=discord.ButtonStyle.primary, emoji="📦")
-    async def mod_panel(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def mod_panel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         embed = create_modpanel_embed(self.bot.user)
         view = ModPanelView(self.members)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         modpanel_logger.info(f"Mod panel opened from /mod by {interaction.user}")
 
-    @discord.ui.button(
-        label="Mod Overview", style=discord.ButtonStyle.secondary, emoji="📊"
-    )
-    async def mod_overview(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    @discord.ui.button(label="Mod Overview", style=discord.ButtonStyle.secondary, emoji="📊")
+    async def mod_overview(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # Use handle_modoverview
         cog = self.bot.get_cog("ModPanel")
         if cog:
@@ -374,9 +324,7 @@ class ModMainView(discord.ui.View):
             await interaction.response.send_message("❌ Cog not found.", ephemeral=True)
 
     @discord.ui.button(label="Opt-Ins", style=discord.ButtonStyle.secondary, emoji="📋")
-    async def opt_ins(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
+    async def opt_ins(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # Use handle_optins
         cog = self.bot.get_cog("ModPanel")
         if cog:
@@ -388,9 +336,7 @@ class ModMainView(discord.ui.View):
 class UserSelectForDetails(discord.ui.Select):
     def __init__(self, members: List[discord.Member]):
         options = [
-            discord.SelectOption(
-                label=f"{m.display_name}#{m.discriminator}", value=str(m.id)
-            )
+            discord.SelectOption(label=f"{m.display_name}#{m.discriminator}", value=str(m.id))
             for m in members[:25]  # Limit to 25 options
         ]
         super().__init__(
@@ -405,9 +351,7 @@ class UserSelectForDetails(discord.ui.Select):
         member_id = int(self.values[0])
         member = interaction.guild.get_member(member_id)
         if not member:
-            await interaction.response.send_message(
-                "❌ User not found.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ User not found.", ephemeral=True)
             return
         # Use handle_moddetails
         cog = interaction.client.get_cog("ModPanel")
@@ -442,9 +386,7 @@ class ModPanel(commands.Cog):
     # 🧩 Shared handler for modpanel logic
     async def handle_modpanel(self, ctx_or_interaction: Any) -> None:
         if not is_mod_or_admin(
-            ctx_or_interaction.author
-            if hasattr(ctx_or_interaction, "author")
-            else ctx_or_interaction.user
+            ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         ):
             message = "❌ You do not have permission to use this command."
             if hasattr(ctx_or_interaction, "send"):
@@ -456,9 +398,7 @@ class ModPanel(commands.Cog):
         members = [
             m
             for m in (
-                ctx_or_interaction.guild
-                if hasattr(ctx_or_interaction, "guild")
-                else ctx_or_interaction.guild
+                ctx_or_interaction.guild if hasattr(ctx_or_interaction, "guild") else ctx_or_interaction.guild
             ).members
             if not m.bot
         ]
@@ -473,9 +413,7 @@ class ModPanel(commands.Cog):
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed, view=view)
         else:
-            await ctx_or_interaction.response.send_message(
-                embed=embed, view=view, ephemeral=True
-            )
+            await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         modpanel_logger.info(
             f"Mod panel opened by {ctx_or_interaction.author if hasattr(ctx_or_interaction, 'author') else ctx_or_interaction.user}"
         )
@@ -498,9 +436,7 @@ class ModPanel(commands.Cog):
     # 🧩 Shared handler for mod logic
     async def handle_mod(self, ctx_or_interaction: Any) -> None:
         if not is_mod_or_admin(
-            ctx_or_interaction.author
-            if hasattr(ctx_or_interaction, "author")
-            else ctx_or_interaction.user
+            ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         ):
             message = "❌ You do not have permission to use this command."
             if hasattr(ctx_or_interaction, "send"):
@@ -517,9 +453,7 @@ class ModPanel(commands.Cog):
         members = [
             m
             for m in (
-                ctx_or_interaction.guild
-                if hasattr(ctx_or_interaction, "guild")
-                else ctx_or_interaction.guild
+                ctx_or_interaction.guild if hasattr(ctx_or_interaction, "guild") else ctx_or_interaction.guild
             ).members
             if not m.bot
         ]
@@ -534,9 +468,7 @@ class ModPanel(commands.Cog):
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed, view=view)
         else:
-            await ctx_or_interaction.response.send_message(
-                embed=embed, view=view, ephemeral=True
-            )
+            await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         modpanel_logger.info(
             f"Mod tools opened by {ctx_or_interaction.author if hasattr(ctx_or_interaction, 'author') else ctx_or_interaction.user}"
         )
@@ -548,9 +480,7 @@ class ModPanel(commands.Cog):
         """
         await self.handle_mod(ctx)
 
-    @app_commands.command(
-        name="mod", description="📋 General mod command with quick access to mod tools."
-    )
+    @app_commands.command(name="mod", description="📋 General mod command with quick access to mod tools.")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def mod_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_mod(interaction)
@@ -558,9 +488,7 @@ class ModPanel(commands.Cog):
     # 🧩 Shared handler for modoverview logic
     async def handle_modoverview(self, ctx_or_interaction: Any) -> None:
         if not is_mod_or_admin(
-            ctx_or_interaction.author
-            if hasattr(ctx_or_interaction, "author")
-            else ctx_or_interaction.user
+            ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         ):
             message = "❌ You do not have permission to use this command."
             if hasattr(ctx_or_interaction, "send"):
@@ -580,9 +508,7 @@ class ModPanel(commands.Cog):
             if data:
                 if action == "warnings":
                     # Sort by count descending, limit to top 3 for brevity
-                    top_users = sorted(
-                        data.items(), key=lambda x: x[1]["count"], reverse=True
-                    )[:3]
+                    top_users = sorted(data.items(), key=lambda x: x[1]["count"], reverse=True)[:3]
                     text_lines = []
                     for uid, wdata in top_users:
                         count = wdata["count"]
@@ -597,15 +523,11 @@ class ModPanel(commands.Cog):
                             }
                         )
                         reason = latest_warning["reason"]
-                        text_lines.append(
-                            f"<@{uid}>: {count} warning(s) - Latest: {reason}"
-                        )
+                        text_lines.append(f"<@{uid}>: {count} warning(s) - Latest: {reason}")
                     text = "\n".join(text_lines)
                 else:
                     # For kicks, bans, mutes: limit to top 3, show latest reason
-                    top_users = sorted(
-                        data.items(), key=lambda x: x[1]["count"], reverse=True
-                    )[:3]
+                    top_users = sorted(data.items(), key=lambda x: x[1]["count"], reverse=True)[:3]
                     text_lines = []
                     for uid, adata in top_users:
                         count = adata["count"]
@@ -619,9 +541,7 @@ class ModPanel(commands.Cog):
                             }
                         )
                         reason = latest_action["reason"]
-                        text_lines.append(
-                            f"<@{uid}>: {count} {action}(s) - Latest: {reason}"
-                        )
+                        text_lines.append(f"<@{uid}>: {count} {action}(s) - Latest: {reason}")
                     text = "\n".join(text_lines)
             else:
                 text = "No actions recorded."
@@ -657,9 +577,7 @@ class ModPanel(commands.Cog):
     # 🧩 Shared handler for moddetails logic
     async def handle_moddetails(self, ctx_or_interaction: Any, user: discord.User) -> None:
         if not is_mod_or_admin(
-            ctx_or_interaction.author
-            if hasattr(ctx_or_interaction, "author")
-            else ctx_or_interaction.user
+            ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         ):
             message = "❌ You do not have permission to use this command."
             if hasattr(ctx_or_interaction, "send"):
@@ -679,17 +597,11 @@ class ModPanel(commands.Cog):
             if data and data.get("count", 0) > 0:
                 if action == "warnings":
                     warnings_list = data.get("warnings", [])
-                    text_lines = [
-                        f"- {w['reason']} (by {w['mod']} at {w['timestamp'][:16]})"
-                        for w in warnings_list
-                    ]
+                    text_lines = [f"- {w['reason']} (by {w['mod']} at {w['timestamp'][:16]})" for w in warnings_list]
                     text = "\n".join(text_lines)
                 else:
                     actions_list = data.get("actions", [])
-                    text_lines = [
-                        f"- {a['reason']} (by {a['mod']} at {a['timestamp'][:16]})"
-                        for a in actions_list
-                    ]
+                    text_lines = [f"- {a['reason']} (by {a['mod']} at {a['timestamp'][:16]})" for a in actions_list]
                     text = "\n".join(text_lines)
                 embed.add_field(
                     name=f"{action.capitalize()} ({data['count']})",
@@ -725,9 +637,7 @@ class ModPanel(commands.Cog):
     )
     @app_commands.describe(user="The user to get details for")
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
-    async def moddetails_slash(
-        self, interaction: discord.Interaction, user: discord.User
-    ) -> None:
+    async def moddetails_slash(self, interaction: discord.Interaction, user: discord.User) -> None:
         await self.handle_moddetails(interaction, user)
 
     # !optins (Prefix) - For mods/admins to view opt-ins
@@ -750,9 +660,7 @@ class ModPanel(commands.Cog):
     # 🧩 Shared handler for optins logic
     async def handle_optins(self, ctx_or_interaction: Any) -> None:
         if not is_mod_or_admin(
-            ctx_or_interaction.author
-            if hasattr(ctx_or_interaction, "author")
-            else ctx_or_interaction.user
+            ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         ):
             message = "❌ You do not have permission to use this command."
             if hasattr(ctx_or_interaction, "send"):
@@ -760,11 +668,7 @@ class ModPanel(commands.Cog):
             else:
                 await ctx_or_interaction.response.send_message(message, ephemeral=True)
             return
-        guild = (
-            ctx_or_interaction.guild
-            if hasattr(ctx_or_interaction, "guild")
-            else ctx_or_interaction.guild
-        )
+        guild = ctx_or_interaction.guild if hasattr(ctx_or_interaction, "guild") else ctx_or_interaction.guild
         changelog_role = guild.get_role(CHANGELOG_ROLE_ID)
         if not changelog_role:
             message = "❌ Changelog role not found."
@@ -773,22 +677,13 @@ class ModPanel(commands.Cog):
             else:
                 await ctx_or_interaction.response.send_message(message, ephemeral=True)
             return
-        users_with_role = [
-            member for member in guild.members if changelog_role in member.roles
-        ]
+        users_with_role = [member for member in guild.members if changelog_role in member.roles]
         if not users_with_role:
             description = "No users have opted into changelog notifications."
         else:
-            user_list = "\n".join(
-                [
-                    f"<@{member.id}> ({member.display_name})"
-                    for member in users_with_role
-                ]
-            )
+            user_list = "\n".join([f"<@{member.id}> ({member.display_name})" for member in users_with_role])
             description = f"Users opted into changelog notifications:\n{user_list}"
-        embed = discord.Embed(
-            title="📊 Opt-Ins Overview", description=description, color=PINK
-        )
+        embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=PINK)
         set_pink_footer(embed, bot=self.bot.user)
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed)
