@@ -107,7 +107,7 @@ class Leaderboard(commands.Cog):
                 lambda idx: f"{RANK_EMOJIS.get(RL_TIER_ORDER[idx], '<:unranked:1425389712276721725>')} {RL_TIER_ORDER[idx]}",
             )
         elif category == "tickets":
-            tickets = await load_tickets()
+            tickets = await load_tickets()  # Added await since load_tickets is now async
             data = {}
             for ticket in tickets:
                 if ticket["status"] == "Closed":
