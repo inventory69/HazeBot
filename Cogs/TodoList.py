@@ -160,7 +160,7 @@ Rules:
 """
 
         response = openai.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-4.1-nano",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.7,
