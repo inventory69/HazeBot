@@ -1,14 +1,8 @@
 # HazeWorldBot 🌿
 
-# ⚠️ **IMPORTANT: PERSONAL USE ONLY**
+A Discord bot designed for The Chillventory server ("Haze" on Discord). Built with Python and discord.py, HazeWorldBot enhances moderation, onboarding, changelogs, and community engagement with a modular, inventory-themed experience.
 
-**This project is intended exclusively for personal use by the developer and is not designed for public use, redistribution, or commercial purposes.**
-
-*(Dieses Projekt ist ausschließlich für den persönlichen Gebrauch des Entwicklers bestimmt und nicht für die öffentliche Nutzung, Weiterverbreitung oder kommerzielle Verwendung gedacht.)*
-
----
-
-A personal Discord bot designed for The Chillventory server ("Haze" on Discord). Built with Python and discord.py, HazeWorldBot enhances moderation, onboarding, changelogs, and community engagement with a modular, inventory-themed experience.
+**Note:** This is a personal project. Feel free to fork and adapt it for your own server!
 
 ---
 
@@ -20,6 +14,7 @@ A personal Discord bot designed for The Chillventory server ("Haze" on Discord).
 - **Status:** `/status` and `!status` display bot latency and server count.
 - **Message Management:** `!clear` for admins and Slot Keepers (mods) to purge messages.
 - **Say Command:** `!say` lets admins send bot messages (with embed option).
+- **Mod Command:** `/mod` and `!mod` for various moderation actions and controls (admin-only).
 - **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Warnings are tracked per user and stored in `Data/mod_data.json`.
 - **Mod Details:** `/moddetails` and `!moddetails` for Slot Keepers and Admins to view detailed moderation history for specific users.
 - **Centralized Command Lists:** All admin/mod commands are managed in `Config.py` for consistency.
@@ -38,7 +33,7 @@ A personal Discord bot designed for The Chillventory server ("Haze" on Discord).
 - **Performance Caching:** API calls are cached for 1 hour to reduce external requests and improve response times.
 
 ### 📝 Changelog System
-- **Automated Changelog Generation:** `!changelog` uses GPT-4 Turbo to format PR/commit text as Discord embeds.
+- **Automated Changelog Generation:** `!changelog` (admin-only) uses GPT-4 Turbo to format PR/commit text as Discord embeds.
 - **Post to Channel Button:** Instantly post changelogs to the designated channel with a notification.
 - **Role Mention:** Changelog notification role can be toggled by users in preferences.
 
@@ -67,6 +62,13 @@ A personal Discord bot designed for The Chillventory server ("Haze" on Discord).
 - **Persistent Welcome Buttons:** Community can greet new members with themed replies.
 - **Automatic Cleanup:** Welcome messages are deleted when members leave.
 
+### 📋 To-Do List System
+- **Manage Tasks:** `/todo-update` and `!todo-update` for admins/mods to add, remove, and clear tasks.
+- **AI Formatting:** OpenAI GPT-4 Turbo automatically formats tasks with emojis and descriptions.
+- **View Tasks:** `/todo-show` and `!todo-show` display the current to-do list.
+- **Priority Levels:** Tasks organized by priority (🔴 High, 🟡 Medium, 🟢 Low).
+- **Author Tracking:** Each task shows who added it.
+
 ### ⚡ Performance & Caching
 - **Advanced Caching System:** Custom-built caching utilities with in-memory and file-based caching for optimal performance.
 - **Optimized Data Loading:** All data operations use async caching with configurable TTL to reduce I/O operations.
@@ -80,17 +82,7 @@ A personal Discord bot designed for The Chillventory server ("Haze" on Discord).
 
 ---
 
-## 🛠️ Setup (Personal Use Only)
-
-# ⚠️ **STRICTLY RESTRICTED: PERSONAL USE ONLY**
-
-**This bot was developed specifically for The Chillventory and is NOT intended for public deployment. Any redistribution, forking, or commercial use is prohibited.**
-
-*(Dieser Bot wurde speziell für The Chillventory entwickelt und ist NICHT für die öffentliche Bereitstellung gedacht. Jegliche Weiterverbreitung, Forking oder kommerzielle Nutzung ist untersagt.)*
-
-**If you for any reason want to create a copy for your personal use (which is not recommended), please note:**
-
-This bot is tailored for The Chillventory and not intended for public deployment. If you fork for personal use:
+## 🛠️ Setup
 
 ### Prerequisites
 - **Python 3.8+** - The bot requires Python 3.8 or higher
@@ -247,29 +239,46 @@ For contributors and developers:
 ```bash
 # All moderator commands plus:
 !say Hello everyone!  # Send message as bot
-!changelog  # Create changelog from recent changes
+!changelog text:"Your PR text here"  # Create changelog from changes
+!mod  # Moderation actions and controls
 !optins  # View changelog opt-in statistics
 ```
 
 ### Command Reference
 
-| Command | Description | Access Level |
-|---------|-------------|--------------|
-| `/help` | Show available commands | All |
-| `/status` | Bot status and latency | All |
-| `/profile` | User profile information | All |
-| `/rlstats` | Rocket League statistics | All |
-| `/setrlaccount` | Link RL account | All |
-| `/preferences` | User preferences | All |
-| `/leaderboard` | View leaderboards | All |
-| `/ticket` | Create support ticket | All |
-| `/roleinfo` | Role information | All |
-| `/modpanel` | Moderation panel | Mods+ |
-| `/modoverview` | Moderation statistics | Mods+ |
-| `/moddetails` | User moderation history | Mods+ |
-| `/clear` | Clear messages | Mods+ |
-| `/say` | Send message as bot | Admins |
-| `/optins` | View opt-in statistics | Admins |
+#### User Commands (All Members)
+
+| Command | Prefix | Description |
+|---------|--------|-------------|
+| `/help` | `!help` | Show available commands |
+| `/status` | `!status` | Bot status and latency |
+| `/profile` | `!profile` | User profile information |
+| `/rlstats [platform] [username]` | `!rlstats` | Rocket League statistics |
+| `/setrlaccount [platform] [username]` | `!setrlaccount` | Link RL account |
+| `/preferences` | `!preferences` | Toggle changelog notifications |
+| `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
+| `/ticket` | `!ticket` | Create support ticket |
+| `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
+| `/todo-show` | `!todo-show` | Display current to-do list |
+
+#### Moderator Commands (Slot Keepers+)
+
+| Command | Prefix | Description |
+|---------|--------|-------------|
+| `/clear [amount]` | `!clear` | Delete messages in bulk |
+| `/modpanel` | `!modpanel` | Moderation control panel |
+| `/modoverview` | `!modoverview` | Moderation statistics |
+| `/moddetails [@user]` | `!moddetails` | User moderation history |
+| `/todo-update` | `!todo-update` | Create/update to-do items with AI formatting |
+
+#### Administrator Commands (Admins Only)
+
+| Command | Prefix | Description |
+|---------|--------|-------------|
+| `/changelog` | `!changelog` | Generate and post bot changelogs with AI |
+| `/say [message]` | `!say` | Send message as bot |
+| `/mod [action]` | `!mod` | Moderation actions and controls |
+| `/optins` | `!optins` | View opt-in statistics |
 
 ---
 
@@ -347,41 +356,76 @@ docker run -d --env-file .env hazeworldbot
 
 ## 🤝 Contributing
 
-# ⚠️ **NO CONTRIBUTIONS WELCOME**
+**Want to help improve HazeWorldBot?** Contributions are welcome!
 
-**Due to the nature of this project as a personal tool, external contributions are not welcome. This repository serves only for personal documentation and archiving.**
+Please see our [**CONTRIBUTING.md**](CONTRIBUTING.md) for detailed guidelines on how to contribute.
 
-*(Aufgrund der Natur dieses Projekts als persönliches Werkzeug sind externe Beiträge nicht erwünscht. Dieses Repository dient nur der persönlichen Dokumentation und Archivierung.)*
+### How to Contribute
 
-*If you for any reason want to use the code, do so at your own risk and without any support.*
+1. **Fork the Repository**
+   ```bash
+   git clone https://github.com/inventory69/HazeWorldBot.git
+   cd HazeWorldBot
+   ```
+
+2. **Create a Feature Branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **Make Your Changes**
+   - Follow the existing code style and patterns
+   - Add comments for complex logic
+   - Test thoroughly before submitting
+
+4. **Commit with Clear Messages**
+   ```bash
+   git commit -m "feat: describe your changes"
+   ```
+
+5. **Push and Open a Pull Request**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+### Contribution Guidelines
+
+- **Code Style:** Use `ruff` for formatting (run `ruff format .`)
+- **Testing:** Ensure all changes are tested in a development environment
+- **Documentation:** Update README and code comments as needed
+- **Respect Existing Structure:** Follow the modular Cog architecture
+- **Async/Await:** Use async patterns throughout (no blocking calls)
+- **Error Handling:** Include proper error handling and logging
+- **Discord API:** Use discord.py best practices and patterns
+
+### Areas for Contribution
+
+- **Bug Fixes:** Found a bug? We'd love your fix!
+- **New Features:** Have an idea? Open an issue first to discuss
+- **Documentation:** Help improve README, docstrings, and comments
+- **Performance:** Optimize existing code and caching systems
+- **Testing:** Add unit tests and improve test coverage
 
 ---
 
 ## 📄 License
 
-**This project is licensed for personal use only and is not intended for redistribution.**
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-*(Dieses Projekt ist für den persönlichen Gebrauch lizenziert und nicht für die Weiterverbreitung gedacht.)*
-
-This project is licensed for personal use only and is not intended for redistribution - see the [LICENSE](LICENSE) file for details.
+You're free to fork, modify, and use this project for your own Discord server!
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **Personal Project** - This is a personal tool, not intended for the public
 - Built with 💖 for The Chillventory community
-- Special thanks to contributors and testers
-- Powered by discord.py and various open-source libraries
+- Powered by [discord.py](https://github.com/Rapptz/discord.py)
+- AI features powered by [OpenAI GPT-4](https://openai.com/)
+- Special thanks to all contributors and community members
+- Thanks to the open-source libraries that make this project possible
 
 ---
 
-# ⚠️ **FINAL WARNING**
+**Questions?** Feel free to open an issue or reach out! 🌿
 
-**This project is and remains a personal tool. Any use outside the personal context is not authorized and will not be supported.**
-
-*(Dieses Projekt ist und bleibt ein persönliches Werkzeug. Jegliche Nutzung außerhalb des persönlichen Kontexts ist nicht autorisiert und wird nicht unterstützt.)*
-
-**Questions?** Reach out personally or create an issue! 🌿
-
-*Made with 💖 for The Chillventory community - Personal Use Only*
+*Made with 💖 for The Chillventory community*
