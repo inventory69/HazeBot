@@ -4,6 +4,7 @@ import os
 from typing import Any, Callable, Dict, Optional, TypeVar
 from functools import wraps
 import time
+from Utils.Logger import Logger  # ← Hinzugefügt
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -173,3 +174,11 @@ def file_cache_decorator(ttl_seconds: int) -> Callable[[F], F]:
             return sync_wrapper  # type: ignore
 
     return decorator
+
+
+def invalidate_cache(func):
+    """Invalidate cache for a specific function."""
+    cache_key = f"{func.__module__}.{func.__name__}"
+    if cache_key in cache_instance._cache:
+        del cache_instance._cache[cache_key]
+        Logger.info(f"Cache invalidated for {cache_key}")
