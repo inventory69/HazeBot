@@ -59,7 +59,6 @@ SLASH_COMMANDS = [
     "leaderboard",
     "optins",
     "todo-update",
-    "todo-show",
 ]  # Commands that have slash (/) versions
 ADMIN_COMMANDS = [
     "clear",

@@ -14,6 +14,9 @@ from Utils.Logger import Logger
 # === File path for to-do list data ===
 TODO_DATA_FILE = "Data/todo_list.json"
 
+# === Todo List Channel ID ===
+TODO_CHANNEL_ID = 1424862421650247730  # Only this channel can use todo-update
+
 
 # === Helper functions for data persistence ===
 async def load_todo_data() -> Dict[str, Any]:
@@ -350,31 +353,52 @@ class TodoRemoveSelectView(discord.ui.View):
                 )
             )
 
-        # Create and add select
+        # Create and add select with multi-select enabled
         self.select = discord.ui.Select(
-            placeholder="Choose item to remove...", options=options, custom_id="remove_select"
+            placeholder="Choose items to remove...",
+            options=options,
+            custom_id="remove_select",
+            min_values=1,
+            max_values=min(len(options), 25),  # Allow selecting up to 25 items (Discord limit)
         )
         self.select.callback = self.select_callback
         self.add_item(self.select)
 
     async def select_callback(self, interaction: discord.Interaction) -> None:
-        # Get selected index
-        index = int(self.select.values[0])
+        # Get selected indices (sorted in reverse to remove from end first)
+        indices = sorted([int(val) for val in self.select.values], reverse=True)
 
         # Load current data
         data = await load_todo_data()
-        if 0 <= index < len(data["items"]):
-            removed_item = data["items"].pop(index)
-            save_todo_data(data)
+        removed_items = []
 
-            # Update message
-            modal = TodoModal(self.bot)
-            await interaction.response.defer()
-            await modal.update_todo_message(interaction, data)
+        # Remove selected items (from end to start to avoid index issues)
+        for index in indices:
+            if 0 <= index < len(data["items"]):
+                removed_items.append(data["items"].pop(index))
 
-            Logger.info(f"Removed to-do item '{removed_item['title']}' by {interaction.user}")
-        else:
-            await interaction.response.send_message("❌ Item not found!", ephemeral=True)
+        save_todo_data(data)
+
+        # Update message
+        modal = TodoModal(self.bot)
+        await interaction.response.defer()
+        await modal.update_todo_message(interaction, data)
+
+        # Log removed items
+        removed_titles = ", ".join([f"'{item['title']}'" for item in reversed(removed_items)])
+        Logger.info(f"Removed {len(removed_items)} to-do item(s): {removed_titles} by {interaction.user}")
+
+        # Send confirmation
+        confirm_msg = await interaction.followup.send(
+            f"✅ Removed {len(removed_items)} item(s)!", ephemeral=True
+        )
+
+        # Delete confirmation after 3 seconds
+        await asyncio.sleep(3)
+        try:
+            await confirm_msg.delete()
+        except Exception:
+            pass
 
 
 class TodoList(commands.Cog):
@@ -392,6 +416,16 @@ class TodoList(commands.Cog):
         user = ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
         if not is_mod_or_admin(user):
             message = "❌ You do not have permission to use this command."
+            if hasattr(ctx_or_interaction, "send"):
+                await ctx_or_interaction.send(message, delete_after=5)
+            else:
+                await ctx_or_interaction.response.send_message(message, ephemeral=True)
+            return
+
+        # Check if command is used in the correct channel
+        channel = ctx_or_interaction.channel
+        if channel.id != TODO_CHANNEL_ID:
+            message = f"❌ This command can only be used in <#{TODO_CHANNEL_ID}>."
             if hasattr(ctx_or_interaction, "send"):
                 await ctx_or_interaction.send(message, delete_after=5)
             else:
@@ -436,7 +470,7 @@ class TodoList(commands.Cog):
             await ctx_or_interaction.response.send_message(embed=embed, ephemeral=False)
 
         user = ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
-        Logger.info(f"todo-show used by {user} in {ctx_or_interaction.guild}")
+        Logger.info(f"todo-update used by {user} in {ctx_or_interaction.guild}")
 
     # !todo-update (Prefix) - Mod/Admin only
     @commands.command(name="todo-update")
@@ -451,20 +485,6 @@ class TodoList(commands.Cog):
     @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
     async def todo_update_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_todo_update(interaction)
-
-    # !todo-show (Prefix) - Public
-    @commands.command(name="todo-show")
-    async def todo_show_prefix(self, ctx: commands.Context) -> None:
-        """
-        📋 Display the current server to-do list.
-        """
-        await self.handle_todo_show(ctx)
-
-    # /todo-show (Slash) - Public
-    @app_commands.command(name="todo-show", description="📋 Display the current server to-do list.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
-    async def todo_show_slash(self, interaction: discord.Interaction) -> None:
-        await self.handle_todo_show(interaction)
 
 
 async def setup(bot: commands.Bot) -> None:
