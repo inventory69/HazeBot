@@ -13,7 +13,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Help System:** `/help` and `!help` show all commands, with mod/admin commands only visible to authorized users.
 - **Status:** `/status` and `!status` display bot latency and server count.
 - **Message Management:** `!clear` for admins and Slot Keepers (mods) to purge messages.
-- **Say Command:** `!say` lets admins send bot messages (with embed option).
+- **Say Command:** `!say` lets admins send bot messages with embeds and interactive buttons via JSON.
 - **Mod Command:** `/mod` and `!mod` for various moderation actions and controls (admin-only).
 - **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Dynamic button states reflect current channel conditions (locked/unlocked, slowmode enabled/disabled). Warnings are tracked per user and stored in `Data/mod_data.json`.
 - **Mod Details:** `/moddetails` and `!moddetails` for Slot Keepers and Admins to view detailed moderation history for specific users.
@@ -243,7 +243,9 @@ For contributors and developers:
 ### For Administrators
 ```bash
 # All moderator commands plus:
-!say Hello everyone!  # Send message as bot
+!say Hello everyone!  # Send plain message as bot
+!say --embed Welcome to the server!  # Send simple embed
+!say --json {"embed": {"title": "Announcement"}, "buttons": [{"label": "Click", "style": "primary"}]}  # Embed with buttons
 !changelog text:"Your PR text here"  # Create changelog from changes
 !mod  # Moderation actions and controls
 !optins  # View changelog opt-in statistics
@@ -281,7 +283,7 @@ For contributors and developers:
 | Command | Prefix | Description |
 |---------|--------|-------------|
 | `/changelog` | `!changelog` | Generate and post bot changelogs with AI |
-| `/say [message]` | `!say` | Send message as bot |
+| `/say [message]` | `!say` | Send message as bot with embeds and buttons (JSON support) |
 | `/mod [action]` | `!mod` | Moderation actions and controls |
 | `/optins` | `!optins` | View opt-in statistics |
 
