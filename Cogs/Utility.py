@@ -304,31 +304,28 @@ class Utility(commands.Cog):
             label="Embed Color (hex without #)",
             placeholder="4605516 or 464bac",
             required=False,
-            default="464bac",
             style=discord.TextStyle.short,
         )
 
         async def on_submit(self, interaction: discord.Interaction):
             try:
                 # Parse color
+                color_value = self.color.value if self.color.value else "464bac"
                 try:
-                    if len(self.color.value) == 6:
-                        color = int(self.color.value, 16)
+                    if len(color_value) == 6:
+                        color = int(color_value, 16)
                     else:
-                        color = int(self.color.value)
+                        color = int(color_value)
                 except (ValueError, TypeError):
                     color = 0x464BAC  # Default blue
-                
+
                 # Create embed
-                embed = discord.Embed(
-                    title=self.title.value,
-                    color=color
-                )
-                
+                embed = discord.Embed(title=self.title.value, color=color)
+
                 # Add banner image
                 if self.banner_url.value:
                     embed.set_image(url=self.banner_url.value)
-                
+
                 # Parse sections
                 try:
                     sections = json.loads(self.sections.value)
@@ -338,11 +335,11 @@ class Utility(commands.Cog):
                         title = section.get("title", "")
                         desc = section.get("description", "")
                         description_parts.append(f"**{emoji} {title}**\n{desc}")
-                    
+
                     embed.description = "\n\n".join(description_parts)
                 except json.JSONDecodeError:
                     embed.description = self.sections.value
-                
+
                 # Parse buttons
                 view = None
                 if self.buttons.value:
@@ -353,7 +350,7 @@ class Utility(commands.Cog):
                             parts = line.split("|", 1)
                             label = parts[0].strip()
                             url = parts[1].strip()
-                            
+
                             # Auto-detect emoji
                             emoji = None
                             if "website" in label.lower() or "web" in label.lower():
@@ -364,29 +361,23 @@ class Utility(commands.Cog):
                                 emoji = "🛠️"
                             elif "patreon" in label.lower():
                                 emoji = "💖"
-                            
-                            view.add_item(discord.ui.Button(
-                                label=label,
-                                url=url,
-                                style=discord.ButtonStyle.link,
-                                emoji=emoji
-                            ))
-                
+
+                            view.add_item(
+                                discord.ui.Button(label=label, url=url, style=discord.ButtonStyle.link, emoji=emoji)
+                            )
+
                 # Add footer
                 embed.set_footer(
                     text=f"Powered by {interaction.guild.name} 💖",
-                    icon_url=interaction.client.user.avatar.url if interaction.client.user.avatar else None
+                    icon_url=interaction.client.user.avatar.url if interaction.client.user.avatar else None,
                 )
-                
+
                 # Send embed
                 await interaction.response.send_message(embed=embed, view=view)
                 Logger.info(f"Interactive embed created by {interaction.user}")
-                
+
             except Exception as e:
-                await interaction.response.send_message(
-                    f"❌ Error creating embed: {e}",
-                    ephemeral=True
-                )
+                await interaction.response.send_message(f"❌ Error creating embed: {e}", ephemeral=True)
                 Logger.error(f"Error in embed builder: {e}")
 
     # !say (Prefix) - Only prefix, no slash
