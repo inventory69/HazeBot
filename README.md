@@ -15,16 +15,19 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Message Management:** `!clear` for admins and Slot Keepers (mods) to purge messages.
 - **Say Command:** `!say` lets admins send bot messages (with embed option).
 - **Mod Command:** `/mod` and `!mod` for various moderation actions and controls (admin-only).
-- **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Warnings are tracked per user and stored in `Data/mod_data.json`.
+- **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Dynamic button states reflect current channel conditions (locked/unlocked, slowmode enabled/disabled). Warnings are tracked per user and stored in `Data/mod_data.json`.
 - **Mod Details:** `/moddetails` and `!moddetails` for Slot Keepers and Admins to view detailed moderation history for specific users.
 - **Centralized Command Lists:** All admin/mod commands are managed in `Config.py` for consistency.
 
 ### 🎫 Ticket System
 - **Create Tickets:** `/ticket` and `!ticket` for support, bugs, or applications.
-- **Interactive Controls:** Claim, assign, close, and reopen tickets with buttons.
-- **Role-Based Permissions:** Slot Keepers (mods) and Admins can claim/close; only Admins can assign.
-- **Transcript & Email:** Closed tickets generate transcripts and can send via email.
-- **Automatic Cleanup:** Old tickets are deleted after 7 days.
+- **Interactive Controls:** Claim, assign, close, delete, and reopen tickets with buttons.
+- **Optional Close Messages:** When closing tickets, moderators can include an optional message for the ticket creator.
+- **Automatic Archiving:** Tickets are archived immediately after closing to prevent further writing until reopened.
+- **Role-Based Permissions:** Slot Keepers (mods) and Admins can claim/close/reopen; only Admins can assign and delete.
+- **Transcript & Email:** Closed tickets generate transcripts (including close messages) and can send via email.
+- **Automatic Cleanup:** Old closed tickets are deleted after 7 days.
+- **Persistent Views:** All ticket buttons remain functional across bot restarts.
 
 ### 🚀 Rocket League Integration
 - **Stats Fetching:** `/rlstats` and `!rlstats` show player stats for 1v1, 2v2, 3v3, 4v4.
@@ -64,10 +67,12 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 
 ### 📋 To-Do List System
 - **Manage Tasks:** `/todo-update` and `!todo-update` for admins/mods to add, remove, and clear tasks.
+- **Multi-Delete:** Select up to 25 tasks at once for batch deletion with confirmation.
 - **AI Formatting:** OpenAI GPT-4 Turbo automatically formats tasks with emojis and descriptions.
 - **View Tasks:** `/todo-show` and `!todo-show` display the current to-do list.
 - **Priority Levels:** Tasks organized by priority (🔴 High, 🟡 Medium, 🟢 Low).
 - **Author Tracking:** Each task shows who added it.
+- **Channel Restriction:** Management commands restricted to designated todo channel.
 
 ### ⚡ Performance & Caching
 - **Advanced Caching System:** Custom-built caching utilities with in-memory and file-based caching for optimal performance.
