@@ -392,6 +392,21 @@ async def close_ticket_async(
 ) -> None:
     transcript = await create_transcript(channel)
     
+    # Update channel permissions: Remove send_messages for creator
+    creator = bot.get_user(ticket["user_id"])
+    if creator:
+        try:
+            await channel.set_permissions(
+                creator,
+                view_channel=True,
+                send_messages=False,
+                add_reactions=False,
+                reason=f"Ticket #{ticket['ticket_num']} closed"
+            )
+            Logger.info(f"Removed send permissions for creator {creator.name} in closed ticket.")
+        except Exception as e:
+            Logger.error(f"Error updating permissions for creator: {e}")
+    
     # Create full transcript embed (for DMs)
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
@@ -634,6 +649,22 @@ class TicketControlView(discord.ui.View):
         if not is_allowed_for_ticket_actions(interaction.user, ticket, "Reopen"):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
+        
+        # Restore send permissions for creator
+        creator = interaction.client.get_user(ticket["user_id"])
+        if creator:
+            try:
+                await interaction.channel.set_permissions(
+                    creator,
+                    view_channel=True,
+                    send_messages=True,
+                    add_reactions=True,
+                    reason=f"Ticket #{ticket['ticket_num']} reopened"
+                )
+                Logger.info(f"Restored send permissions for creator {creator.name} in reopened ticket.")
+            except Exception as e:
+                Logger.error(f"Error restoring permissions for creator: {e}")
+        
         # Reopen: Set status to Open, unarchive, increase reopen_count
         await update_ticket(
             interaction.channel.id,
