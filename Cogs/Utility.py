@@ -273,6 +273,122 @@ class Utility(commands.Cog):
         await msg.delete(delay=30)
         log_clear(ctx.channel, ctx.author, deleted_count)
 
+    # Modal for interactive embed creation
+    class EmbedBuilderModal(discord.ui.Modal, title="Embed Builder"):
+        banner_url = discord.ui.TextInput(
+            label="Banner Image URL",
+            placeholder="https://example.com/banner.png",
+            required=False,
+            style=discord.TextStyle.short,
+        )
+
+        title = discord.ui.TextInput(
+            label="Embed Title", placeholder="📦 Welcome to...", required=True, style=discord.TextStyle.short
+        )
+
+        sections = discord.ui.TextInput(
+            label="Sections (JSON format)",
+            placeholder='[{"emoji": "🧊", "title": "About Us", "description": "Text here"}]',
+            required=True,
+            style=discord.TextStyle.long,
+        )
+
+        buttons = discord.ui.TextInput(
+            label="Buttons (Label|URL per line)",
+            placeholder="Website|https://example.com\nDocumentation|https://docs.example.com",
+            required=False,
+            style=discord.TextStyle.long,
+        )
+
+        color = discord.ui.TextInput(
+            label="Embed Color (hex without #)",
+            placeholder="4605516 or 464bac",
+            required=False,
+            default="464bac",
+            style=discord.TextStyle.short,
+        )
+
+        async def on_submit(self, interaction: discord.Interaction):
+            try:
+                # Parse color
+                try:
+                    if len(self.color.value) == 6:
+                        color = int(self.color.value, 16)
+                    else:
+                        color = int(self.color.value)
+                except (ValueError, TypeError):
+                    color = 0x464BAC  # Default blue
+                
+                # Create embed
+                embed = discord.Embed(
+                    title=self.title.value,
+                    color=color
+                )
+                
+                # Add banner image
+                if self.banner_url.value:
+                    embed.set_image(url=self.banner_url.value)
+                
+                # Parse sections
+                try:
+                    sections = json.loads(self.sections.value)
+                    description_parts = []
+                    for section in sections:
+                        emoji = section.get("emoji", "")
+                        title = section.get("title", "")
+                        desc = section.get("description", "")
+                        description_parts.append(f"**{emoji} {title}**\n{desc}")
+                    
+                    embed.description = "\n\n".join(description_parts)
+                except json.JSONDecodeError:
+                    embed.description = self.sections.value
+                
+                # Parse buttons
+                view = None
+                if self.buttons.value:
+                    view = discord.ui.View(timeout=None)
+                    lines = self.buttons.value.strip().split("\n")
+                    for line in lines:
+                        if "|" in line:
+                            parts = line.split("|", 1)
+                            label = parts[0].strip()
+                            url = parts[1].strip()
+                            
+                            # Auto-detect emoji
+                            emoji = None
+                            if "website" in label.lower() or "web" in label.lower():
+                                emoji = "🌐"
+                            elif "doc" in label.lower():
+                                emoji = "📖"
+                            elif "support" in label.lower():
+                                emoji = "🛠️"
+                            elif "patreon" in label.lower():
+                                emoji = "💖"
+                            
+                            view.add_item(discord.ui.Button(
+                                label=label,
+                                url=url,
+                                style=discord.ButtonStyle.link,
+                                emoji=emoji
+                            ))
+                
+                # Add footer
+                embed.set_footer(
+                    text=f"Powered by {interaction.guild.name} 💖",
+                    icon_url=interaction.client.user.avatar.url if interaction.client.user.avatar else None
+                )
+                
+                # Send embed
+                await interaction.response.send_message(embed=embed, view=view)
+                Logger.info(f"Interactive embed created by {interaction.user}")
+                
+            except Exception as e:
+                await interaction.response.send_message(
+                    f"❌ Error creating embed: {e}",
+                    ephemeral=True
+                )
+                Logger.error(f"Error in embed builder: {e}")
+
     # !say (Prefix) - Only prefix, no slash
     @commands.command(name="say")
     async def say(self, ctx: commands.Context, *, message: str) -> None:
@@ -281,7 +397,8 @@ class Utility(commands.Cog):
         Usage:
         - !say your message here (plain text)
         - !say --embed your message here (simple text embed)
-        - !say --json {"title": "...", "description": "...", "image": {"url": "..."}} (full JSON embed)
+        - !say --json {"embeds": [...], "components": [...]} (full JSON with embeds and buttons)
+        - !say --builder (interactive embed builder modal)
         """
         if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
             embed = discord.Embed(
@@ -293,40 +410,116 @@ class Utility(commands.Cog):
             return
         await ctx.message.delete()
 
-        # JSON Embed Support (Full Control with Images)
+        # Interactive Builder
+        if message.strip() == "--builder":
+            # Create a temporary interaction-like button to trigger modal
+            view = discord.ui.View(timeout=60)
+            button = discord.ui.Button(label="Open Embed Builder", style=discord.ButtonStyle.primary)
+
+            async def button_callback(interaction: discord.Interaction):
+                await interaction.response.send_modal(self.EmbedBuilderModal())
+
+            button.callback = button_callback
+            view.add_item(button)
+
+            await ctx.send("Click the button to open the embed builder:", view=view, delete_after=60)
+            return
+
+        # JSON Embed Support (Full Control with Embeds + Components)
         if message.startswith("--json "):
             try:
                 json_str = message[7:].strip()
-                embed_data = json.loads(json_str)
-                embed = discord.Embed.from_dict(embed_data)
-                await ctx.send(embed=embed)
-                Logger.info(f"JSON embed sent by {ctx.author} in {ctx.guild}")
+                data = json.loads(json_str)
+
+                # Parse embeds
+                embeds = []
+                if "embeds" in data:
+                    for embed_data in data["embeds"]:
+                        embeds.append(discord.Embed.from_dict(embed_data))
+                elif "embed" in data:
+                    embeds.append(discord.Embed.from_dict(data["embed"]))
+                elif any(key in data for key in ["title", "description", "color", "fields"]):
+                    embeds.append(discord.Embed.from_dict(data))
+
+                # Parse components (buttons)
+                view = None
+                if "components" in data:
+                    view = discord.ui.View(timeout=None)
+
+                    for action_row in data["components"]:
+                        if action_row.get("type") != 1:
+                            continue
+
+                        for component in action_row.get("components", []):
+                            if component.get("type") != 2:
+                                continue
+
+                            # Link Button
+                            if component.get("style") == 5:
+                                view.add_item(
+                                    discord.ui.Button(
+                                        label=component.get("label", "Button"),
+                                        url=component["url"],
+                                        style=discord.ButtonStyle.link,
+                                        emoji=component.get("emoji"),
+                                    )
+                                )
+                            # Interactive Button
+                            else:
+                                custom_id = component.get("custom_id", "button")
+                                label = component.get("label", "Button")
+                                style_map = {
+                                    1: discord.ButtonStyle.primary,
+                                    2: discord.ButtonStyle.secondary,
+                                    3: discord.ButtonStyle.success,
+                                    4: discord.ButtonStyle.danger,
+                                }
+                                style = style_map.get(component.get("style", 2), discord.ButtonStyle.secondary)
+
+                                button = discord.ui.Button(
+                                    label=label, style=style, custom_id=custom_id, emoji=component.get("emoji")
+                                )
+
+                                async def button_callback(interaction: discord.Interaction, cid=custom_id):
+                                    await interaction.response.send_message(f"Button '{cid}' clicked!", ephemeral=True)
+
+                                button.callback = button_callback
+                                view.add_item(button)
+
+                # Send message
+                if embeds:
+                    await ctx.send(embeds=embeds, view=view)
+                else:
+                    await ctx.send(content=data.get("content", ""), view=view)
+
+                Logger.info(f"JSON message sent by {ctx.author}")
+
             except json.JSONDecodeError as e:
                 error_embed = discord.Embed(
                     description=f"❌ Invalid JSON format: {e}",
                     color=discord.Color.red(),
                 )
                 await ctx.send(embed=error_embed, delete_after=10)
-                Logger.error(f"JSON decode error in !say by {ctx.author}: {e}")
+                Logger.error(f"JSON decode error: {e}")
             except Exception as e:
                 error_embed = discord.Embed(
-                    description=f"❌ Error creating embed: {e}",
+                    description=f"❌ Error creating message: {e}",
                     color=discord.Color.red(),
                 )
                 await ctx.send(embed=error_embed, delete_after=10)
-                Logger.error(f"Error creating embed in !say by {ctx.author}: {e}")
-        # Simple Text Embed Support
+                Logger.error(f"Error in !say: {e}")
+        # Simple Text Embed
         elif message.startswith("--embed "):
             message = message[8:].strip()
             embed = self.create_say_embed(message, self.bot.user)
             await ctx.send(embed=embed)
-            Logger.info(f"Simple embed sent by {ctx.author} in {ctx.guild}")
+            Logger.info(f"Simple embed sent by {ctx.author}")
         # Plain Text
         else:
             await ctx.send(message)
-            Logger.info(f"Plain message sent by {ctx.author} in {ctx.guild}")
+            Logger.info(f"Plain message sent by {ctx.author}")
 
-        Logger.info(f"Prefix command !say used by {ctx.author} in {ctx.guild}")
+        Logger.info(f"Prefix command !say used by {ctx.author}")
 
 
 async def setup(bot: commands.Bot) -> None:

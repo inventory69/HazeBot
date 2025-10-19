@@ -275,10 +275,12 @@ class ModPanelView(discord.ui.View):
     def __init__(self, members: List[discord.Member], channel: discord.TextChannel):
         super().__init__(timeout=None)
         self.add_item(UserSelect(members))
-        
+
         # Set initial button states based on current channel settings
         # Find buttons by label
-        lock_btn = next((c for c in self.children if isinstance(c, discord.ui.Button) and c.label == "Lock Channel"), None)
+        lock_btn = next(
+            (c for c in self.children if isinstance(c, discord.ui.Button) and c.label == "Lock Channel"), None
+        )
         slow_btn = next((c for c in self.children if isinstance(c, discord.ui.Button) and c.label == "Slowmode"), None)
 
         # Lock button
@@ -287,7 +289,7 @@ class ModPanelView(discord.ui.View):
             lock_btn.label = "Unlock Channel"
             lock_btn.emoji = "🔓"
             lock_btn.style = discord.ButtonStyle.green
-        
+
         # Slowmode button
         if slow_btn and channel.slowmode_delay > 0:
             slow_btn.label = "Disable Slowmode"
@@ -298,7 +300,7 @@ class ModPanelView(discord.ui.View):
     async def lock(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         try:
             overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
-            
+
             # Check current state and toggle
             if overwrite.send_messages is False:
                 # Channel is locked, unlock it
@@ -312,7 +314,7 @@ class ModPanelView(discord.ui.View):
                 await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
                 await interaction.response.send_message("🔒 Channel locked.", ephemeral=True)
                 modpanel_logger.info(f"Channel locked by {interaction.user}")
-            
+
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
             modpanel_logger.error(f"Error toggling channel lock: {e}")
@@ -321,7 +323,7 @@ class ModPanelView(discord.ui.View):
     async def slowmode(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         try:
             current_slowmode = interaction.channel.slowmode_delay
-            
+
             # Check current state and toggle
             if current_slowmode > 0:
                 # Slowmode is active, disable it
@@ -333,7 +335,7 @@ class ModPanelView(discord.ui.View):
                 await interaction.channel.edit(slowmode_delay=30)
                 await interaction.response.send_message("🐢 Slowmode set to 30 seconds.", ephemeral=True)
                 modpanel_logger.info(f"Slowmode enabled by {interaction.user}")
-            
+
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
             modpanel_logger.error(f"Error toggling slowmode: {e}")
@@ -436,11 +438,7 @@ class ModPanel(commands.Cog):
             return
         embed = create_modpanel_embed(self.bot.user)
         channel = ctx_or_interaction.channel
-        members = [
-            m
-            for m in ctx_or_interaction.guild.members
-            if not m.bot
-        ]
+        members = [m for m in ctx_or_interaction.guild.members if not m.bot]
         if not members:
             message = "❌ No users available."
             if hasattr(ctx_or_interaction, "send"):

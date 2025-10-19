@@ -391,7 +391,7 @@ async def close_ticket_async(
     close_message: Optional[str] = None,
 ) -> None:
     transcript = await create_transcript(channel)
-    
+
     # Update channel permissions: Remove send_messages for creator
     creator = bot.get_user(ticket["user_id"])
     if creator:
@@ -401,42 +401,42 @@ async def close_ticket_async(
                 view_channel=True,
                 send_messages=False,
                 add_reactions=False,
-                reason=f"Ticket #{ticket['ticket_num']} closed"
+                reason=f"Ticket #{ticket['ticket_num']} closed",
             )
             Logger.info(f"Removed send permissions for creator {creator.name} in closed ticket.")
         except Exception as e:
             Logger.error(f"Error updating permissions for creator: {e}")
-    
+
     # Create transcript embed for transcript channel
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
         description=f"**Type:** {ticket['type']}\n**Creator:** <@{ticket['user_id']}>\n**Status:** Closed",
         color=PINK,
     )
-    
+
     # Add ticket details
     if ticket.get("claimed_by"):
         embed.add_field(name="Handler", value=f"<@{ticket['claimed_by']}>", inline=True)
     if ticket.get("assigned_to"):
         embed.add_field(name="Assigned to", value=f"<@{ticket['assigned_to']}>", inline=True)
-    
+
     # Add closing message if provided (check for None AND empty string)
     if close_message and close_message.strip():
         embed.add_field(name="Closing Message", value=close_message, inline=False)
-    
+
     # Add transcript as field (split if too long)
     if len(transcript) <= 1024:
         embed.add_field(name="Transcript", value=transcript, inline=False)
     else:
         # Split transcript into multiple fields
-        chunks = [transcript[i:i+1024] for i in range(0, len(transcript), 1024)]
+        chunks = [transcript[i : i + 1024] for i in range(0, len(transcript), 1024)]
         for idx, chunk in enumerate(chunks[:5], 1):  # Max 5 fields to avoid embed limit
             embed.add_field(name=f"Transcript (Part {idx})", value=chunk, inline=False)
         if len(chunks) > 5:
             embed.add_field(name="Note", value="Transcript is too long. Full version sent via email.", inline=False)
-    
+
     set_pink_footer(embed, bot=bot.user)
-    
+
     # Post transcript to dedicated channel
     transcript_channel = bot.get_channel(TRANSCRIPT_CHANNEL_ID)
     if transcript_channel:
@@ -624,7 +624,7 @@ class TicketControlView(discord.ui.View):
         if not is_allowed_for_ticket_actions(interaction.user, ticket, "Reopen"):
             await interaction.response.send_message("Not authorized.", ephemeral=True)
             return
-        
+
         # Restore send permissions for creator
         creator = interaction.client.get_user(ticket["user_id"])
         if creator:
@@ -634,12 +634,12 @@ class TicketControlView(discord.ui.View):
                     view_channel=True,
                     send_messages=True,
                     add_reactions=True,
-                    reason=f"Ticket #{ticket['ticket_num']} reopened"
+                    reason=f"Ticket #{ticket['ticket_num']} reopened",
                 )
                 Logger.info(f"Restored send permissions for creator {creator.name} in reopened ticket.")
             except Exception as e:
                 Logger.error(f"Error restoring permissions for creator: {e}")
-        
+
         # Reopen: Set status to Open, unarchive, increase reopen_count
         await update_ticket(
             interaction.channel.id,
@@ -662,10 +662,10 @@ class TicketControlView(discord.ui.View):
         if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
             await interaction.response.send_message("Not authorized. Only admins can delete tickets.", ephemeral=True)
             return
-        
+
         # Defer to prevent timeout
         await interaction.response.defer(ephemeral=True)
-        
+
         # Delete the channel
         try:
             await interaction.channel.delete()
@@ -674,7 +674,7 @@ class TicketControlView(discord.ui.View):
             Logger.error(f"Error deleting channel {interaction.channel.name}: {e}")
             await interaction.followup.send("Error deleting the ticket channel.", ephemeral=True)
             return
-        
+
         # Remove from database
         await delete_ticket(interaction.channel.id)
         Logger.info(f"Ticket data for channel {interaction.channel.id} removed from database.")

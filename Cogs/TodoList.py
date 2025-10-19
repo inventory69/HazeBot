@@ -389,9 +389,7 @@ class TodoRemoveSelectView(discord.ui.View):
         Logger.info(f"Removed {len(removed_items)} to-do item(s): {removed_titles} by {interaction.user}")
 
         # Send confirmation
-        confirm_msg = await interaction.followup.send(
-            f"✅ Removed {len(removed_items)} item(s)!", ephemeral=True
-        )
+        confirm_msg = await interaction.followup.send(f"✅ Removed {len(removed_items)} item(s)!", ephemeral=True)
 
         # Delete confirmation after 3 seconds
         await asyncio.sleep(3)
