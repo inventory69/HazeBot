@@ -1,6 +1,6 @@
 from discord.ext import commands
 import discord
-from typing import Any
+from typing import Any, List, Dict
 from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS, MOD_COMMANDS
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
@@ -10,6 +10,84 @@ import json
 
 ADMIN_ROLE_ID = 1424466881862959294  # Admin role ID
 MODERATOR_ROLE_ID = 1427219729960931449  # Slot Keeper role ID
+
+
+class DynamicButtonView(discord.ui.View):
+    """
+    A dynamic view that creates buttons from JSON configuration.
+    Supports both link buttons and interactive buttons.
+    """
+
+    def __init__(self, buttons_config: List[Dict[str, Any]]) -> None:
+        super().__init__(timeout=None)  # Persistent view
+        for button_data in buttons_config:
+            self._add_button(button_data)
+
+    def _add_button(self, button_data: Dict[str, Any]) -> None:
+        """
+        Add a button to the view based on configuration.
+
+        Supported fields:
+        - label: Button text (required)
+        - style: Button style (optional, default: "blurple")
+        - url: URL for link buttons (optional)
+        - emoji: Emoji for the button (optional)
+        - custom_id: Custom identifier for interactive buttons (optional)
+        - disabled: Whether button is disabled (optional, default: False)
+        """
+        label = button_data.get("label", "Button")
+        url = button_data.get("url")
+        emoji = button_data.get("emoji")
+        disabled = button_data.get("disabled", False)
+
+        # Parse style
+        style_str = button_data.get("style", "blurple").lower()
+        style_map = {
+            "primary": discord.ButtonStyle.primary,
+            "blurple": discord.ButtonStyle.primary,
+            "secondary": discord.ButtonStyle.secondary,
+            "grey": discord.ButtonStyle.secondary,
+            "gray": discord.ButtonStyle.secondary,
+            "success": discord.ButtonStyle.success,
+            "green": discord.ButtonStyle.success,
+            "danger": discord.ButtonStyle.danger,
+            "red": discord.ButtonStyle.danger,
+            "link": discord.ButtonStyle.link,
+        }
+        style = style_map.get(style_str, discord.ButtonStyle.primary)
+
+        # If URL is provided, it's a link button
+        if url:
+            button = discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.link,
+                url=url,
+                emoji=emoji,
+                disabled=disabled,
+            )
+            self.add_item(button)
+        else:
+            # Interactive button
+            custom_id = button_data.get("custom_id", f"button_{len(self.children)}")
+
+            button = discord.ui.Button(
+                label=label,
+                style=style,
+                custom_id=custom_id,
+                emoji=emoji,
+                disabled=disabled,
+            )
+
+            # Create callback for the button
+            async def button_callback(interaction: discord.Interaction, btn=button) -> None:
+                """Handle button click with a simple acknowledgment."""
+                await interaction.response.send_message(
+                    f"✅ You clicked the **{btn.label}** button!",
+                    ephemeral=True,
+                )
+
+            button.callback = button_callback
+            self.add_item(button)
 
 
 class Utility(commands.Cog):
@@ -282,6 +360,7 @@ class Utility(commands.Cog):
         - !say your message here (plain text)
         - !say --embed your message here (simple text embed)
         - !say --json {"title": "...", "description": "...", "image": {"url": "..."}} (full JSON embed)
+        - !say --json {"embed": {...}, "buttons": [{"label": "...", "url": "..."}]} (embed with buttons)
         """
         if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
             embed = discord.Embed(
@@ -293,13 +372,49 @@ class Utility(commands.Cog):
             return
         await ctx.message.delete()
 
-        # JSON Embed Support (Full Control with Images)
+        # JSON Embed Support (Full Control with Images and Buttons)
         if message.startswith("--json "):
             try:
                 json_str = message[7:].strip()
-                embed_data = json.loads(json_str)
-                embed = discord.Embed.from_dict(embed_data)
-                await ctx.send(embed=embed)
+                json_data = json.loads(json_str)
+
+                # Check if there's a separate "embed" and "buttons" structure
+                # or if the entire JSON is the embed data
+                if "embed" in json_data or "buttons" in json_data:
+                    # New structure: {"embed": {...}, "buttons": [...]}
+                    embed_data = json_data.get("embed", {})
+                    buttons_data = json_data.get("buttons", [])
+
+                    # Create embed if provided
+                    if embed_data:
+                        embed = discord.Embed.from_dict(embed_data)
+                    else:
+                        embed = None
+
+                    # Create view with buttons if provided
+                    view = None
+                    if buttons_data and isinstance(buttons_data, list):
+                        view = DynamicButtonView(buttons_data)
+
+                    # Send message with embed and/or buttons
+                    if embed and view:
+                        await ctx.send(embed=embed, view=view)
+                    elif embed:
+                        await ctx.send(embed=embed)
+                    elif view:
+                        await ctx.send(view=view)
+                    else:
+                        error_embed = discord.Embed(
+                            description="❌ JSON must contain 'embed' or 'buttons'.",
+                            color=discord.Color.red(),
+                        )
+                        await ctx.send(embed=error_embed, delete_after=10)
+                        return
+                else:
+                    # Legacy structure: entire JSON is embed data
+                    embed = discord.Embed.from_dict(json_data)
+                    await ctx.send(embed=embed)
+
                 Logger.info(f"JSON embed sent by {ctx.author} in {ctx.guild}")
             except json.JSONDecodeError as e:
                 error_embed = discord.Embed(
