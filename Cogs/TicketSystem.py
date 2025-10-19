@@ -12,7 +12,6 @@ import re
 from typing import List, Dict, Optional, Any
 from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, TICKETS_CATEGORY_ID
 from Utils.EmbedUtils import set_pink_footer
-from Utils.CacheUtils import invalidate_cache
 from Utils.Logger import Logger
 
 # === Path to JSON file ===
@@ -39,8 +38,6 @@ async def delete_ticket(channel_id: int) -> None:
     tickets = [t for t in tickets if t["channel_id"] != channel_id]
     with open(TICKET_FILE, "w") as f:
         json.dump(tickets, f, indent=2)
-    # Invalidate cache after deletion
-    invalidate_cache(load_tickets)
 
 
 async def save_ticket(ticket: Dict[str, Any]) -> None:
@@ -48,8 +45,6 @@ async def save_ticket(ticket: Dict[str, Any]) -> None:
     tickets.append(ticket)
     with open(TICKET_FILE, "w") as f:
         json.dump(tickets, f, indent=2)
-    # Invalidate cache after save
-    invalidate_cache(load_tickets)
 
 
 async def update_ticket(channel_id: int, updates: Dict[str, Any]) -> None:
@@ -60,8 +55,6 @@ async def update_ticket(channel_id: int, updates: Dict[str, Any]) -> None:
             break
     with open(TICKET_FILE, "w") as f:
         json.dump(tickets, f, indent=2)
-    # Invalidate cache after update
-    invalidate_cache(load_tickets)
 
 
 # === Permission helper function ===
