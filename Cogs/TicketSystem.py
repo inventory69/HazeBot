@@ -10,7 +10,7 @@ import smtplib
 import asyncio
 import re
 from typing import List, Dict, Optional, Any
-from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, TICKETS_CATEGORY_ID
+from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, TICKETS_CATEGORY_ID, TRANSCRIPT_CHANNEL_ID
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
@@ -407,12 +407,22 @@ async def close_ticket_async(
         except Exception as e:
             Logger.error(f"Error updating permissions for creator: {e}")
     
-    # Create full transcript embed (for DMs)
+    # Create transcript embed for transcript channel
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
         description=f"**Type:** {ticket['type']}\n**Creator:** <@{ticket['user_id']}>\n**Status:** Closed",
         color=PINK,
     )
+    
+    # Add ticket details
+    if ticket.get("claimed_by"):
+        embed.add_field(name="Handler", value=f"<@{ticket['claimed_by']}>", inline=True)
+    if ticket.get("assigned_to"):
+        embed.add_field(name="Assigned to", value=f"<@{ticket['assigned_to']}>", inline=True)
+    
+    # Add closing message if provided
+    if close_message:
+        embed.add_field(name="Closing Message", value=close_message, inline=False)
     
     # Add transcript as field (split if too long)
     if len(transcript) <= 1024:
@@ -425,55 +435,20 @@ async def close_ticket_async(
         if len(chunks) > 5:
             embed.add_field(name="Note", value="Transcript is too long. Full version sent via email.", inline=False)
     
-    if ticket.get("claimed_by"):
-        embed.add_field(name="Handler", value=f"<@{ticket['claimed_by']}>", inline=True)
-    if ticket.get("assigned_to"):
-        embed.add_field(name="Assigned to", value=f"<@{ticket['assigned_to']}>", inline=True)
-    
     set_pink_footer(embed, bot=bot.user)
     
-    # Collect all recipients (claimer, assigned, admins, moderators) - EXCLUDE creator
-    recipients = set()
-    
-    # Add claimer (handler)
-    if ticket.get("claimed_by"):
-        recipients.add(ticket["claimed_by"])
-    
-    # Add assigned user
-    if ticket.get("assigned_to"):
-        recipients.add(ticket["assigned_to"])
-    
-    # Add all admins and moderators from the guild, but exclude the creator
-    guild = channel.guild
-    for member in guild.members:
-        if member.id != ticket["user_id"] and any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles):
-            recipients.add(member.id)
-    
-    # Send transcript to all recipients (admins/mods only)
-    for user_id in recipients:
-        user = bot.get_user(user_id)
-        if user:
-            try:
-                await user.send(embed=embed)
-                
-                # If there's a closing message, send it to admins/mods
-                if close_message:
-                    close_embed = discord.Embed(
-                        title=f"Ticket #{ticket['ticket_num']} - Closing Message",
-                        description=close_message,
-                        color=PINK,
-                    )
-                    set_pink_footer(close_embed, bot=bot.user)
-                    await user.send(embed=close_embed)
-                
-                Logger.info(f"Transcript sent to {user.name} ({user_id})")
-            except discord.Forbidden:
-                Logger.warning(f"Could not send transcript to {user.name} (DMs disabled).")
-            except Exception as e:
-                Logger.error(f"Error sending transcript to {user.name}: {e}")
+    # Post transcript to dedicated channel
+    transcript_channel = bot.get_channel(TRANSCRIPT_CHANNEL_ID)
+    if transcript_channel:
+        try:
+            await transcript_channel.send(embed=embed)
+            Logger.info(f"Transcript for ticket #{ticket['ticket_num']} posted to transcript channel.")
+        except Exception as e:
+            Logger.error(f"Error posting transcript to transcript channel: {e}")
+    else:
+        Logger.error(f"Transcript channel with ID {TRANSCRIPT_CHANNEL_ID} not found.")
 
     # Send closing message to creator separately (if any)
-    creator = bot.get_user(ticket["user_id"])
     if creator and close_message:
         try:
             close_embed = discord.Embed(
