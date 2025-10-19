@@ -282,7 +282,7 @@ class Utility(commands.Cog):
             style=discord.TextStyle.short,
         )
 
-        title = discord.ui.TextInput(
+        embed_title = discord.ui.TextInput(
             label="Embed Title", placeholder="📦 Welcome to...", required=True, style=discord.TextStyle.short
         )
 
@@ -300,7 +300,7 @@ class Utility(commands.Cog):
             style=discord.TextStyle.long,
         )
 
-        color = discord.ui.TextInput(
+        embed_color = discord.ui.TextInput(
             label="Embed Color (hex without #)",
             placeholder="4605516 or 464bac",
             required=False,
@@ -310,41 +310,61 @@ class Utility(commands.Cog):
         async def on_submit(self, interaction: discord.Interaction):
             try:
                 # Parse color
-                color_value = self.color.value if self.color.value else "464bac"
-                try:
-                    if len(color_value) == 6:
-                        color = int(color_value, 16)
-                    else:
-                        color = int(color_value)
-                except (ValueError, TypeError):
-                    color = 0x464BAC  # Default blue
+                color_value = self.embed_color.value.strip() if self.embed_color.value else "464bac"
+                
+                if not color_value:
+                    color_value = "464bac"
 
-                # Create embed
-                embed = discord.Embed(title=self.title.value, color=color)
+                try:
+                    color_value = color_value.lstrip("#")
+                    color = int(color_value, 16)
+                except (ValueError, TypeError):
+                    try:
+                        color = int(color_value)
+                    except (ValueError, TypeError):
+                        color = 0x464BAC
+
+                # Create main embed
+                embed = discord.Embed(title=self.embed_title.value, color=color)
 
                 # Add banner image
-                if self.banner_url.value:
-                    embed.set_image(url=self.banner_url.value)
+                if self.banner_url.value and self.banner_url.value.strip():
+                    embed.set_image(url=self.banner_url.value.strip())
 
                 # Parse sections
                 try:
                     sections = json.loads(self.sections.value)
-                    description_parts = []
+                    
+                    # Add each section as a separate field
                     for section in sections:
                         emoji = section.get("emoji", "")
-                        title = section.get("title", "")
+                        section_title = section.get("title", "")
                         desc = section.get("description", "")
-                        description_parts.append(f"**{emoji} {title}**\n{desc}")
+                        
+                        # Add section as field with emoji in title
+                        embed.add_field(
+                            name=f"{emoji} {section_title}",
+                            value=desc,
+                            inline=False
+                        )
 
-                    embed.description = "\n\n".join(description_parts)
                 except json.JSONDecodeError:
                     embed.description = self.sections.value
 
-                # Parse buttons
+                # Add footer
+                footer_icon = interaction.client.user.avatar.url if interaction.client.user.avatar else None
+                embed.set_footer(
+                    text=f"Powered by {interaction.guild.name} 💖",
+                    icon_url=footer_icon,
+                )
+
+                # Parse buttons into multiple rows
                 view = None
-                if self.buttons.value:
+                if self.buttons.value and self.buttons.value.strip():
                     view = discord.ui.View(timeout=None)
                     lines = self.buttons.value.strip().split("\n")
+                    
+                    # Group buttons (max 5 per row)
                     for line in lines:
                         if "|" in line:
                             parts = line.split("|", 1)
@@ -363,22 +383,25 @@ class Utility(commands.Cog):
                                 emoji = "💖"
 
                             view.add_item(
-                                discord.ui.Button(label=label, url=url, style=discord.ButtonStyle.link, emoji=emoji)
+                                discord.ui.Button(
+                                    label=label,
+                                    url=url,
+                                    style=discord.ButtonStyle.secondary,
+                                    emoji=emoji,
+                                )
                             )
 
-                # Add footer
-                embed.set_footer(
-                    text=f"Powered by {interaction.guild.name} 💖",
-                    icon_url=interaction.client.user.avatar.url if interaction.client.user.avatar else None,
-                )
-
-                # Send embed
+                # Send embed with view
                 await interaction.response.send_message(embed=embed, view=view)
                 Logger.info(f"Interactive embed created by {interaction.user}")
 
             except Exception as e:
-                await interaction.response.send_message(f"❌ Error creating embed: {e}", ephemeral=True)
-                Logger.error(f"Error in embed builder: {e}")
+                import traceback
+
+                error_trace = traceback.format_exc()
+                error_msg = f"❌ Error creating embed: {e}\n\n```\n{error_trace[:1500]}\n```"
+                await interaction.response.send_message(error_msg, ephemeral=True)
+                Logger.error(f"Error in embed builder: {e}\n{error_trace}")
 
     # !say (Prefix) - Only prefix, no slash
     @commands.command(name="say")
