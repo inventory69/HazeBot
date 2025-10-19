@@ -420,8 +420,8 @@ async def close_ticket_async(
     if ticket.get("assigned_to"):
         embed.add_field(name="Assigned to", value=f"<@{ticket['assigned_to']}>", inline=True)
     
-    # Add closing message if provided
-    if close_message:
+    # Add closing message if provided (check for None AND empty string)
+    if close_message and close_message.strip():
         embed.add_field(name="Closing Message", value=close_message, inline=False)
     
     # Add transcript as field (split if too long)
@@ -448,8 +448,8 @@ async def close_ticket_async(
     else:
         Logger.error(f"Transcript channel with ID {TRANSCRIPT_CHANNEL_ID} not found.")
 
-    # Send closing message to creator separately (if any)
-    if creator and close_message:
+    # Send closing message to creator separately (check for None AND empty string)
+    if creator and close_message and close_message.strip():
         try:
             close_embed = discord.Embed(
                 title=f"Ticket #{ticket['ticket_num']} - Closing Message",
@@ -471,9 +471,9 @@ async def close_ticket_async(
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
 
-    # Send success message in channel
+    # Send success message in channel (check for None AND empty string)
     success_msg = "Ticket successfully closed and archived. It will be deleted after 7 days."
-    if close_message:
+    if close_message and close_message.strip():
         success_msg += f"\n\n**Closing Message:** {close_message}"
     await channel.send(success_msg)
 
