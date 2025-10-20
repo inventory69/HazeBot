@@ -6,13 +6,13 @@ import json
 import openai
 import asyncio
 from typing import Dict, List, Any, Optional
-from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, get_guild_id, get_data_dir
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
 
 # === File path for to-do list data ===
-TODO_DATA_FILE = "Data/todo_list.json"
+TODO_DATA_FILE = f"{get_data_dir()}/todo_list.json"
 
 # === Todo List Channel ID ===
 TODO_CHANNEL_ID = 1424862421650247730  # Only this channel can use todo-update
@@ -480,7 +480,7 @@ class TodoList(commands.Cog):
 
     # /todo-update (Slash) - Mod/Admin only
     @app_commands.command(name="todo-update", description="📋 Update the server's to-do list with interactive buttons.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def todo_update_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_todo_update(interaction)
 

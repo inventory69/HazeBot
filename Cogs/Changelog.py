@@ -4,11 +4,8 @@ import openai
 import os
 from datetime import datetime
 from Utils.Logger import Logger
-from Config import PINK
+from Config import PINK, CHANGELOG_ROLE_ID, CHANGELOG_CHANNEL_ID
 from Utils.EmbedUtils import set_pink_footer
-
-ROLE_ID_CHANGELOG = 1426314743278473307  # Changelog Notifications Role ID
-CHANNEL_ID_CHANGELOG = 1424859282284871752  # Target Channel ID
 
 
 class ChangelogCog(commands.Cog):
@@ -139,10 +136,10 @@ class ChangelogChannelView(discord.ui.View):
 
     @discord.ui.button(label="Post to Channel", style=discord.ButtonStyle.primary, emoji="📢")
     async def post_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        channel = interaction.guild.get_channel(CHANNEL_ID_CHANGELOG)
+        channel = interaction.guild.get_channel(CHANGELOG_CHANNEL_ID)
         if channel:
             # Send the mention message before the embed
-            await channel.send(f"Role Mention: <@&{ROLE_ID_CHANGELOG}> ...")
+            await channel.send(f"Role Mention: <@&{CHANGELOG_ROLE_ID}> ...")
             await channel.send(embed=self.embed)
             await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
         else:

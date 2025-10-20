@@ -1,7 +1,6 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import os
 from typing import Optional, Any
 from Config import (
     PINK,
@@ -9,10 +8,11 @@ from Config import (
     MODERATOR_ROLE_ID,
     NORMAL_ROLE_ID,
     INTEREST_ROLE_IDS,
+    CHANGELOG_ROLE_ID,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
 from Cogs.RocketLeague import get_highest_rl_rank, RANK_EMOJIS
-from Cogs.Preferences import CHANGELOG_ROLE_ID
 from Cogs.ModPerks import load_mod_data
 from Cogs.TicketSystem import load_tickets
 from Cogs.Leaderboard import get_user_activity
@@ -127,7 +127,7 @@ class Profile(commands.Cog):
 
     # /profile (Slash)
     @app_commands.command(name="profile", description="👤 Shows your profile or another user's profile.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(user="Select a user (optional, defaults to yourself)")
     async def profile_slash(self, interaction: discord.Interaction, user: Optional[discord.Member] = None) -> None:
         await self.handle_profile(interaction, user)

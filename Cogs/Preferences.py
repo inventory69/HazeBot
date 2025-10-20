@@ -1,14 +1,10 @@
-import os
 import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Any
-from Config import PINK
+from Config import PINK, CHANGELOG_ROLE_ID, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
-
-# === Role ID for Changelog Notifications ===
-CHANGELOG_ROLE_ID = 1426314743278473307
 
 
 # === Cog definition ===
@@ -33,7 +29,7 @@ class PreferencesSystem(commands.Cog):
 
     # /preferences (Slash) - Only synced in guild
     @app_commands.command(name="preferences", description="🛠️ Open your preferences menu.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def preferences_slash(self, interaction: discord.Interaction) -> None:
         embed = self.get_preferences_help_embed(interaction, interaction.user)
         view = PreferencesView(interaction.user.id, interaction.guild)

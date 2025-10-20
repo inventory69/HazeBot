@@ -1,11 +1,10 @@
 from discord.ext import commands
 import discord
 from typing import Any
-from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS, MOD_COMMANDS
+from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS, MOD_COMMANDS, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
 from discord import app_commands
-import os
 import json
 
 ADMIN_ROLE_ID = 1424466881862959294  # Admin role ID
@@ -130,7 +129,7 @@ class Utility(commands.Cog):
         name="help",
         description="📖 Shows all available commands with their descriptions.",
     )
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def help_slash(self, interaction: discord.Interaction) -> None:
         is_admin = any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
         is_mod = any(role.id == MODERATOR_ROLE_ID for role in interaction.user.roles)
@@ -232,7 +231,7 @@ class Utility(commands.Cog):
 
     # /status (Slash)
     @app_commands.command(name="status", description="💖 Shows bot status and basic info in pink.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def status_slash(self, interaction: discord.Interaction) -> None:
         embed = self.create_status_embed(
             interaction.client.user,
@@ -311,7 +310,7 @@ class Utility(commands.Cog):
             try:
                 # Parse color
                 color_value = self.embed_color.value.strip() if self.embed_color.value else "464bac"
-                
+
                 if not color_value:
                     color_value = "464bac"
 
@@ -334,19 +333,15 @@ class Utility(commands.Cog):
                 # Parse sections
                 try:
                     sections = json.loads(self.sections.value)
-                    
+
                     # Add each section as a separate field
                     for section in sections:
                         emoji = section.get("emoji", "")
                         section_title = section.get("title", "")
                         desc = section.get("description", "")
-                        
+
                         # Add section as field with emoji in title
-                        embed.add_field(
-                            name=f"{emoji} {section_title}",
-                            value=desc,
-                            inline=False
-                        )
+                        embed.add_field(name=f"{emoji} {section_title}", value=desc, inline=False)
 
                 except json.JSONDecodeError:
                     embed.description = self.sections.value
@@ -363,7 +358,7 @@ class Utility(commands.Cog):
                 if self.buttons.value and self.buttons.value.strip():
                     view = discord.ui.View(timeout=None)
                     lines = self.buttons.value.strip().split("\n")
-                    
+
                     # Group buttons (max 5 per row)
                     for line in lines:
                         if "|" in line:

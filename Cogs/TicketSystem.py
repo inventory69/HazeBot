@@ -10,12 +10,20 @@ import smtplib
 import asyncio
 import re
 from typing import List, Dict, Optional, Any
-from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, TICKETS_CATEGORY_ID, TRANSCRIPT_CHANNEL_ID
+from Config import (
+    PINK,
+    ADMIN_ROLE_ID,
+    MODERATOR_ROLE_ID,
+    TICKETS_CATEGORY_ID,
+    TRANSCRIPT_CHANNEL_ID,
+    get_guild_id,
+    get_data_dir,
+)
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
 # === Path to JSON file ===
-TICKET_FILE = "Data/tickets.json"
+TICKET_FILE = f"{get_data_dir()}/tickets.json"
 
 
 # === Helper functions for JSON persistence ===
@@ -29,7 +37,7 @@ async def load_tickets() -> List[Dict[str, Any]]:
         with open(TICKET_FILE, "r") as f:
             return json.load(f)
     except json.JSONDecodeError:
-        Logger.error("Error loading Data/tickets.json – resetting file.")
+        Logger.error(f"Error loading {get_data_dir()}/tickets.json – resetting file.")
         return []
 
 
@@ -716,7 +724,7 @@ class TicketSystem(commands.Cog):
 
     # /ticket (Slash) - Only synced in guild
     @app_commands.command(name="ticket", description="🎫 Create a new ticket.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def ticket_slash(self, interaction: discord.Interaction):
         embed = self.get_ticket_help_embed(interaction)
         await interaction.response.send_message(embed=embed, view=TicketView(), ephemeral=True)
@@ -776,7 +784,7 @@ class TicketSystem(commands.Cog):
                     channel = self.bot.get_channel(ticket["channel_id"])
                     if not channel:
                         # If not in cache, try to fetch from guild
-                        guild = self.bot.get_guild(int(os.getenv("DISCORD_GUILD_ID")))
+                        guild = self.bot.get_guild(get_guild_id())
                         if guild:
                             try:
                                 channel = await guild.fetch_channel(ticket["channel_id"])

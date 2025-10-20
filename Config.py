@@ -3,6 +3,11 @@
 
 import discord
 import logging
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 # === General Bot Settings ===
 LogLevel = logging.INFO  # Set the logging level (INFO, DEBUG, WARNING, ERROR, CRITICAL)
@@ -16,31 +21,108 @@ PINK = discord.Color(0xAD1457)  # Hot Pink color used for embeds and UI elements
 FuzzyMatchingThreshold = 0.6  # Similarity threshold for fuzzy command matching (0.0 to 1.0, higher = stricter)
 MessageCooldown = 5  # Cooldown in seconds between user messages to prevent spam
 
-# === Roles and Permissions ===
-ADMIN_ROLE_ID = 1424466881862959294  # Role ID for Admins (full permissions)
-MODERATOR_ROLE_ID = 1427219729960931449  # Role ID for Slot Keepers (Moderators)
-NORMAL_ROLE_ID = 1424161475718807562  # Role ID for Lootlings (regular members)
-MEMBER_ROLE_ID = 1424161475718807562  # Alias for NORMAL_ROLE_ID, used in Welcome
-CHANGELOG_ROLE_ID = 1426314743278473307  # Role ID for Changelog Notifications
+# === Environment-based Configuration ===
+PROD_MODE = os.getenv("PROD_MODE", "false").lower() == "true"
 
-INTEREST_ROLE_IDS = [
-    1424465865297887345,  # Chat & Memes
-    1424465951792828477,  # Creative Vibes
-    1424466003102007359,  # Gaming & Chill
-    1424466081547817183,  # Ideas & Projects
-    1424466456866852956,  # Development
-    1424466150330466434,  # Tech & Support
-    1424466239618810019,  # Just Browsing
-]
-INTEREST_ROLES = {
-    "Chat & Memes": 1424465865297887345,
-    "Creative Vibes": 1424465951792828477,
-    "Gaming & Chill": 1424466003102007359,
-    "Ideas & Projects": 1424466081547817183,
-    "Development": 1424466456866852956,
-    "Tech & Support": 1424466150330466434,
-    "Just Browsing": 1424466239618810019,
+# Bot token selection based on PROD_MODE
+BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN" if PROD_MODE else "TEST_DISCORD_BOT_TOKEN")
+
+# Guild ID selection based on PROD_MODE
+GUILD_ID = int(os.getenv("DISCORD_GUILD_ID" if PROD_MODE else "DISCORD_TEST_GUILD_ID", "0"))
+
+# Data directory selection based on PROD_MODE
+DATA_DIR = "Data" if PROD_MODE else "TestData"
+
+
+# Helper function to get current guild ID (for use in other files)
+def get_guild_id():
+    """Returns the current guild ID based on PROD_MODE"""
+    return GUILD_ID
+
+
+# Helper function to get current data directory (for use in other files)
+def get_data_dir():
+    """Returns the current data directory based on PROD_MODE"""
+    return DATA_DIR
+
+
+# Production IDs (Main Discord Server)
+PROD_IDS = {
+    "ADMIN_ROLE_ID": 1424466881862959294,
+    "MODERATOR_ROLE_ID": 1427219729960931449,
+    "NORMAL_ROLE_ID": 1424161475718807562,
+    "MEMBER_ROLE_ID": 1424161475718807562,
+    "CHANGELOG_ROLE_ID": 1426314743278473307,
+    "CHANGELOG_CHANNEL_ID": 1424859282284871752,
+    "INTEREST_ROLE_IDS": [
+        1424465865297887345,  # Chat & Memes
+        1424465951792828477,  # Creative Vibes
+        1424466003102007359,  # Gaming & Chill
+        1424466081547817183,  # Ideas & Projects
+        1424466456866852956,  # Development
+        1424466150330466434,  # Tech & Support
+        1424466239618810019,  # Just Browsing
+    ],
+    "INTEREST_ROLES": {
+        "Chat & Memes": 1424465865297887345,
+        "Creative Vibes": 1424465951792828477,
+        "Gaming & Chill": 1424466003102007359,
+        "Ideas & Projects": 1424466081547817183,
+        "Development": 1424466456866852956,
+        "Tech & Support": 1424466150330466434,
+        "Just Browsing": 1424466239618810019,
+    },
+    "TICKETS_CATEGORY_ID": 1426113555974979625,
+    "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
+    "WELCOME_RULES_CHANNEL_ID": 1424724535923703968,
+    "WELCOME_PUBLIC_CHANNEL_ID": 1424164269775392858,
 }
+
+# Test IDs (Test Discord Server)
+TEST_IDS = {
+    "ADMIN_ROLE_ID": 1429722580608225340,
+    "MODERATOR_ROLE_ID": 1429724374746923061,
+    "NORMAL_ROLE_ID": 1429722417428692992,
+    "MEMBER_ROLE_ID": 1429722417428692992,
+    "CHANGELOG_ROLE_ID": 1429726011771060344,
+    "CHANGELOG_CHANNEL_ID": 1429724050305056819,  # TODO: Add test changelog channel ID
+    "INTEREST_ROLE_IDS": [
+        1429725562074566656,
+        1429725652667596840,
+        1429725708003049543,
+        1429725752047173745,
+        1429725801443758131,
+        1429725837078560859,
+        1429725869743538237,
+    ],
+    "INTEREST_ROLES": {
+        "Chat & Memes": 1429725562074566656,
+        "Creative Vibes": 1429725652667596840,
+        "Gaming & Chill": 1429725708003049543,
+        "Ideas & Projects": 1429725752047173745,
+        "Development": 1429725801443758131,
+        "Tech & Support": 1429725837078560859,
+        "Just Browsing": 1429725869743538237,
+    },
+    "TICKETS_CATEGORY_ID": 1429723767445389352,
+    "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
+    "WELCOME_RULES_CHANNEL_ID": 1429722359534718976,
+    "WELCOME_PUBLIC_CHANNEL_ID": 1429722992857976854,
+}
+
+# Select IDs based on PROD_MODE
+CURRENT_IDS = PROD_IDS if PROD_MODE else TEST_IDS
+
+# === Roles and Permissions ===
+ADMIN_ROLE_ID = CURRENT_IDS["ADMIN_ROLE_ID"]
+MODERATOR_ROLE_ID = CURRENT_IDS["MODERATOR_ROLE_ID"]
+NORMAL_ROLE_ID = CURRENT_IDS["NORMAL_ROLE_ID"]
+MEMBER_ROLE_ID = CURRENT_IDS["MEMBER_ROLE_ID"]
+CHANGELOG_ROLE_ID = CURRENT_IDS["CHANGELOG_ROLE_ID"]
+CHANGELOG_CHANNEL_ID = CURRENT_IDS["CHANGELOG_CHANNEL_ID"]
+
+INTEREST_ROLE_IDS = CURRENT_IDS["INTEREST_ROLE_IDS"]
+INTEREST_ROLES = CURRENT_IDS["INTEREST_ROLES"]
 
 # === Commands ===
 SLASH_COMMANDS = [
@@ -107,7 +189,7 @@ RL_TIER_ORDER = [
     "Grand Champion III",
     "Supersonic Legend",
 ]
-RL_ACCOUNTS_FILE = "Data/rl_accounts.json"
+RL_ACCOUNTS_FILE = f"{DATA_DIR}/rl_accounts.json"
 RANK_EMOJIS = {
     "Supersonic Legend": "<:ssl:1425389967030489139>",
     "Grand Champion III": "<:gc3:1425389956796518420>",
@@ -135,17 +217,17 @@ RANK_EMOJIS = {
 }
 
 # === Mod Perks ===
-MOD_DATA_FILE = "Data/mod_data.json"
+MOD_DATA_FILE = f"{DATA_DIR}/mod_data.json"
 
 # === Leaderboard ===
-ACTIVITY_FILE = "Data/activity.json"
+ACTIVITY_FILE = f"{DATA_DIR}/activity.json"
 
 # === Ticket System ===
-TICKETS_CATEGORY_ID = 1426113555974979625
-TRANSCRIPT_CHANNEL_ID = 1428690310971785327
+TICKETS_CATEGORY_ID = CURRENT_IDS["TICKETS_CATEGORY_ID"]
+TRANSCRIPT_CHANNEL_ID = CURRENT_IDS["TRANSCRIPT_CHANNEL_ID"]
 
 # === Welcome ===
-WELCOME_RULES_CHANNEL_ID = 1424724535923703968
-WELCOME_PUBLIC_CHANNEL_ID = 1424164269775392858
-PERSISTENT_VIEWS_FILE = "Data/persistent_views.json"  # File for persistent welcome card views
-ACTIVE_RULES_VIEWS_FILE = "Data/active_rules_views.json"  # File for active rules acceptance views
+WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
+WELCOME_PUBLIC_CHANNEL_ID = CURRENT_IDS["WELCOME_PUBLIC_CHANNEL_ID"]
+PERSISTENT_VIEWS_FILE = f"{DATA_DIR}/persistent_views.json"  # File for persistent welcome card views
+ACTIVE_RULES_VIEWS_FILE = f"{DATA_DIR}/active_rules_views.json"  # File for active rules acceptance views

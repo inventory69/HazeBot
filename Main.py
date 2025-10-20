@@ -15,7 +15,6 @@ root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
 # Jetzt erst die restlichen Imports!
-import os
 import pathlib
 import discord
 from discord.ext import commands
@@ -26,6 +25,11 @@ from Config import (
     SLASH_COMMANDS,
     FuzzyMatchingThreshold,
     MessageCooldown,
+    get_guild_id,
+    PROD_MODE,
+    GUILD_ID,
+    DATA_DIR,
+    BOT_TOKEN,
 )
 from Utils.Logger import Logger
 from dotenv import load_dotenv
@@ -35,12 +39,15 @@ from Utils.EmbedUtils import set_pink_footer  # Import the missing function
 import asyncio  # For async sleep
 
 load_dotenv()
-Token = os.getenv("DISCORD_BOT_TOKEN")
+Token = BOT_TOKEN
 EnvDict = LoadEnv()
 
 # Now log the summary, since Logger is initialized
 loaded_count = sum(1 for v in EnvDict.values() if v is not None)
 Logger.info(f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}")
+Logger.info(f"🤖 HazeWorldBot starting in {'PRODUCTION' if PROD_MODE else 'TEST'} mode")
+Logger.info(f"📊 Using Guild ID: {GUILD_ID}")
+Logger.info(f"📁 Using Data Directory: {DATA_DIR}")
 
 
 class HazeWorldBot(commands.Bot):
@@ -77,7 +84,7 @@ class HazeWorldBot(commands.Bot):
         # Clear global commands to prevent duplicates
         self.tree.clear_commands(guild=None)
         # Copy global commands to guild and sync
-        guild = discord.Object(id=int(os.getenv("DISCORD_GUILD_ID")))
+        guild = discord.Object(id=get_guild_id())
         self.tree.copy_global_to(guild=guild)
         synced = await self.tree.sync(guild=guild)
         Logger.info(f"Synced commands: {[cmd.name for cmd in synced]}")
