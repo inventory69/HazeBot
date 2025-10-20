@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from bs4 import BeautifulSoup
 from typing import Dict, Optional, Tuple, Any
-from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS
+from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS, get_guild_id
 
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
@@ -268,7 +268,7 @@ class RocketLeague(commands.Cog):
         """
         accounts = load_rl_accounts()
         now = datetime.now()
-        guild = self.bot.get_guild(int(os.getenv("DISCORD_GUILD_ID")))
+        guild = self.bot.get_guild(get_guild_id())
         if not guild:
             return
         channel = guild.get_channel(1425472657293443236)
@@ -365,7 +365,7 @@ class RocketLeague(commands.Cog):
         await ctx.send(f"✅ Set your RL account to {username} on {platform}.")
 
     @app_commands.command(name="setrlaccount", description="Set your main Rocket League account")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(platform="Platform", username="Username")
     async def setrlaccount_slash(self, interaction: discord.Interaction, platform: str, username: str) -> None:
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
@@ -419,7 +419,7 @@ class RocketLeague(commands.Cog):
         name="rlstats",
         description="🚀 Get Rocket League stats for a player or your set account",
     )
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(platform="Platform (optional if set)", username="Username (optional if set)")
     async def rlstats_slash(
         self,

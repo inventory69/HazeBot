@@ -1,14 +1,18 @@
 from discord.ext import commands
 from discord import app_commands
 import discord
-import os
 from typing import Dict, List, Optional
-from Config import PINK, MOD_COMMANDS, ADMIN_COMMANDS, SLASH_COMMANDS
+from Config import (
+    PINK,
+    MOD_COMMANDS,
+    ADMIN_COMMANDS,
+    SLASH_COMMANDS,
+    ADMIN_ROLE_ID,
+    MODERATOR_ROLE_ID,
+    NORMAL_ROLE_ID,
+    get_guild_id,
+)
 from Utils.EmbedUtils import set_pink_footer
-
-ADMIN_ROLE_ID = 1424466881862959294
-MODERATOR_ROLE_ID = 1427219729960931449
-NORMAL_ROLE_ID = 1424161475718807562
 
 ROLE_DESCRIPTIONS: Dict[int, str] = {
     ADMIN_ROLE_ID: (
@@ -101,7 +105,7 @@ class RoleInfo(commands.Cog):
         name="roleinfo",
         description="📢 Shows info, permissions, and usage tips for a given role.",
     )
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(role_id="Select a main server role")
     async def roleinfo_slash(self, interaction: discord.Interaction, role_id: Optional[str] = None) -> None:
         """

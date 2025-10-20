@@ -4,7 +4,7 @@ from discord import app_commands
 import os
 import json
 from typing import Dict, List, Callable, Any
-from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE
+from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
 from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
 from Utils.CacheUtils import cache
@@ -148,7 +148,7 @@ class Leaderboard(commands.Cog):
 
     # /leaderboard (Slash)
     @app_commands.command(name="leaderboard", description="🏆 Shows a leaderboard for various categories.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(category="Choose the leaderboard category")
     @app_commands.choices(
         category=[

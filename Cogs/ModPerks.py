@@ -12,6 +12,7 @@ from Config import (
     MODERATOR_ROLE_ID,
     MOD_DATA_FILE,
     CHANGELOG_ROLE_ID,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
 from Utils.CacheUtils import cache_instance as cache
@@ -466,7 +467,7 @@ class ModPanel(commands.Cog):
         name="modpanel",
         description="📦 Opens the Mod Panel for quick moderation actions.",
     )
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def modpanel_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_modpanel(interaction)
 
@@ -518,7 +519,7 @@ class ModPanel(commands.Cog):
         await self.handle_mod(ctx)
 
     @app_commands.command(name="mod", description="📋 General mod command with quick access to mod tools.")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def mod_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_mod(interaction)
 
@@ -607,7 +608,7 @@ class ModPanel(commands.Cog):
         name="modoverview",
         description="📊 Shows an overview of moderation actions for mods.",
     )
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def modoverview_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_modoverview(interaction)
 
@@ -673,7 +674,7 @@ class ModPanel(commands.Cog):
         description="📊 Shows detailed moderation actions for a specific user.",
     )
     @app_commands.describe(user="The user to get details for")
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def moddetails_slash(self, interaction: discord.Interaction, user: discord.User) -> None:
         await self.handle_moddetails(interaction, user)
 
@@ -690,7 +691,7 @@ class ModPanel(commands.Cog):
         name="optins",
         description="📊 Shows an overview of user opt-ins (e.g., changelog notifications).",
     )
-    @app_commands.guilds(discord.Object(id=int(os.getenv("DISCORD_GUILD_ID"))))
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def optins_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_optins(interaction)
 

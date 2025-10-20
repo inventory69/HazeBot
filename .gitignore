@@ -146,6 +146,8 @@ temp/
 # Data files
 Data/
 
+TestData/
+
 # Diff files
 my_changes.diff
 
