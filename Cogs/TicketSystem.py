@@ -437,22 +437,17 @@ async def close_ticket_async(
     closing_msg: discord.Message,
     close_message: Optional[str] = None,
 ) -> None:
-    transcript = await create_transcript(channel)
-
-    # Update channel permissions: Remove send_messages for creator
+    # Get creator user
     creator = bot.get_user(ticket["user_id"])
-    if creator:
-        try:
-            await channel.set_permissions(
-                creator,
-                view_channel=True,
-                send_messages=False,
-                add_reactions=False,
-                reason=f"Ticket #{ticket['ticket_num']} closed",
-            )
-            Logger.info(f"Removed send permissions for creator {creator.name} in closed ticket.")
-        except Exception as e:
-            Logger.error(f"Error updating permissions for creator: {e}")
+
+    # Send success message in channel (check for None AND empty string)
+    success_msg = "Ticket successfully closed and archived. It will be deleted after 7 days."
+    if close_message and close_message.strip():
+        success_msg += f"\n\n**Closing Message:** {close_message}"
+    await channel.send(success_msg)
+
+    # Create transcript after sending the closing message
+    transcript = await create_transcript(channel)
 
     # Create transcript embed for transcript channel
     embed = discord.Embed(
@@ -517,41 +512,6 @@ async def close_ticket_async(
 
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
-
-    # Send success message in channel (check for None AND empty string)
-    success_msg = "Ticket successfully closed and archived. It will be deleted after 7 days."
-    if close_message and close_message.strip():
-        success_msg += f"\n\n**Closing Message:** {close_message}"
-    await channel.send(success_msg)
-
-    # Delete the closing message
-    try:
-        await closing_msg.delete()
-    except Exception as e:
-        Logger.error(f"Error deleting closing message: {e}")
-
-    # Archive the channel
-    await channel.edit(archived=True)
-
-    # Get names for email
-    creator_user = bot.get_user(ticket["user_id"])
-    creator_name = creator_user.name if creator_user else f"User {ticket['user_id']}"
-    claimer_user = bot.get_user(ticket.get("claimed_by")) if ticket.get("claimed_by") else None
-    claimer_name = claimer_user.name if claimer_user else "None"
-    assigned_user = bot.get_user(ticket.get("assigned_to")) if ticket.get("assigned_to") else None
-    assigned_name = assigned_user.name if assigned_user else "None"
-
-    # Send email
-    send_transcript_email(
-        os.getenv("SUPPORT_EMAIL"),
-        transcript,
-        ticket,
-        channel.guild.name,
-        creator_name,
-        claimer_name,
-        assigned_name,
-    )
-    Logger.info(f"Ticket #{ticket['ticket_num']} closed.")
 
 
 # === Modal for optional close message ===
