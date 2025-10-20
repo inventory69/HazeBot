@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from bs4 import BeautifulSoup
 from typing import Dict, Optional, Tuple, Any
-from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS, get_guild_id
+from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS, get_guild_id, RL_CHANNEL_ID
 
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
@@ -271,7 +271,7 @@ class RocketLeague(commands.Cog):
         guild = self.bot.get_guild(get_guild_id())
         if not guild:
             return
-        channel = guild.get_channel(1425472657293443236)
+        channel = guild.get_channel(RL_CHANNEL_ID)
         if not channel:
             return
         tier_order = [

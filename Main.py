@@ -45,9 +45,7 @@ EnvDict = LoadEnv()
 # Now log the summary, since Logger is initialized
 loaded_count = sum(1 for v in EnvDict.values() if v is not None)
 Logger.info(f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}")
-Logger.info(f"🤖 HazeWorldBot starting in {'PRODUCTION' if PROD_MODE else 'TEST'} mode")
-Logger.info(f"📊 Using Guild ID: {GUILD_ID}")
-Logger.info(f"📁 Using Data Directory: {DATA_DIR}")
+# Removed early mode/guild/data logs - moved to setup_hook
 
 
 class HazeWorldBot(commands.Bot):
@@ -89,6 +87,10 @@ class HazeWorldBot(commands.Bot):
         synced = await self.tree.sync(guild=guild)
         Logger.info(f"Synced commands: {[cmd.name for cmd in synced]}")
         Logger.info(f"🔗 Synced {len(synced)} guild slash commands.")
+        # Now log mode and config info after sync
+        Logger.info(f"🤖 HazeWorldBot starting in {'PRODUCTION' if PROD_MODE else 'TEST'} mode")
+        Logger.info(f"📊 Using Guild ID: {GUILD_ID}")
+        Logger.info(f"📁 Using Data Directory: {DATA_DIR}")
 
     async def on_ready(self) -> None:
         Logger.info(f"{BotName} is online as {self.user}!")

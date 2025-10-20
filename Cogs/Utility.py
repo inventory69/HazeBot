@@ -1,14 +1,11 @@
 from discord.ext import commands
 import discord
 from typing import Any
-from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS, MOD_COMMANDS, get_guild_id
+from Config import BotName, PINK, SLASH_COMMANDS, ADMIN_COMMANDS, MOD_COMMANDS, get_guild_id, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import log_clear, Logger
 from discord import app_commands
 import json
-
-ADMIN_ROLE_ID = 1424466881862959294  # Admin role ID
-MODERATOR_ROLE_ID = 1427219729960931449  # Slot Keeper role ID
 
 
 class Utility(commands.Cog):

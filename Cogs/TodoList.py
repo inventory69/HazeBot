@@ -6,7 +6,14 @@ import json
 import openai
 import asyncio
 from typing import Dict, List, Any, Optional
-from Config import PINK, ADMIN_ROLE_ID, MODERATOR_ROLE_ID, get_guild_id, get_data_dir
+from Config import (
+    PINK,
+    ADMIN_ROLE_ID,
+    MODERATOR_ROLE_ID,
+    get_guild_id,
+    get_data_dir,
+    TODO_CHANNEL_ID,
+)
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger
 
@@ -15,7 +22,7 @@ from Utils.Logger import Logger
 TODO_DATA_FILE = f"{get_data_dir()}/todo_list.json"
 
 # === Todo List Channel ID ===
-TODO_CHANNEL_ID = 1424862421650247730  # Only this channel can use todo-update
+# TODO_CHANNEL_ID is now imported from Config.py based on PROD_MODE
 
 
 # === Helper functions for data persistence ===
