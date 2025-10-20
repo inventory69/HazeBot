@@ -24,6 +24,7 @@ from Utils.Logger import Logger
 
 # === Path to JSON file ===
 TICKET_FILE = f"{get_data_dir()}/tickets.json"
+TICKET_COUNTER_FILE = f"{get_data_dir()}/ticket_counter.json"
 
 
 # === Helper functions for JSON persistence ===
@@ -63,6 +64,27 @@ async def update_ticket(channel_id: int, updates: Dict[str, Any]) -> None:
             break
     with open(TICKET_FILE, "w") as f:
         json.dump(tickets, f, indent=2)
+
+
+# === Counter functions for ticket numbering ===
+async def load_counter() -> int:
+    os.makedirs(os.path.dirname(TICKET_COUNTER_FILE), exist_ok=True)
+    if not os.path.exists(TICKET_COUNTER_FILE):
+        with open(TICKET_COUNTER_FILE, "w") as f:
+            json.dump({"next_num": 1}, f)
+        return 1
+    try:
+        with open(TICKET_COUNTER_FILE, "r") as f:
+            data = json.load(f)
+            return data.get("next_num", 1)
+    except json.JSONDecodeError:
+        Logger.error(f"Error loading {get_data_dir()}/ticket_counter.json – resetting file.")
+        return 1
+
+
+async def save_counter(num: int) -> None:
+    with open(TICKET_COUNTER_FILE, "w") as f:
+        json.dump({"next_num": num}, f)
 
 
 # === Permission helper function ===
@@ -216,15 +238,21 @@ class TicketView(discord.ui.View):
 async def create_ticket(
     interaction: discord.Interaction, ticket_type: str, initial_message: Optional[str] = None
 ) -> None:
-    # Check cooldown: 1 hour between ticket creations per user
+    # Load tickets for cooldown check and ticket number calculation
     tickets = await load_tickets()
-    now = datetime.now()
-    user_tickets = [t for t in tickets if t["user_id"] == interaction.user.id]
-    if user_tickets:
-        last_ticket = max(user_tickets, key=lambda t: datetime.fromisoformat(t["created_at"]))
-        if now - datetime.fromisoformat(last_ticket["created_at"]) < timedelta(hours=1):
-            await interaction.response.send_message("You can only create a new ticket every 1 hour.", ephemeral=True)
-            return
+
+    # Check cooldown: 1 hour between ticket creations per user (except admins/mods)
+    is_admin_or_mod = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in interaction.user.roles)
+    if not is_admin_or_mod:
+        now = datetime.now()
+        user_tickets = [t for t in tickets if t["user_id"] == interaction.user.id]
+        if user_tickets:
+            last_ticket = max(user_tickets, key=lambda t: datetime.fromisoformat(t["created_at"]))
+            if now - datetime.fromisoformat(last_ticket["created_at"]) < timedelta(hours=1):
+                await interaction.response.send_message(
+                    "You can only create a new ticket every 1 hour.", ephemeral=True
+                )
+                return
 
     guild = interaction.guild
     category = guild.get_channel(TICKETS_CATEGORY_ID)
@@ -242,7 +270,14 @@ async def create_ticket(
         overwrites[moderator_role] = discord.PermissionOverwrite(view_channel=True)
     # Calculate ticket_num as the next highest number (no reuse of deleted IDs)
     existing_nums = [t.get("ticket_num", 0) for t in tickets]
-    ticket_num = max(existing_nums) + 1 if existing_nums else 1
+    max_existing = max(existing_nums) if existing_nums else 0
+    current_counter = await load_counter()
+    if current_counter <= max_existing:
+        ticket_num = max_existing + 1
+        await save_counter(ticket_num + 1)
+    else:
+        ticket_num = current_counter
+        await save_counter(ticket_num + 1)
     channel = await guild.create_text_channel(
         name=f"ticket-{ticket_num}-{ticket_type}-{interaction.user.name}",
         overwrites=overwrites,
@@ -265,7 +300,11 @@ async def create_ticket(
     ticket_data["initial_message"] = initial_message
     await save_ticket(ticket_data)
     embed = create_ticket_embed(ticket_data, interaction.client.user)
-    view = TicketControlView()  # Buttons are active
+    view = TicketControlView()
+    # Disable Reopen button since ticket is open
+    for item in view.children:
+        if isinstance(item, discord.ui.Button) and item.label == "Reopen":
+            item.disabled = True
     msg = await channel.send(
         f"{interaction.user.mention}, your ticket has been opened!",
         embed=embed,
