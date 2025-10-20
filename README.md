@@ -6,6 +6,15 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 
 ---
 
+## ℹ️ Special Architecture Notes
+
+- **Test & Production Mode:** The bot automatically detects via the `PROD_MODE` environment variable whether it is running in test or production mode. IDs and tokens are dynamically loaded from `.env` and managed in `Config.py`, allowing safe operation in multiple environments.
+- **Rich Logging:** All logs are output with colored emojis and highlights using the `rich` framework (`Utils/Logger.py`). This makes debugging and monitoring in the terminal much easier.
+- **Caching Strategies:** The bot uses both in-memory and file-based caching (`Utils/CacheUtils.py`). Frequently used data (e.g., activity, moderation data, API responses) is cached with a configurable TTL to optimize performance and avoid rate limits.
+- **AI Features:** For changelog and to-do formatting, the bot exclusively uses the **GPT-4.1-nano** model from OpenAI (see Cogs `Changelog.py` and `TodoList.py`).
+
+---
+
 ## ✨ Features
 
 ### 🛠️ Utility & Moderation
@@ -36,7 +45,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Performance Caching:** API calls are cached for 1 hour to reduce external requests and improve response times.
 
 ### 📝 Changelog System
-- **Automated Changelog Generation:** `!changelog` (admin-only) uses GPT-4 Turbo to format PR/commit text as Discord embeds.
+- **Automated Changelog Generation:** `!changelog` (admin-only) uses GPT-4.1-Nano to format PR/commit text as Discord embeds.
 - **Post to Channel Button:** Instantly post changelogs to the designated channel with a notification.
 - **Role Mention:** Changelog notification role can be toggled by users in preferences.
 
@@ -68,7 +77,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 ### 📋 To-Do List System
 - **Manage Tasks:** `/todo-update` and `!todo-update` for admins/mods to add, remove, and clear tasks.
 - **Multi-Delete:** Select up to 25 tasks at once for batch deletion with confirmation.
-- **AI Formatting:** OpenAI GPT-4 Turbo automatically formats tasks with emojis and descriptions.
+- **AI Formatting:** OpenAI GPT-4.1-Nano automatically formats tasks with emojis and descriptions.
 - **View Tasks:** `/todo-show` and `!todo-show` display the current to-do list.
 - **Priority Levels:** Tasks organized by priority (🔴 High, 🟡 Medium, 🟢 Low).
 - **Author Tracking:** Each task shows who added it.
