@@ -6,7 +6,7 @@ from discord.ext import commands, tasks
 import discord
 
 # ⚙️ Settings
-from Config import PresenceUpdateInterval  # Assuming you add this to Config.py
+from Config import PresenceUpdateInterval, PROD_MODE
 
 # 📥 Custom modules
 from Utils.Logger import Logger
@@ -43,6 +43,10 @@ class Presence(commands.Cog):
             message = random.choice(self.presence_messages)
             emoji = random.choice(self.emojis)
             message = message.format(random_emoji=emoji)
+
+            # Indicate test mode if not in production
+            if not PROD_MODE:
+                message = f"[TEST] {message}"
 
             # Set presence
             activity = discord.Game(name=message)
