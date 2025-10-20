@@ -141,6 +141,59 @@ async def create_transcript(channel: discord.TextChannel) -> str:
 
 
 # === Optional email sending ===
+
+
+# --- HTML transcript helper ---
+def build_transcript_html(
+    transcript_text: str,
+    ticket: Dict[str, Any],
+    guild_name: str,
+    creator_name: str,
+    claimer_name: str,
+    assigned_name: str,
+) -> str:
+    # Split transcript into lines and format as HTML
+    transcript_lines = transcript_text.splitlines()
+    transcript_html = "".join(
+        f'<tr><td style="padding:4px 8px;font-family:monospace;font-size:13px;border-bottom:1px solid #eee;vertical-align:top;">{line.replace(chr(10), "<br>")}</td></tr>'
+        for line in transcript_lines
+    )
+    # Ticket meta info
+    meta_html = f"""
+        <table style="margin-bottom:18px;font-family:sans-serif;font-size:15px;">
+            <tr><td><b>Ticket #:</b></td><td>{ticket["ticket_num"]}</td></tr>
+            <tr><td><b>Type:</b></td><td>{ticket["type"]}</td></tr>
+            <tr><td><b>Status:</b></td><td>{ticket["status"]}</td></tr>
+            <tr><td><b>Creator:</b></td><td>{creator_name}</td></tr>
+            <tr><td><b>Claimed by:</b></td><td>{claimer_name or "-"}</td></tr>
+            <tr><td><b>Assigned to:</b></td><td>{assigned_name or "-"}</td></tr>
+        </table>
+    """
+    # Main HTML
+    html = f"""
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <title>Ticket Transcript #{ticket["ticket_num"]}</title>
+    </head>
+    <body style="background:#fafbfc;padding:24px;">
+        <h2 style="font-family:sans-serif;color:#ad1457;">{guild_name} &ndash; Ticket Transcript #{ticket["ticket_num"]}</h2>
+        {meta_html}
+        <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;box-shadow:0 2px 8px #0001;">
+            <thead>
+                <tr><th style="text-align:left;padding:8px 8px 8px 8px;background:#f5f5fa;color:#ad1457;font-size:15px;font-family:sans-serif;">Transcript</th></tr>
+            </thead>
+            <tbody>
+                {transcript_html}
+            </tbody>
+        </table>
+        <div style="margin-top:24px;font-size:13px;color:#888;font-family:sans-serif;">This transcript was generated automatically by HazeWorldBot.</div>
+    </body>
+    </html>
+    """
+    return html
+
+
 def send_transcript_email(
     to_email: str,
     transcript_text: str,
@@ -152,9 +205,12 @@ def send_transcript_email(
 ) -> None:
     try:
         subject = f"{guild_name} - Ticket Transcript - Ticket #{ticket['ticket_num']} - Type: {ticket['type']} - Creator: {creator_name}"
-        content = f"Transcript for Ticket #{ticket['ticket_num']}\nType: {ticket['type']}\nCreator: {creator_name}\nClaimed by: {claimer_name}\nAssigned to: {assigned_name}\nStatus: {ticket['status']}\n\nTranscript:\n{transcript_text}"
+        html_body = build_transcript_html(
+            transcript_text, ticket, guild_name, creator_name, claimer_name, assigned_name
+        )
         msg = EmailMessage()
-        msg.set_content(content)
+        msg.set_content("This is an HTML email. Please view it in an HTML-compatible email client.")
+        msg.add_alternative(html_body, subtype="html")
         msg["Subject"] = subject
         msg["From"] = os.getenv("SMTP_USER")
         msg["To"] = to_email
@@ -449,6 +505,27 @@ async def close_ticket_async(
     # Create transcript after sending the closing message
     transcript = await create_transcript(channel)
 
+    # === SEND EMAIL WITH TRANSCRIPT ===
+    # Get names for meta info
+    guild_name = channel.guild.name
+    creator_name = bot.get_user(ticket["user_id"]).name if bot.get_user(ticket["user_id"]) else str(ticket["user_id"])
+    claimer_name = bot.get_user(ticket["claimed_by"]).name if ticket.get("claimed_by") and bot.get_user(ticket["claimed_by"]) else ""
+    assigned_name = bot.get_user(ticket["assigned_to"]).name if ticket.get("assigned_to") and bot.get_user(ticket["assigned_to"]) else ""
+    # Use SUPPORT_EMAIL from .env as recipient
+    to_email = os.getenv("SUPPORT_EMAIL")
+    if to_email:
+        send_transcript_email(
+            to_email,
+            transcript,
+            ticket,
+            guild_name,
+            creator_name,
+            claimer_name,
+            assigned_name,
+        )
+    else:
+        Logger.warning("No transcript recipient email configured (SUPPORT_EMAIL).")
+
     # Create transcript embed for transcript channel
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
@@ -510,8 +587,12 @@ async def close_ticket_async(
     ticket["status"] = "Closed"
     ticket["closed_at"] = datetime.now().isoformat()
 
+
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
+
+    # Log ticket closed (green)
+    Logger.info("\033[92mTicket closed.\033[0m")
 
 
 # === Modal for optional close message ===
