@@ -509,8 +509,16 @@ async def close_ticket_async(
     # Get names for meta info
     guild_name = channel.guild.name
     creator_name = bot.get_user(ticket["user_id"]).name if bot.get_user(ticket["user_id"]) else str(ticket["user_id"])
-    claimer_name = bot.get_user(ticket["claimed_by"]).name if ticket.get("claimed_by") and bot.get_user(ticket["claimed_by"]) else ""
-    assigned_name = bot.get_user(ticket["assigned_to"]).name if ticket.get("assigned_to") and bot.get_user(ticket["assigned_to"]) else ""
+    claimer_name = (
+        bot.get_user(ticket["claimed_by"]).name
+        if ticket.get("claimed_by") and bot.get_user(ticket["claimed_by"])
+        else ""
+    )
+    assigned_name = (
+        bot.get_user(ticket["assigned_to"]).name
+        if ticket.get("assigned_to") and bot.get_user(ticket["assigned_to"])
+        else ""
+    )
     # Use SUPPORT_EMAIL from .env as recipient
     to_email = os.getenv("SUPPORT_EMAIL")
     if to_email:
@@ -586,7 +594,6 @@ async def close_ticket_async(
     # Update ticket status
     ticket["status"] = "Closed"
     ticket["closed_at"] = datetime.now().isoformat()
-
 
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
