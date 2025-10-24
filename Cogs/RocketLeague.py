@@ -82,27 +82,62 @@ class CongratsButton(discord.ui.Button):
 
 class CongratsView(discord.ui.View):
     """
-    Persistent view for the rank promotion embed with a congrats button.
-    Times out after 1 week to reduce bot load.
+    View containing the congrats button for rank promotions.
     """
 
     def __init__(self, ranked_user: discord.User) -> None:
-        super().__init__(timeout=604800)  # 1 week
+        super().__init__(timeout=None)  # Persistent view
         self.ranked_user = ranked_user
         self.add_item(CongratsButton(self))
 
-    async def on_timeout(self) -> None:
-        """
-        Called when the view times out (1 week).
-        Disables the button to reduce bot load.
-        """
-        for item in self.children:
-            item.disabled = True
-        if hasattr(self, "message") and self.message:
-            try:
-                await self.message.edit(view=self)
-            except Exception as e:
-                Logger.error(f"Failed to disable congrats button: {e}")
+
+class ConfirmLinkView(discord.ui.View):
+    """
+    View for confirming RL account linking.
+    """
+
+    def __init__(
+        self,
+        interaction: discord.Interaction,
+        platform: str,
+        username: str,
+        stats: Dict[str, Any],
+        cog: "RocketLeague",
+        message: discord.Message,
+    ) -> None:
+        super().__init__(timeout=60)  # 1 minute timeout
+        self.interaction = interaction
+        self.platform = platform
+        self.username = username
+        self.stats = stats
+        self.cog = cog
+        self.message = message
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        # Save the account
+        accounts = load_rl_accounts()
+        accounts[str(interaction.user.id)] = {
+            "platform": self.platform.lower(),
+            "username": self.username,
+            "ranks": self.stats["tier_names"],
+        }
+        save_rl_accounts(accounts)
+        await self.message.edit(
+            content=f"✅ Successfully linked your Rocket League account to {self.stats['username']} on {self.platform.upper()}.",
+            embed=None,
+            view=None,
+        )
+        self.stop()
+        await asyncio.sleep(5)
+        await self.message.delete()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="❌")
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.message.edit(content="❌ Account linking cancelled.", embed=None, view=None)
+        self.stop()
+        await asyncio.sleep(5)
+        await self.message.delete()
 
 
 class RocketLeague(commands.Cog):
@@ -423,22 +458,19 @@ class RocketLeague(commands.Cog):
             await ctx.send("❌ Invalid platform.")
             return
         stats = await self.get_player_stats(platform.lower(), username)
-        initial_ranks = {
-            "1v1": "Unranked",
-            "2v2": "Unranked",
-            "3v3": "Unranked",
-            "4v4": "Unranked",
-        }
-        if stats:
-            initial_ranks = stats["tier_names"]
+        if not stats:
+            await ctx.send("❌ Player not found or error fetching stats. Please check the username and platform.")
+            return
         accounts = load_rl_accounts()
         accounts[str(ctx.author.id)] = {
             "platform": platform.lower(),
             "username": username,
-            "ranks": initial_ranks,
+            "ranks": stats["tier_names"],
         }
         save_rl_accounts(accounts)
-        await ctx.send(f"✅ Set your RL account to {username} on {platform}.")
+        await ctx.send(
+            f"✅ Successfully linked your Rocket League account to {stats['username']} on {platform.upper()}."
+        )
 
     @app_commands.command(name="setrlaccount", description="Set your main Rocket League account")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
@@ -447,24 +479,28 @@ class RocketLeague(commands.Cog):
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             await interaction.response.send_message("❌ Invalid platform.", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)  # <--- Defer first!
+        await interaction.response.defer(ephemeral=True)
         stats = await self.get_player_stats(platform.lower(), username)
-        initial_ranks = {
-            "1v1": "Unranked",
-            "2v2": "Unranked",
-            "3v3": "Unranked",
-            "4v4": "Unranked",
-        }
-        if stats:
-            initial_ranks = stats["tier_names"]
-        accounts = load_rl_accounts()
-        accounts[str(interaction.user.id)] = {
-            "platform": platform.lower(),
-            "username": username,
-            "ranks": initial_ranks,
-        }
-        save_rl_accounts(accounts)
-        await interaction.followup.send(f"✅ Set your RL account to {username} on {platform}.", ephemeral=True)
+        if not stats:
+            await interaction.followup.send(
+                "❌ Player not found or error fetching stats. Please check the username and platform.", ephemeral=True
+            )
+            return
+        # Show confirmation
+        embed = discord.Embed(
+            title="🔗 Confirm Rocket League Account Linking",
+            description=f"Player found: **{stats['username']}**\nPlatform: **{platform.upper()}**\n\nDo you want to link this account?",
+            color=PINK,
+        )
+        if stats.get("highest_icon_url"):
+            embed.set_thumbnail(url=stats["highest_icon_url"])
+        embed.add_field(
+            name="Current Ranks", value="\n".join([f"• {k}: {v}" for k, v in stats["tier_names"].items()]), inline=False
+        )
+        set_pink_footer(embed, bot=self.bot.user)
+        msg = await interaction.followup.send(embed=embed, ephemeral=True)  # Send without view first
+        view = ConfirmLinkView(interaction, platform, username, stats, self, msg)
+        await msg.edit(embed=embed, view=view)  # Edit to add view
 
     @commands.command(name="rlstats")
     async def rlstats(
