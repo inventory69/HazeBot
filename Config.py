@@ -156,6 +156,7 @@ ADMIN_COMMANDS = [
     "changelog",
     "optins",
     "todo-update",
+    "adminrlstats",
 ]  # Commands restricted to Admins only
 MOD_COMMANDS = [
     "clear",
@@ -165,6 +166,7 @@ MOD_COMMANDS = [
     "moddetails",
     "optins",
     "todo-update",
+    "adminrlstats",
 ]  # Commands restricted to Moderators (Slot Keepers) only
 
 # === Rocket League ===
