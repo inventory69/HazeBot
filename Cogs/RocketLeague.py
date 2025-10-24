@@ -2,6 +2,8 @@ import aiohttp
 import requests
 import os
 import json
+import random
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from discord.ext import commands, tasks
 import discord
@@ -44,6 +46,63 @@ def get_highest_rl_rank(user_id: str) -> Optional[str]:
         if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
             highest_tier = tier
     return highest_tier
+
+
+class CongratsButton(discord.ui.Button):
+    """
+    Button for others to congratulate the ranked up user.
+    """
+
+    def __init__(self, parent_view: Any) -> None:
+        super().__init__(label="Congrats!", style=discord.ButtonStyle.primary, emoji="🎉")
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        user = interaction.user
+        if user == self.parent_view.ranked_user:
+            await interaction.followup.send("You can't congratulate yourself! 😄", ephemeral=True)
+            return
+        congrats_replies = [
+            f"Inventory alert: {user.mention} congratulates {self.parent_view.ranked_user.mention} on the rank up! 📦",
+            f"{user.mention} throws confetti for {self.parent_view.ranked_user.mention}'s epic rank promotion! 🎊",
+            f"New achievement unlocked: {user.mention} cheers for {self.parent_view.ranked_user.mention}! 🏆",
+            f"{user.mention} adds extra vibes to {self.parent_view.ranked_user.mention}'s rank up celebration! ✨",
+            f"Chillventory update: {user.mention} says congrats to {self.parent_view.ranked_user.mention}! 😎",
+            f"{user.mention} shares positivity confetti for {self.parent_view.ranked_user.mention}'s promotion! 🎉",
+            f"Rank stash expanded: {user.mention} greets {self.parent_view.ranked_user.mention}'s new tier! 🌟",
+            f"{user.mention} discovers {self.parent_view.ranked_user.mention} in the champion inventory! 🏅",
+            f"Realm of ranks welcomes {self.parent_view.ranked_user.mention}'s upgrade via {user.mention}! 🚀",
+            f"{user.mention} throws a party for {self.parent_view.ranked_user.mention}'s rank advancement! 🎈",
+        ]
+        reply = random.choice(congrats_replies)
+        await interaction.followup.send(reply)
+        Logger.info(f"{user} congratulated {self.parent_view.ranked_user} on rank up")
+
+
+class CongratsView(discord.ui.View):
+    """
+    Persistent view for the rank promotion embed with a congrats button.
+    Times out after 1 week to reduce bot load.
+    """
+
+    def __init__(self, ranked_user: discord.User) -> None:
+        super().__init__(timeout=604800)  # 1 week
+        self.ranked_user = ranked_user
+        self.add_item(CongratsButton(self))
+
+    async def on_timeout(self) -> None:
+        """
+        Called when the view times out (1 week).
+        Disables the button to reduce bot load.
+        """
+        for item in self.children:
+            item.disabled = True
+        if hasattr(self, "message") and self.message:
+            try:
+                await self.message.edit(view=self)
+            except Exception as e:
+                Logger.error(f"Failed to disable congrats button: {e}")
 
 
 class RocketLeague(commands.Cog):
@@ -212,11 +271,18 @@ class RocketLeague(commands.Cog):
 
             time.sleep(8)  # Rate limit to avoid overwhelming the API
 
-    async def get_player_stats(self, platform: str, username: str) -> Optional[Dict[str, Any]]:
+    async def get_player_stats(
+        self, platform: str, username: str, force_refresh: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """
         Async wrapper for sync fetch with caching.
         """
         cache_key = f"rl_stats:{platform}:{username}"
+
+        if force_refresh:
+            # Bypass cache and fetch directly
+            loop = self.bot.loop
+            return await loop.run_in_executor(self.executor, self.fetch_stats_sync, platform, username)
 
         async def fetch_and_cache():
             loop = self.bot.loop
@@ -261,10 +327,10 @@ class RocketLeague(commands.Cog):
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 
-    @tasks.loop(hours=1)
-    async def check_ranks(self) -> None:
+    async def _check_and_update_ranks(self, force: bool = False) -> None:
         """
-        Check for rank promotions every hour.
+        Check and update ranks for all linked accounts.
+        If force=True, ignore time checks and fetch all.
         """
         accounts = load_rl_accounts()
         now = datetime.now()
@@ -300,15 +366,16 @@ class RocketLeague(commands.Cog):
             "Supersonic Legend",
         ]
         for user_id, data in accounts.items():
-            last_fetched_str = data.get("last_fetched")
-            if last_fetched_str:
-                last_fetched = datetime.fromisoformat(last_fetched_str)
-                if now - last_fetched < timedelta(hours=1):
-                    continue  # Skip if less than 1 hour
+            if not force:
+                last_fetched_str = data.get("last_fetched")
+                if last_fetched_str:
+                    last_fetched = datetime.fromisoformat(last_fetched_str)
+                    if now - last_fetched < timedelta(hours=1):
+                        continue  # Skip if less than 1 hour
             platform = data["platform"]
             username = data["username"]
             old_ranks = data.get("ranks", {})
-            stats = await self.get_player_stats(platform, username)
+            stats = await self.get_player_stats(platform, username, force_refresh=force)
             if stats:
                 new_ranks = stats["tier_names"]
                 new_icon_urls = stats.get("icon_urls", {})
@@ -329,13 +396,22 @@ class RocketLeague(commands.Cog):
                             if icon_url:
                                 embed.set_thumbnail(url=icon_url)
                             set_pink_footer(embed, bot=self.bot.user)
-                            await channel.send(embed=embed)
+                            view = CongratsView(user)
+                            embed_msg = await channel.send(embed=embed, view=view)
+                            view.message = embed_msg
                             Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
                 # Update ranks and last_fetched
                 data["ranks"] = new_ranks
                 data["icon_urls"] = new_icon_urls
                 data["last_fetched"] = now.isoformat()
                 save_rl_accounts(accounts)
+
+    @tasks.loop(hours=1)
+    async def check_ranks(self) -> None:
+        """
+        Check for rank promotions every hour.
+        """
+        await self._check_and_update_ranks(force=False)
 
     @commands.command(name="setrlaccount")
     async def setrlaccount(self, ctx: commands.Context, platform: str, *, username: str) -> None:
@@ -444,6 +520,22 @@ class RocketLeague(commands.Cog):
 
         embed = await self._create_rl_embed(stats, platform)
         await interaction.followup.send(embed=embed)
+
+    @commands.command(name="adminrlstats")
+    @commands.has_permissions(administrator=True)
+    async def adminrlstats(self, ctx: commands.Context) -> None:
+        """
+        🚀 Admin command to manually check all linked Rocket League accounts for rank promotions.
+        Bypasses the hourly timer and fetches fresh data.
+        Requires administrator permissions.
+        """
+        msg1 = await ctx.send("🔍 Checking all linked Rocket League accounts for rank promotions...")
+        await self._check_and_update_ranks(force=True)
+        await msg1.delete()
+        msg2 = await ctx.send("✅ Rank check completed for all linked accounts.")
+        await asyncio.sleep(5)
+        await msg2.delete()
+        Logger.info(f"Admin manual rank check triggered by {ctx.author}")
 
     async def cog_unload(self) -> None:
         await self.session.close()
