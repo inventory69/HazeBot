@@ -67,10 +67,109 @@ def is_mod_or_admin(user: discord.User) -> bool:
     return any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
 
 
+# === View for selecting priority before modal ===
+class PrioritySelectView(discord.ui.View):
+    def __init__(
+        self,
+        bot: commands.Bot,
+        action: str = "add",
+        item_index: Optional[int] = None,
+        current_priority: Optional[str] = None,
+        current_text: Optional[str] = None,
+    ) -> None:
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.action = action
+        self.item_index = item_index
+        self.current_priority = current_priority or "low"
+        self.current_text = current_text or ""
+
+    @discord.ui.button(label="High", style=discord.ButtonStyle.danger, emoji="🔴")
+    async def select_high(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.open_modal(interaction, "high")
+
+    @discord.ui.button(label="Medium", style=discord.ButtonStyle.secondary, emoji="🟡")
+    async def select_medium(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.open_modal(interaction, "medium")
+
+    @discord.ui.button(label="Low", style=discord.ButtonStyle.success, emoji="🟢")
+    async def select_low(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.open_modal(interaction, "low")
+
+    async def open_modal(self, interaction: discord.Interaction, priority: str) -> None:
+        modal = TodoModal(
+            self.bot,
+            action=self.action,
+            item_index=self.item_index,
+            default_priority=priority,
+            default_text=self.current_text,
+        )
+        await interaction.response.send_modal(modal)
+
+
+# === View for confirming AI-formatted todo item ===
+class TodoConfirmView(discord.ui.View):
+    def __init__(
+        self,
+        bot: commands.Bot,
+        formatted_task: Dict[str, str],
+        priority: str,
+        action: str,
+        item_index: Optional[int],
+        interaction: discord.Interaction,
+    ) -> None:
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.formatted_task = formatted_task
+        self.priority = priority
+        self.action = action
+        self.item_index = item_index
+        self.original_interaction = interaction
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        # Create new item with AI-formatted text and author info
+        new_item = {
+            "priority": self.priority,
+            "title": self.formatted_task["title"],
+            "description": self.formatted_task["description"],
+            "author_id": interaction.user.id,
+            "author_name": interaction.user.display_name,
+        }
+
+        # Load current data
+        data = await load_todo_data()
+
+        if self.action == "add":
+            data["items"].append(new_item)
+            Logger.info(f"To-do item added by {interaction.user}")
+        elif self.action == "edit" and self.item_index is not None:
+            if 0 <= self.item_index < len(data["items"]):
+                data["items"][self.item_index] = new_item
+                Logger.info(f"To-do item {self.item_index} edited by {interaction.user}")
+
+        # Save data
+        save_todo_data(data)
+
+        # Update message
+        modal = TodoModal(self.bot)
+        await modal.update_todo_message(self.original_interaction, data)
+
+        # Send confirmation
+        await interaction.response.send_message("✅ To-do item added successfully!", ephemeral=True, delete_after=3)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_message("❌ Cancelled. Item was not added.", ephemeral=True, delete_after=3)
+
+
 # === Modal for adding/editing to-do items ===
 class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
     priority = discord.ui.TextInput(
-        label="Priority (high/medium/low)", placeholder="low", required=True, max_length=10, default="low"
+        label="Priority (already selected)",
+        placeholder="Priority is pre-selected",
+        required=True,
+        max_length=10,
     )
 
     raw_text = discord.ui.TextInput(
@@ -81,18 +180,27 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
         style=discord.TextStyle.paragraph,
     )
 
-    def __init__(self, bot: commands.Bot, action: str = "add", item_index: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        bot: commands.Bot,
+        action: str = "add",
+        item_index: Optional[int] = None,
+        default_priority: str = "low",
+        default_text: str = "",
+    ) -> None:
         super().__init__()
         self.bot = bot
         self.action = action
         self.item_index = item_index
+        self.priority.default = default_priority
+        self.raw_text.default = default_text
         openai.api_key = os.getenv("OPENAI_API_KEY")
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        # Validate priority
+        # Priority is pre-selected, but validate just in case
         priority = self.priority.value.lower().strip()
         if priority not in ["high", "medium", "low"]:
-            await interaction.response.send_message("❌ Invalid priority! Use: high, medium, or low", ephemeral=True)
+            await interaction.response.send_message("❌ Invalid priority! This shouldn't happen.", ephemeral=True)
             return
 
         # Defer response since AI processing takes time
@@ -107,38 +215,25 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
             # Use AI to format the task
             formatted_task = await self.format_task_with_ai(self.raw_text.value.strip(), priority)
 
-            # Load current data
-            data = await load_todo_data()
+            # Delete status message
+            await status_msg.delete()
 
-            # Create new item with AI-formatted text and author info
-            new_item = {
-                "priority": priority,
-                "title": formatted_task["title"],
-                "description": formatted_task["description"],
-                "author_id": interaction.user.id,
-                "author_name": interaction.user.display_name,
-            }
+            # Show confirmation view with formatted task
+            embed = discord.Embed(
+                title="🤖 AI-Formatted Task Preview",
+                description=(
+                    f"**Priority:** {priority.title()}\n\n"
+                    f"**Title:** {formatted_task['title']}\n\n"
+                    f"**Description:** {formatted_task['description']}\n\n"
+                    "Do you want to add this to the to-do list?"
+                ),
+                color=PINK,
+            )
+            set_pink_footer(embed, bot=self.bot.user)
 
-            if self.action == "add":
-                data["items"].append(new_item)
-                Logger.info(f"To-do item added by {interaction.user}")
-            elif self.action == "edit" and self.item_index is not None:
-                if 0 <= self.item_index < len(data["items"]):
-                    data["items"][self.item_index] = new_item
-                    Logger.info(f"To-do item {self.item_index} edited by {interaction.user}")
+            view = TodoConfirmView(self.bot, formatted_task, priority, self.action, self.item_index, interaction)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-            # Save data
-            save_todo_data(data)
-
-            # Update message
-            await self.update_todo_message(interaction, data)
-
-            # Delete status message after 3 seconds
-            await asyncio.sleep(3)
-            try:
-                await status_msg.delete()
-            except Exception:
-                pass
         except Exception as e:
             Logger.error(f"Error processing to-do item: {e}")
             await interaction.followup.send(
@@ -270,7 +365,39 @@ class TodoManageView(discord.ui.View):
         if not is_mod_or_admin(interaction.user):
             await interaction.response.send_message("❌ You do not have permission to use this.", ephemeral=True)
             return
-        await interaction.response.send_modal(TodoModal(self.bot, action="add"))
+
+        # Send priority selection view
+        embed = discord.Embed(
+            title="Select Priority",
+            description="Choose the priority level for the new to-do item:",
+            color=PINK,
+        )
+        set_pink_footer(embed, bot=self.bot.user)
+        view = PrioritySelectView(self.bot, action="add")
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    @discord.ui.button(label="Edit Item", style=discord.ButtonStyle.primary, emoji="✏️")
+    async def edit_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        # Check if user is mod or admin
+        if not is_mod_or_admin(interaction.user):
+            await interaction.response.send_message("❌ You do not have permission to use this.", ephemeral=True)
+            return
+
+        # Load data
+        data = await load_todo_data()
+        if not data["items"]:
+            await interaction.response.send_message("❌ No items to edit!", ephemeral=True)
+            return
+
+        # Create view with select
+        view = TodoEditSelectView(self.bot, data["items"])
+
+        embed = discord.Embed(
+            title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK
+        )
+        set_pink_footer(embed, bot=self.bot.user)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     @discord.ui.button(label="Remove Item", style=discord.ButtonStyle.red, emoji="🗑️")
     async def remove_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -337,6 +464,66 @@ class TodoManageView(discord.ui.View):
             await interaction.followup.send(f"❌ Error clearing items: {str(e)}", ephemeral=True, delete_after=5)
 
 
+# === Select view for editing specific items ===
+class TodoEditSelectView(discord.ui.View):
+    def __init__(self, bot: commands.Bot, items: List[Dict[str, Any]]) -> None:
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.items = items
+
+        # Create select menu options
+        options = []
+        for i, item in enumerate(items):
+            title = item.get("title", "Untitled")
+            if len(title) > 50:
+                title = title[:50] + "..."
+            author = item.get("author_name", "Unknown")
+            priority = item.get("priority", "low").title()
+            label = f"{i + 1}. {title}"
+            options.append(
+                discord.SelectOption(
+                    label=label[:100],
+                    value=str(i),
+                    description=f"By {author} • Priority: {priority}"[:100],
+                )
+            )
+
+        # Create and add select
+        self.select = discord.ui.Select(
+            placeholder="Choose item to edit...",
+            options=options,
+            custom_id="edit_select",
+            min_values=1,
+            max_values=1,  # Only one item at a time
+        )
+        self.select.callback = self.select_callback
+        self.add_item(self.select)
+
+    async def select_callback(self, interaction: discord.Interaction) -> None:
+        index = int(self.select.values[0])
+        if 0 <= index < len(self.items):
+            item = self.items[index]
+            current_priority = item.get("priority", "low")
+            # For edit, we need the raw text, but since we have formatted, use description or title
+            current_text = item.get("description", item.get("title", ""))
+
+            # Send priority selection view with current values
+            embed = discord.Embed(
+                title="Edit Priority",
+                description=f"Editing: **{item['title']}**\n\nChoose new priority level:",
+                color=PINK,
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            view = PrioritySelectView(
+                self.bot,
+                action="edit",
+                item_index=index,
+                current_priority=current_priority,
+                current_text=current_text,
+            )
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
 # === Select view for removing specific items ===
 class TodoRemoveSelectView(discord.ui.View):
     def __init__(self, bot: commands.Bot, items: List[Dict[str, Any]]) -> None:
@@ -351,12 +538,14 @@ class TodoRemoveSelectView(discord.ui.View):
             if len(title) > 50:
                 title = title[:50] + "..."
             author = item.get("author_name", "Unknown")
+            priority = item.get("priority", "low").title()
+            desc = f"By {author} • Priority: {priority}"[:100]
             label = f"{i + 1}. {title}"
             options.append(
                 discord.SelectOption(
                     label=label[:100],
                     value=str(i),
-                    description=f"By {author} • Priority: {item.get('priority', 'low').title()}"[:100],
+                    description=desc,
                 )
             )
 
