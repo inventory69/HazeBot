@@ -13,9 +13,11 @@ from typing import Dict, Optional, Tuple, Any
 from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS, get_guild_id, RL_CHANNEL_ID
 
 from Utils.EmbedUtils import set_pink_footer
-from Utils.Logger import Logger
 from Utils.CacheUtils import file_cache
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def load_rl_accounts() -> Dict[str, Any]:
@@ -77,7 +79,7 @@ class CongratsButton(discord.ui.Button):
         ]
         reply = random.choice(congrats_replies)
         await interaction.followup.send(reply)
-        Logger.info(f"{user} congratulated {self.parent_view.ranked_user} on rank up")
+        logger.info(f"{user} congratulated {self.parent_view.ranked_user} on rank up")
 
 
 class CongratsView(discord.ui.View):
@@ -128,7 +130,7 @@ class ConfirmLinkView(discord.ui.View):
             embed=None,
             view=None,
         )
-        Logger.info(f"🚀 [RocketLeague] Rocket League account linked by {interaction.user}")
+        logger.info(f"Rocket League account linked by {interaction.user}")
         self.stop()
         await asyncio.sleep(5)
         await self.message.delete()
@@ -160,7 +162,7 @@ class RocketLeague(commands.Cog):
         Start the rank check task when the bot is ready.
         """
         self.check_ranks.start()
-        Logger.info("🚀 [RocketLeague] Rank check task started.")
+        logger.info("Rank check task started.")
 
     def fetch_stats_sync(self, platform: str, username: str) -> Optional[Dict[str, Any]]:
         """
@@ -181,11 +183,11 @@ class RocketLeague(commands.Cog):
         try:
             response = requests.post(self.flaresolverr_url, json=payload, timeout=60)
             if response.status_code != 200:
-                Logger.warning(f"❌ External service error: {response.status_code}")
+                logger.warning(f"❌ External service error: {response.status_code}")
                 return None
             data = response.json()
             if data.get("status") != "ok":
-                Logger.warning(f"❌ External service failed: {data.get('message')}")
+                logger.warning(f"❌ External service failed: {data.get('message')}")
                 return None
             # Get the actual response
             api_response = data["solution"]["response"]
@@ -193,21 +195,21 @@ class RocketLeague(commands.Cog):
             soup = BeautifulSoup(api_response, "html.parser")
             pre_tag = soup.find("pre")
             if not pre_tag:
-                Logger.warning("Invalid response format")
+                logger.warning("Invalid response format")
                 return None
             json_text = pre_tag.text
             api_data = json.loads(json_text)
 
             # Now process api_data as before
             if "errors" in api_data and api_data["errors"][0]["code"] == "CollectorResultStatus::NotFound":
-                Logger.warning(f"🚫 Player {username} not found")
+                logger.warning(f"🚫 Player {username} not found")
                 return None
 
             profile = api_data["data"]
             segments = profile["segments"]
             overview = next((s for s in segments if s["type"] == "overview"), None)
             if not overview:
-                Logger.warning("No overview segment found")
+                logger.warning("No overview segment found")
                 return None
 
             stats = overview["stats"]
@@ -293,13 +295,13 @@ class RocketLeague(commands.Cog):
                 "icon_urls": icon_urls,
             }
         except requests.exceptions.RequestException as e:
-            Logger.error(f"💥 Connection error: {e}")
+            logger.error(f"Connection error: {e}")
             return None
         except json.JSONDecodeError as e:
-            Logger.error(f"💥 JSON parse error: {e}")
+            logger.error(f"JSON parse error: {e}")
             return None
         except Exception as e:
-            Logger.error(f"💥 Error fetching stats for {username}: {e}")
+            logger.error(f"Error fetching stats for {username}: {e}")
             return None
         finally:
             import time
@@ -376,7 +378,7 @@ class RocketLeague(commands.Cog):
         if not channel:
             return
         if not accounts:
-            Logger.info("🚀 [RocketLeague] No linked accounts, skipping rank check.")
+            logger.info("No linked accounts, skipping rank check.")
             return
         tier_order = [
             "Unranked",
@@ -403,7 +405,7 @@ class RocketLeague(commands.Cog):
             "Grand Champion III",
             "Supersonic Legend",
         ]
-        Logger.info(f"🚀 [RocketLeague] Starting rank check for {len(accounts)} linked accounts.")
+        logger.info(f"Starting rank check for {len(accounts)} linked accounts.")
         for user_id, data in accounts.items():
             if not force:
                 last_fetched_str = data.get("last_fetched")
@@ -438,15 +440,13 @@ class RocketLeague(commands.Cog):
                             view = CongratsView(user)
                             embed_msg = await channel.send(embed=embed, view=view)
                             view.message = embed_msg
-                            Logger.info(
-                                f"🚀 [RocketLeague] Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}"
-                            )
+                            logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
                 # Update ranks and last_fetched
                 data["ranks"] = new_ranks
                 data["icon_urls"] = new_icon_urls
                 data["last_fetched"] = now.isoformat()
                 save_rl_accounts(accounts)
-        Logger.info("🚀 [RocketLeague] Rank check completed.")
+        logger.info("Rank check completed.")
 
     @tasks.loop(hours=1)
     async def check_ranks(self) -> None:
@@ -466,7 +466,13 @@ class RocketLeague(commands.Cog):
             return
         stats = await self.get_player_stats(platform.lower(), username)
         if not stats:
-            await ctx.send("❌ Player not found or error fetching stats. Please check the username and platform.")
+            if platform.lower() == "steam":
+                await ctx.send(
+                    "❌ Player not found. For Steam, try using your 17-digit Steam ID instead of the display name.\n"
+                    "Find it at https://steamid.io/ or in your Steam profile URL (e.g., https://steamcommunity.com/profiles/76561197993735144)."
+                )
+            else:
+                await ctx.send("❌ Player not found or error fetching stats. Please check the username and platform.")
             return
         accounts = load_rl_accounts()
         accounts[str(ctx.author.id)] = {
@@ -478,7 +484,7 @@ class RocketLeague(commands.Cog):
         await ctx.send(
             f"✅ Successfully linked your Rocket League account to {stats['username']} on {platform.upper()}."
         )
-        Logger.info(f"🚀 [RocketLeague] Rocket League account linked by {ctx.author}")
+        logger.info(f"Rocket League account linked by {ctx.author}")
 
     @app_commands.command(name="setrlaccount", description="Set your main Rocket League account")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
@@ -490,9 +496,17 @@ class RocketLeague(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         stats = await self.get_player_stats(platform.lower(), username)
         if not stats:
-            await interaction.followup.send(
-                "❌ Player not found or error fetching stats. Please check the username and platform.", ephemeral=True
-            )
+            if platform.lower() == "steam":
+                await interaction.followup.send(
+                    "❌ Player not found. For Steam, try using your 17-digit Steam ID instead of the display name.\n"
+                    "Find it at https://steamid.io/ or in your Steam profile URL.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.followup.send(
+                    "❌ Player not found or error fetching stats. Please check the username and platform.",
+                    ephemeral=True,
+                )
             return
         # Show confirmation
         embed = discord.Embed(
@@ -533,7 +547,7 @@ class RocketLeague(commands.Cog):
 
         embed = await self._create_rl_embed(stats, platform)
         await ctx.send(embed=embed)
-        Logger.info(f"🚀 [RocketLeague] Rocket League stats requested for {username} by {ctx.author}")
+        logger.info(f"Rocket League stats requested for {username} by {ctx.author}")
 
     @app_commands.command(
         name="rlstats",
@@ -579,7 +593,7 @@ class RocketLeague(commands.Cog):
         msg2 = await ctx.send("✅ Rank check completed for all linked accounts.")
         await asyncio.sleep(5)
         await msg2.delete()
-        Logger.info(f"🚀 [RocketLeague] Admin manual rank check triggered by {ctx.author}")
+        logger.info(f"Admin manual rank check triggered by {ctx.author}")
 
     @commands.command(name="unlinkrlaccount")
     async def unlinkrlaccount(self, ctx: commands.Context) -> None:
@@ -595,7 +609,7 @@ class RocketLeague(commands.Cog):
         del accounts[user_id]
         save_rl_accounts(accounts)
         await ctx.send("✅ Successfully unlinked your Rocket League account.")
-        Logger.info(f"🚀 [RocketLeague] Rocket League account unlinked by {ctx.author}")
+        logger.info(f"Rocket League account unlinked by {ctx.author}")
 
     @app_commands.command(name="unlinkrlaccount", description="Unlink your Rocket League account")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
@@ -608,7 +622,7 @@ class RocketLeague(commands.Cog):
         del accounts[user_id]
         save_rl_accounts(accounts)
         await interaction.response.send_message("✅ Successfully unlinked your Rocket League account.", ephemeral=True)
-        Logger.info(f"🚀 [RocketLeague] Rocket League account unlinked by {interaction.user}")
+        logger.info(f"Rocket League account unlinked by {interaction.user}")
 
     async def cog_unload(self) -> None:
         await self.session.close()

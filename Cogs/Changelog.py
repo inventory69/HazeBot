@@ -3,9 +3,11 @@ from discord.ext import commands
 import openai
 import os
 from datetime import datetime
-from Utils.Logger import Logger
 from Config import PINK, CHANGELOG_ROLE_ID, CHANGELOG_CHANNEL_ID
 from Utils.EmbedUtils import set_pink_footer
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ChangelogCog(commands.Cog):
@@ -110,7 +112,7 @@ PR-Text:
             try:
                 title = await self.generate_changelog_title(text)
             except Exception as e:
-                Logger.error(f"Error generating title: {e}")
+                logger.error(f"Error generating title: {e}")
                 title = "Bot Update"
         else:
             title = params["title"]
@@ -124,7 +126,7 @@ PR-Text:
             view = ChangelogChannelView(embed)
             await ctx.send(embed=embed, view=view)
         except Exception as e:
-            Logger.error(f"Error generating changelog: {e}")
+            logger.error(f"Error generating changelog: {e}")
             await ctx.send("❌ Failed to generate changelog. Check logs.")
 
 

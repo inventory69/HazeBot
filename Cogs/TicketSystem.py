@@ -20,7 +20,9 @@ from Config import (
     get_data_dir,
 )
 from Utils.EmbedUtils import set_pink_footer
-from Utils.Logger import Logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 # === Path to JSON file ===
 TICKET_FILE = f"{get_data_dir()}/tickets.json"
@@ -38,7 +40,7 @@ async def load_tickets() -> List[Dict[str, Any]]:
         with open(TICKET_FILE, "r") as f:
             return json.load(f)
     except json.JSONDecodeError:
-        Logger.error(f"Error loading {get_data_dir()}/tickets.json – resetting file.")
+        logger.error(f"Error loading {get_data_dir()}/tickets.json – resetting file.")
         return []
 
 
@@ -78,7 +80,7 @@ async def load_counter() -> int:
             data = json.load(f)
             return data.get("next_num", 1)
     except json.JSONDecodeError:
-        Logger.error(f"Error loading {get_data_dir()}/ticket_counter.json – resetting file.")
+        logger.error(f"Error loading {get_data_dir()}/ticket_counter.json – resetting file.")
         return 1
 
 
@@ -217,9 +219,9 @@ def send_transcript_email(
         with smtplib.SMTP_SSL(os.getenv("SMTP_SERVER"), int(os.getenv("SMTP_PORT", 465))) as smtp:
             smtp.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
             smtp.send_message(msg)
-        Logger.info(f"🎫 [TicketSystem] Transcript email sent to {to_email}.")
+        logger.info(f"Transcript email sent to {to_email}.")
     except Exception as e:
-        Logger.error(f"Error sending email: {e}")
+        logger.error(f"Error sending email: {e}")
 
 
 # === Shared Helper Functions (avoids duplication) ===
@@ -313,7 +315,7 @@ async def create_ticket(
     guild = interaction.guild
     category = guild.get_channel(TICKETS_CATEGORY_ID)
     if not category or not isinstance(category, discord.CategoryChannel):
-        Logger.error(f"Tickets category with ID {TICKETS_CATEGORY_ID} not found or is not a category.")
+        logger.error(f"Tickets category with ID {TICKETS_CATEGORY_ID} not found or is not a category.")
         await interaction.response.send_message("Error: Tickets category not available.", ephemeral=True)
         return
     overwrites = {
@@ -382,11 +384,11 @@ async def create_ticket(
             await channel.send(
                 f"{' '.join(roles_to_mention)} New ticket #{ticket_num} created by {interaction.user.mention}."
             )
-            Logger.info("🎫 [TicketSystem] Admin/Moderator roles notified in ticket channel.")
+            logger.info("Admin/Moderator roles notified in ticket channel.")
         except Exception as e:
-            Logger.error(f"Error sending admin/moderator notification: {e}")
+            logger.error(f"Error sending admin/moderator notification: {e}")
     else:
-        Logger.warning("Admin or Moderator role not found.")
+        logger.warning("Admin or Moderator role not found.")
     # Info for the creator
     await channel.send(
         "Please describe your problem, application, or support request in detail here. An admin or moderator will handle it soon."
@@ -394,7 +396,7 @@ async def create_ticket(
     # If initial_message provided, send it in the channel
     if initial_message:
         await channel.send(f"**Initial details from {interaction.user.name}:**\n{initial_message}")
-    Logger.info(f"🎫 [TicketSystem] Ticket #{ticket_num} created by {interaction.user}.")
+    logger.info(f"Ticket #{ticket_num} created by {interaction.user}.")
 
 
 # === Select for assignment ===
@@ -426,7 +428,7 @@ class AssignSelect(discord.ui.Select):
             await interaction.message.delete()
         except Exception:
             pass
-        Logger.info(f"🎫 [TicketSystem] Ticket in {interaction.channel} assigned to {user_id}.")
+        logger.info(f"Ticket in {interaction.channel} assigned to {user_id}.")
 
 
 # === View for assignment ===
@@ -462,13 +464,13 @@ async def update_embed_and_disable_buttons(interaction: discord.Interaction) -> 
             msg = await interaction.channel.fetch_message(ticket["embed_message_id"])
             await msg.edit(embed=embed, view=view)
         except discord.NotFound:
-            Logger.error(f"Embed message for ticket {ticket['ticket_num']} not found.")
+            logger.error(f"Embed message for ticket {ticket['ticket_num']} not found.")
 
 
 # === Helper function to disable buttons for closed tickets ===
 async def disable_buttons_for_closed_ticket(channel: discord.TextChannel, ticket: Dict[str, Any]) -> None:
     if not ticket.get("embed_message_id"):
-        Logger.error(f"No embed_message_id for ticket {ticket['ticket_num']}")
+        logger.error(f"No embed_message_id for ticket {ticket['ticket_num']}")
         return
     embed = create_ticket_embed(ticket, channel.guild.me)
     view = TicketControlView()
@@ -479,9 +481,9 @@ async def disable_buttons_for_closed_ticket(channel: discord.TextChannel, ticket
         try:
             msg = await channel.fetch_message(ticket["embed_message_id"])
             await msg.edit(embed=embed, view=view)
-            Logger.info(f"🎫 [TicketSystem] Embed for ticket {ticket['ticket_num']} updated.")
+            logger.info(f"Embed for ticket {ticket['ticket_num']} updated.")
         except Exception as e:
-            Logger.error(f"Error updating embed for ticket {ticket['ticket_num']}: {e}")
+            logger.error(f"Error updating embed for ticket {ticket['ticket_num']}: {e}")
 
 
 # === Asynchronous function for ticket closing ===
@@ -532,7 +534,7 @@ async def close_ticket_async(
             assigned_name,
         )
     else:
-        Logger.warning("No transcript recipient email configured (SUPPORT_EMAIL).")
+        logger.warning("No transcript recipient email configured (SUPPORT_EMAIL).")
 
     # Create transcript embed for transcript channel
     embed = discord.Embed(
@@ -569,11 +571,11 @@ async def close_ticket_async(
     if transcript_channel:
         try:
             await transcript_channel.send(embed=embed)
-            Logger.info(f"🎫 [TicketSystem] Transcript for ticket #{ticket['ticket_num']} posted to transcript channel.")
+            logger.info(f"Transcript for ticket #{ticket['ticket_num']} posted to transcript channel.")
         except Exception as e:
-            Logger.error(f"Error posting transcript to transcript channel: {e}")
+            logger.error(f"Error posting transcript to transcript channel: {e}")
     else:
-        Logger.error(f"Transcript channel with ID {TRANSCRIPT_CHANNEL_ID} not found.")
+        logger.error(f"Transcript channel with ID {TRANSCRIPT_CHANNEL_ID} not found.")
 
     # Send closing message to creator separately (check for None AND empty string)
     if creator and close_message and close_message.strip():
@@ -585,11 +587,11 @@ async def close_ticket_async(
             )
             set_pink_footer(close_embed, bot=bot.user)
             await creator.send(embed=close_embed)
-            Logger.info(f"🎫 [TicketSystem] Closing message sent to creator {creator.name}")
+            logger.info(f"Closing message sent to creator {creator.name}")
         except discord.Forbidden:
-            Logger.warning(f"Could not send closing message to creator {creator.name} (DMs disabled).")
+            logger.warning(f"Could not send closing message to creator {creator.name} (DMs disabled).")
         except Exception as e:
-            Logger.error(f"Error sending closing message to creator {creator.name}: {e}")
+            logger.error(f"Error sending closing message to creator {creator.name}: {e}")
 
     # Update ticket status
     ticket["status"] = "Closed"
@@ -599,7 +601,7 @@ async def close_ticket_async(
     await disable_buttons_for_closed_ticket(channel, ticket)
 
     # Log ticket closed (green)
-    Logger.info("🎫 [TicketSystem] \033[92mTicket closed.\033[0m")
+    logger.info("\033[92mTicket closed.\033[0m")
 
 
 # === Modal for optional close message ===
@@ -642,7 +644,7 @@ async def close_ticket_with_message(
     asyncio.create_task(
         close_ticket_async(interaction.client, interaction.channel, ticket, followup, msg, close_message)
     )
-    Logger.info(f"🎫 [TicketSystem] Ticket closing started for {interaction.channel}.")
+    logger.info(f"Ticket closing started for {interaction.channel}.")
 
 
 # === View with ticket buttons ===
@@ -660,7 +662,7 @@ class TicketControlView(discord.ui.View):
         await update_ticket(interaction.channel.id, {"claimed_by": interaction.user.id})
         await update_embed_and_disable_buttons(interaction)
         await interaction.response.send_message(f"{interaction.user.mention} has claimed the ticket.", ephemeral=False)
-        Logger.info(f"🎫 [TicketSystem] Ticket in {interaction.channel} claimed by {interaction.user}.")
+        logger.info(f"Ticket in {interaction.channel} claimed by {interaction.user}.")
 
     @discord.ui.button(label="Assign", style=discord.ButtonStyle.gray, emoji="📋")
     async def assign(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -731,9 +733,9 @@ class TicketControlView(discord.ui.View):
                     add_reactions=True,
                     reason=f"Ticket #{ticket['ticket_num']} reopened",
                 )
-                Logger.info(f"🎫 [TicketSystem] Restored send permissions for creator {creator.name} in reopened ticket.")
+                logger.info(f"Restored send permissions for creator {creator.name} in reopened ticket.")
             except Exception as e:
-                Logger.error(f"Error restoring permissions for creator: {e}")
+                logger.error(f"Error restoring permissions for creator: {e}")
 
         # Reopen: Set status to Open, unarchive, increase reopen_count
         await update_ticket(
@@ -749,7 +751,7 @@ class TicketControlView(discord.ui.View):
         await update_embed_and_disable_buttons(interaction)
         await update_ticket(interaction.channel.id, {"status": "Open"})
         await interaction.response.send_message(f"{interaction.user.mention} has reopened the ticket.", ephemeral=False)
-        Logger.info(f"🎫 [TicketSystem] Ticket #{ticket['ticket_num']} reopened by {interaction.user}.")
+        logger.info(f"Ticket #{ticket['ticket_num']} reopened by {interaction.user}.")
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def delete(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -764,15 +766,15 @@ class TicketControlView(discord.ui.View):
         # Delete the channel
         try:
             await interaction.channel.delete()
-            Logger.info(f"🎫 [TicketSystem] Ticket channel {interaction.channel.name} deleted by {interaction.user}.")
+            logger.info(f"Ticket channel {interaction.channel.name} deleted by {interaction.user}.")
         except Exception as e:
-            Logger.error(f"Error deleting channel {interaction.channel.name}: {e}")
+            logger.error(f"Error deleting channel {interaction.channel.name}: {e}")
             await interaction.followup.send("Error deleting the ticket channel.", ephemeral=True)
             return
 
         # Remove from database
         await delete_ticket(interaction.channel.id)
-        Logger.info(f"Ticket data for channel {interaction.channel.id} removed from database.")
+        logger.info(f"Ticket data for channel {interaction.channel.id} removed from database.")
 
 
 # === Cog definition ===
@@ -819,7 +821,7 @@ class TicketSystem(commands.Cog):
     # On ready: Restore views for open and closed tickets and start cleanup
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        Logger.info("🎫 [TicketSystem] TicketSystem Cog ready. Restoring views for open and closed tickets...")
+        logger.info("TicketSystem Cog ready. Restoring views for open and closed tickets...")
         tickets = await load_tickets()
         for ticket in tickets:
             if ticket["status"] in ["Open", "Closed"]:
@@ -843,10 +845,10 @@ class TicketSystem(commands.Cog):
                                 elif item.label == "Reopen" and ticket["status"] == "Open":
                                     item.disabled = True
                         await msg.edit(embed=embed, view=view)
-                        Logger.info(f"🎫 [TicketSystem] View for ticket #{ticket['ticket_num']} restored.")
+                        logger.info(f"View for ticket #{ticket['ticket_num']} restored.")
                     await asyncio.sleep(6)  # Further increased sleep to avoid rate limits on server
                 except Exception as e:
-                    Logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
+                    logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
         # Start cleanup task
         self.bot.loop.create_task(self.cleanup_old_tickets())
 
@@ -854,7 +856,7 @@ class TicketSystem(commands.Cog):
     async def cleanup_old_tickets(self) -> None:
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            Logger.info("🎫 [TicketSystem] Checking old tickets for deletion...")
+            logger.info("Checking old tickets for deletion...")
             tickets = await load_tickets()
             now = datetime.now()
             to_delete = []
@@ -877,28 +879,28 @@ class TicketSystem(commands.Cog):
                                 channel = await guild.fetch_channel(ticket["channel_id"])
                             except discord.NotFound:
                                 # Channel already deleted
-                                Logger.info(
+                                logger.info(
                                     f"Channel for ticket #{ticket['ticket_num']} already deleted. Removing from database."
                                 )
                                 channel_deleted = True
                             except discord.Forbidden:
-                                Logger.error(f"No permission to access channel for ticket #{ticket['ticket_num']}.")
+                                logger.error(f"No permission to access channel for ticket #{ticket['ticket_num']}.")
                                 channel_deleted = True  # Treat as deleted to remove from database
 
                     if channel:
                         try:
                             await channel.delete()
-                            Logger.info(f"Old ticket #{ticket['ticket_num']} channel deleted.")
+                            logger.info(f"Old ticket #{ticket['ticket_num']} channel deleted.")
                             channel_deleted = True
                         except discord.NotFound:
                             # Channel was deleted between fetch and delete
-                            Logger.info(f"Channel for ticket #{ticket['ticket_num']} already deleted.")
+                            logger.info(f"Channel for ticket #{ticket['ticket_num']} already deleted.")
                             channel_deleted = True
                         except discord.Forbidden:
-                            Logger.error(f"No permission to delete channel for ticket #{ticket['ticket_num']}.")
+                            logger.error(f"No permission to delete channel for ticket #{ticket['ticket_num']}.")
                             # Don't mark as deleted, will retry next time
                     elif not channel_deleted:
-                        Logger.warning(
+                        logger.warning(
                             f"Channel for ticket #{ticket['ticket_num']} not found (may have been manually deleted)."
                         )
                         channel_deleted = True  # Remove from database anyway
@@ -906,14 +908,14 @@ class TicketSystem(commands.Cog):
                     # Only remove from database if channel was successfully deleted or confirmed not to exist
                     if channel_deleted:
                         await delete_ticket(ticket["channel_id"])
-                        Logger.info(f"Ticket #{ticket['ticket_num']} removed from database.")
+                        logger.info(f"Ticket #{ticket['ticket_num']} removed from database.")
 
                 except discord.NotFound:
                     # Channel doesn't exist, remove from database
-                    Logger.info(f"Channel for ticket #{ticket['ticket_num']} not found. Removing from database.")
+                    logger.info(f"Channel for ticket #{ticket['ticket_num']} not found. Removing from database.")
                     await delete_ticket(ticket["channel_id"])
                 except Exception as e:
-                    Logger.error(f"Unexpected error deleting ticket #{ticket['ticket_num']}: {e}")
+                    logger.error(f"Unexpected error deleting ticket #{ticket['ticket_num']}: {e}")
                     # Don't remove from database on unexpected errors, will retry next time
             await asyncio.sleep(86400)  # Wait 24 hours
 

@@ -35,7 +35,7 @@ class Highlighter(RegexHighlighter):
     ]
 
 
-# 🌱 Custom formatter with emojis (retained from old logger)
+# 🌱 Custom formatter with emojis and cog prefixes (retained from old logger)
 class EmojiRichFormatter(logging.Formatter):
     def __init__(self):
         super().__init__(datefmt="[%H:%M:%S]")
@@ -62,7 +62,31 @@ class EmojiRichFormatter(logging.Formatter):
             else "CRITICAL"
         )
         time_str = self.formatTime(record, self.datefmt)
-        return f"{time_str} {emoji}  {level:<7} │ {record.getMessage()}"
+
+        # Add cog prefix based on logger name
+        prefix = self.get_cog_prefix(record.name)
+        message = f"{record.getMessage()}"
+        if prefix:
+            message = f"{prefix} {message}"
+
+        return f"{time_str} {emoji}  {level:<7} │ {message}"
+
+    def get_cog_prefix(self, name):
+        # Extract cog name from logger name (e.g., "Cogs.RocketLeague" -> "RocketLeague")
+        parts = name.split(".")
+        if len(parts) >= 2 and parts[-2] == "Cogs":
+            cog_name = parts[-1]
+            prefixes = {
+                "Utility": "🔧 [Utility]",
+                "Preferences": "⚙️ [Preferences]",
+                "TicketSystem": "🎫 [TicketSystem]",
+                "TodoList": "✅ [TodoList]",
+                "Welcome": "👋 [Welcome]",
+                "Presence": "👤 [Presence]",
+                "RocketLeague": "🚀 [RocketLeague]",
+            }
+            return prefixes.get(cog_name, "")
+        return ""
 
 
 # 🌱 Initialize and define logging

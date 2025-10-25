@@ -4,7 +4,9 @@ from discord import app_commands
 from typing import Any
 from Config import PINK, CHANGELOG_ROLE_ID, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
-from Utils.Logger import Logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # === Cog definition ===
@@ -93,7 +95,7 @@ class ToggleChangelogButton(discord.ui.Button):
             await member.add_roles(role)
             status = "enabled"
         await interaction.response.send_message(f"Changelog notifications {status}.", ephemeral=True)
-        Logger.info(f"⚙️ [Preferences] User {interaction.user} toggled changelog role to {status}.")
+        logger.info(f"User {interaction.user} toggled changelog role to {status}.")
 
         # Note: Since the message is ephemeral, we can't edit it. The status is shown in the button label and embed initially.
 

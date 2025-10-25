@@ -9,7 +9,9 @@ import discord
 from Config import PresenceUpdateInterval, PROD_MODE
 
 # 📥 Custom modules
-from Utils.Logger import Logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Presence(commands.Cog):
@@ -51,9 +53,9 @@ class Presence(commands.Cog):
             # Set presence
             activity = discord.Game(name=message)
             await self.bot.change_presence(activity=activity, status=discord.Status.online)
-            Logger.info(f"👤 [Presence] Presence updated: {message}")
+            logger.info(f"Presence updated: {message}")
         except Exception as e:
-            Logger.error(f"Error updating presence: {e}")
+            logger.error(f"Error updating presence: {e}")
 
     @update_presence.before_loop
     async def before_update_presence(self):
