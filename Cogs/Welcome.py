@@ -16,7 +16,9 @@ from Config import (
     ACTIVE_RULES_VIEWS_FILE,
 )
 from Utils.EmbedUtils import set_pink_footer
-from Utils.Logger import Logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Polished rules text shown to new members
 RULES_TEXT = (
@@ -181,17 +183,17 @@ class AcceptRulesButton(discord.ui.Button):
                 if member.id not in self.cog.sent_messages:
                     self.cog.sent_messages[member.id] = []
                 self.cog.sent_messages[member.id].extend([mention_msg, embed_msg])
-                Logger.info(f"👋 [Welcome] Sent polished welcome embed for {member} in {welcome_channel}")
+                logger.info(f"Sent polished welcome embed for {member} in {welcome_channel}")
                 channel_link = f"https://discord.com/channels/{guild.id}/{welcome_channel.id}"
                 response_text = (
                     f"You accepted the rules and are now unlocked! 🎉\n"
                     f"Check out your welcome card: {welcome_channel.mention} or [Click here]({channel_link})"
                 )
             except Exception as e:
-                Logger.error(f"Error sending welcome embed: {e}")
+                logger.error(f"Error sending welcome embed: {e}")
                 response_text = "You accepted the rules and are now unlocked! 🎉 (But I couldn't send a welcome card.)"
         else:
-            Logger.warning(f"Public welcome channel not found (ID: {WELCOME_PUBLIC_CHANNEL_ID})")
+            logger.warning(f"Public welcome channel not found (ID: {WELCOME_PUBLIC_CHANNEL_ID})")
             response_text = "You accepted the rules and are now unlocked! 🎉"
         await interaction.followup.send(response_text, ephemeral=True)
         # Stop the view to prevent timeout
@@ -248,22 +250,18 @@ class AcceptRulesView(discord.ui.View):
         Kicks the user if they haven't accepted the rules and are still in the server.
         Deletes the rules messages.
         """
-        Logger.info(
-            f"👋 [Welcome] Rules acceptance timed out for: {self.member.display_name} ({self.member.id})"
+        logger.info(
+            f"Rules acceptance timed out for: {self.member.display_name} ({self.member.id})"
         )  # Added logging for timeouts
         guild = self.member.guild
         if self.member in guild.members:
             try:
                 await self.member.kick(reason="Did not accept rules within 15 minutes")
-                Logger.info(
-                    f"👋 [Welcome] Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time"
-                )
+                logger.info(f"Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time")
             except Exception as e:
-                Logger.error(f"Failed to kick {self.member}: {e}")
+                logger.error(f"Failed to kick {self.member}: {e}")
         else:
-            Logger.info(
-                f"👋 [Welcome] {self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout"
-            )
+            logger.info(f"{self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout")
 
         # Always delete the rules messages
         if self.cog:
@@ -271,11 +269,11 @@ class AcceptRulesView(discord.ui.View):
             for msg in messages:
                 try:
                     await msg.delete()
-                    Logger.info(
-                        f"👋 [Welcome] Deleted rules message for {self.member.display_name} ({self.member.id}) (timeout/leave)"
+                    logger.info(
+                        f"Deleted rules message for {self.member.display_name} ({self.member.id}) (timeout/leave)"
                     )
                 except Exception as e:
-                    Logger.warning(
+                    logger.warning(
                         f"Could not delete rules message for {self.member.display_name} ({self.member.id}): {e}"
                     )
 
@@ -321,7 +319,7 @@ class WelcomeCardView(discord.ui.View):
             try:
                 await self.message.edit(view=self)
             except Exception as e:
-                Logger.error(f"Failed to disable welcome button: {e}")
+                logger.error(f"Failed to disable welcome button: {e}")
         # Remove from persistent data
         persistent_views_file = self.cog.persistent_views_file  # Use cog's attribute instead of self
         os.makedirs(os.path.dirname(persistent_views_file), exist_ok=True)
@@ -372,7 +370,7 @@ class WelcomeButton(discord.ui.Button):
         if member_id not in self.cog.sent_messages:
             self.cog.sent_messages[member_id] = []
         self.cog.sent_messages[member_id].append(reply_msg)
-        Logger.info(f"👋 [Welcome] {user} welcomed {self.parent_view.new_member} via button")
+        logger.info(f"{user} welcomed {self.parent_view.new_member} via button")
 
 
 class Welcome(commands.Cog):
@@ -408,7 +406,7 @@ class Welcome(commands.Cog):
         Event: Triggered when a new member joins the server.
         Sends rules embed and interactive view.
         """
-        Logger.info(f"👋 [Welcome] New member joined: {member.display_name} ({member.id})")  # Added logging for joins
+        logger.info(f"New member joined: {member.display_name} ({member.id})")  # Added logging for joins
         guild = member.guild
         rules_channel = guild.get_channel(WELCOME_RULES_CHANNEL_ID)
         if rules_channel:
@@ -463,10 +461,10 @@ class Welcome(commands.Cog):
                 await msg.delete()
                 deleted_count += 1
             except Exception as e:
-                Logger.warning(f"Could not delete rules message for {member}: {e}")
+                logger.warning(f"Could not delete rules message for {member}: {e}")
         if deleted_count > 0:
-            Logger.info(
-                f"👋 [Welcome] Deleted {deleted_count} rules message(s) for {member.display_name} ({member.id}) who left the server"
+            logger.info(
+                f"Deleted {deleted_count} rules message(s) for {member.display_name} ({member.id}) who left the server"
             )
 
         # Delete all sent welcome messages
@@ -477,10 +475,10 @@ class Welcome(commands.Cog):
                 await msg.delete()
                 deleted_welcome_count += 1
             except Exception as e:
-                Logger.error(f"Failed to delete welcome message for {member}: {e}")
+                logger.error(f"Failed to delete welcome message for {member}: {e}")
         if deleted_welcome_count > 0:
-            Logger.info(
-                f"👋 [Welcome] Deleted {deleted_welcome_count} welcome message(s) for {member.display_name} ({member.id}) who left the server"
+            logger.info(
+                f"Deleted {deleted_welcome_count} welcome message(s) for {member.display_name} ({member.id}) who left the server"
             )
 
         # New lines: Remove from active_rules_views_data
@@ -517,9 +515,9 @@ class Welcome(commands.Cog):
                     await asyncio.sleep(5)  # Increased sleep to avoid rate limits (adjust as needed)
                 except discord.NotFound:
                     # Message no longer exists, skip and remove from data
-                    Logger.warning(f"Message {data['message_id']} not found, removing from persistent views data.")
+                    logger.warning(f"Message {data['message_id']} not found, removing from persistent views data.")
                 except Exception as e:
-                    Logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
+                    logger.error(f"Failed to restore view for message {data['message_id']}: {e}")
                     cleaned_persistent_views_data.append(data)  # Keep on other errors
             else:
                 cleaned_persistent_views_data.append(data)  # Keep if channel not found
@@ -527,7 +525,7 @@ class Welcome(commands.Cog):
         self.persistent_views_data = cleaned_persistent_views_data
         with open(self.persistent_views_file, "w") as f:
             json.dump(self.persistent_views_data, f)
-        Logger.info(f"👋 [Welcome] Restored {restored_count} persistent welcome views.")
+        logger.info(f"Restored {restored_count} persistent welcome views.")
 
         # Restore active_rules_views
         restored_rules_count = 0  # Separate counter
@@ -562,11 +560,11 @@ class Welcome(commands.Cog):
                     await asyncio.sleep(5)  # Sleep to avoid rate limits
                 except discord.NotFound:
                     # Message no longer exists, skip and remove from data
-                    Logger.warning(
+                    logger.warning(
                         f"Message {data['message_id']} or mention message not found, removing from active rules views data."
                     )
                 except Exception as e:
-                    Logger.error(f"Failed to restore rules view for message {data['message_id']}: {e}")
+                    logger.error(f"Failed to restore rules view for message {data['message_id']}: {e}")
                     cleaned_active_rules_views_data.append(data)  # Keep on other errors
             else:
                 cleaned_active_rules_views_data.append(data)  # Keep if channel not found
@@ -574,7 +572,7 @@ class Welcome(commands.Cog):
         self.active_rules_views_data = cleaned_active_rules_views_data
         with open(self.active_rules_views_file, "w") as f:
             json.dump(self.active_rules_views_data, f)
-        Logger.info(f"👋 [Welcome] Restored {restored_rules_count} active rules views.")
+        logger.info(f"Restored {restored_rules_count} active rules views.")
 
 
 async def setup(bot: commands.Bot) -> None:

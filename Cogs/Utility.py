@@ -12,9 +12,12 @@ from Config import (
     MODERATOR_ROLE_ID,
 )
 from Utils.EmbedUtils import set_pink_footer
-from Utils.Logger import log_clear, Logger
+from Utils.Logger import log_clear
 from discord import app_commands
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Utility(commands.Cog):
@@ -245,7 +248,7 @@ class Utility(commands.Cog):
             len(interaction.client.guilds),
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
-        Logger.info(f"🔧 [Utility] Slash command /status used by {interaction.user} in {interaction.guild}")
+        logger.info(f"Slash command /status used by {interaction.user} in {interaction.guild}")
 
     # !clear (Prefix) - Only prefix, no slash
     @commands.command(name="clear")
@@ -394,7 +397,7 @@ class Utility(commands.Cog):
 
                 # Send embed with view
                 await interaction.response.send_message(embed=embed, view=view)
-                Logger.info(f"🔧 [Utility] Interactive embed created by {interaction.user}")
+                logger.info(f"Interactive embed created by {interaction.user}")
 
             except Exception as e:
                 import traceback
@@ -402,7 +405,7 @@ class Utility(commands.Cog):
                 error_trace = traceback.format_exc()
                 error_msg = f"❌ Error creating embed: {e}\n\n```\n{error_trace[:1500]}\n```"
                 await interaction.response.send_message(error_msg, ephemeral=True)
-                Logger.error(f"Error in embed builder: {e}\n{error_trace}")
+                logger.error(f"Error in embed builder: {e}\n{error_trace}")
 
     # !say (Prefix) - Only prefix, no slash
     @commands.command(name="say")
@@ -507,7 +510,7 @@ class Utility(commands.Cog):
                 else:
                     await ctx.send(content=data.get("content", ""), view=view)
 
-                Logger.info(f"🔧 [Utility] JSON message sent by {ctx.author}")
+                logger.info(f"JSON message sent by {ctx.author}")
 
             except json.JSONDecodeError as e:
                 error_embed = discord.Embed(
@@ -515,26 +518,26 @@ class Utility(commands.Cog):
                     color=discord.Color.red(),
                 )
                 await ctx.send(embed=error_embed, delete_after=10)
-                Logger.error(f"JSON decode error: {e}")
+                logger.error(f"JSON decode error: {e}")
             except Exception as e:
                 error_embed = discord.Embed(
                     description=f"❌ Error creating message: {e}",
                     color=discord.Color.red(),
                 )
                 await ctx.send(embed=error_embed, delete_after=10)
-                Logger.error(f"Error in !say: {e}")
+                logger.error(f"Error in !say: {e}")
         # Simple Text Embed
         elif message.startswith("--embed "):
             message = message[8:].strip()
             embed = self.create_say_embed(message, self.bot.user)
             await ctx.send(embed=embed)
-            Logger.info(f"🔧 [Utility] Simple embed sent by {ctx.author}")
+            logger.info(f"Simple embed sent by {ctx.author}")
         # Plain Text
         else:
             await ctx.send(message)
-            Logger.info(f"🔧 [Utility] Plain message sent by {ctx.author}")
+            logger.info(f"Plain message sent by {ctx.author}")
 
-        Logger.info(f"🔧 [Utility] Prefix command !say used by {ctx.author}")
+        logger.info(f"Prefix command !say used by {ctx.author}")
 
 
 async def setup(bot: commands.Bot) -> None:
