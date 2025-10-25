@@ -32,7 +32,7 @@ async def load_todo_data() -> Dict[str, Any]:
     """Load to-do list data from JSON file."""
     if not os.path.exists(TODO_DATA_FILE):
         logger.warning(f"To-do data file not found at {TODO_DATA_FILE}. Starting fresh.")
-        return {"channel_id": None, "message_id": None, "items": []}
+        return {"channel_id": None, "message_ids": [], "items": []}
     try:
         with open(TODO_DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -43,10 +43,20 @@ async def load_todo_data() -> Dict[str, Any]:
                 item["author_id"] = None
                 item["author_name"] = "Unknown"
 
+        # Migrate old single message_id to message_ids list
+        if "message_id" in data and data["message_id"] is not None:
+            if "message_ids" not in data or not data["message_ids"]:
+                data["message_ids"] = [data["message_id"]]
+            del data["message_id"]
+
+        # Ensure message_ids is a list
+        if "message_ids" not in data:
+            data["message_ids"] = []
+
         return data
     except Exception as e:
         logger.error(f"Error loading to-do data: {e}")
-        return {"channel_id": None, "message_id": None, "items": []}
+        return {"channel_id": None, "message_ids": [], "items": []}
 
 
 def save_todo_data(data: Dict[str, Any]) -> None:
@@ -119,6 +129,7 @@ class TodoConfirmView(discord.ui.View):
         action: str,
         item_index: Optional[int],
         interaction: discord.Interaction,
+        view_message: Optional[discord.Message] = None,
     ) -> None:
         super().__init__(timeout=60)
         self.bot = bot
@@ -127,6 +138,7 @@ class TodoConfirmView(discord.ui.View):
         self.action = action
         self.item_index = item_index
         self.original_interaction = interaction
+        self.view_message = view_message
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -159,10 +171,16 @@ class TodoConfirmView(discord.ui.View):
 
         # Send confirmation
         await interaction.response.send_message("✅ To-do item added successfully!", ephemeral=True, delete_after=3)
+        # Delete the view message (the original preview with buttons)
+        if self.view_message:
+            await self.view_message.delete()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_message("❌ Cancelled. Item was not added.", ephemeral=True, delete_after=3)
+        # Delete the view message (the original preview with buttons)
+        if self.view_message:
+            await self.view_message.delete()
 
 
 # === Modal for adding/editing to-do items ===
@@ -202,7 +220,11 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
         # Priority is pre-selected, but validate just in case
         priority = self.priority.value.lower().strip()
         if priority not in ["high", "medium", "low"]:
-            await interaction.response.send_message("❌ Invalid priority! This shouldn't happen.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ Invalid priority! This shouldn't happen.",
+                ephemeral=True,
+                delete_after=10,
+            )
             return
 
         # Defer response since AI processing takes time
@@ -233,14 +255,21 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
             )
             set_pink_footer(embed, bot=self.bot.user)
 
+            # Create the view first, send with the view, then set the message reference
             view = TodoConfirmView(self.bot, formatted_task, priority, self.action, self.item_index, interaction)
-            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            if view is None:
+                logger.error("Attempted to send preview message with view=None. This should never happen!")
+                await interaction.followup.send(
+                    "❌ Internal error: Could not create confirmation view.",
+                    ephemeral=True,
+                )
+                return
+            preview_msg = await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            view.view_message = preview_msg
 
         except Exception as e:
             logger.error(f"Error processing to-do item: {e}")
-            await interaction.followup.send(
-                "❌ Failed to format task with AI. Check logs.", ephemeral=True, delete_after=5
-            )
+            await interaction.followup.send("❌ Failed to format task with AI. Check logs.", ephemeral=True)
 
     async def format_task_with_ai(self, raw_text: str, priority: str) -> Dict[str, str]:
         """Use OpenAI to format the task with emojis and proper structure."""
@@ -288,69 +317,122 @@ Rules:
 
     async def update_todo_message(self, interaction: discord.Interaction, data: Dict[str, Any]) -> None:
         """Update or create the to-do list message in the channel."""
-        embed = self.create_todo_embed(data["items"])
+        items = data["items"]
+        total_items = len(items)
 
-        # Delete old message if exists
-        if data.get("message_id") and data.get("channel_id"):
+        # Delete old messages if exist
+        if data.get("message_ids") and data.get("channel_id"):
             try:
                 old_channel = self.bot.get_channel(data["channel_id"])
                 if old_channel:
-                    old_message = await old_channel.fetch_message(data["message_id"])
-                    await old_message.delete()
-                    logger.info(f"Deleted old to-do message {data['message_id']}")
+                    for message_id in data["message_ids"]:
+                        try:
+                            old_message = await old_channel.fetch_message(message_id)
+                            await old_message.delete()
+                            logger.info(f"Deleted old to-do message {message_id}")
+                        except Exception as e:
+                            logger.warning(f"Could not delete old to-do message {message_id}: {e}")
             except Exception as e:
-                logger.warning(f"Could not delete old to-do message: {e}")
+                logger.warning(f"Could not delete old to-do messages: {e}")
 
-        # Send new message silently
-        new_message = await interaction.channel.send(embed=embed)
+        # Send messages with items, 12 per message
+        max_per_embed = 12
+        new_message_ids = []
+        for i in range(0, total_items, max_per_embed):
+            end = min(i + max_per_embed, total_items)
+            embed_items = items[i:end]
+            is_first = i == 0
+            embed = self.create_todo_embed(
+                embed_items,
+                is_first=is_first,
+                total_items=total_items if is_first else None,
+                page_start=i + 1 if not is_first else None,
+                page_end=end if not is_first else None,
+            )
+            new_message = await interaction.channel.send(embed=embed)
+            new_message_ids.append(new_message.id)
 
         # Update data with new message info
         data["channel_id"] = interaction.channel.id
-        data["message_id"] = new_message.id
+        data["message_ids"] = new_message_ids
         save_todo_data(data)
 
-        logger.info(f"Posted new to-do message {new_message.id} in {interaction.channel}")
+        logger.info(f"Posted to-do messages in {interaction.channel}, messages {new_message_ids}")
 
-    def create_todo_embed(self, items: List[Dict[str, Any]]) -> discord.Embed:
+    def create_todo_embed(
+        self,
+        items: List[Dict[str, Any]],
+        is_first: bool = True,
+        total_items: Optional[int] = None,
+        page_start: Optional[int] = None,
+        page_end: Optional[int] = None,
+    ) -> discord.Embed:
         """Create a formatted to-do list embed."""
-        embed = discord.Embed(title="📋 To-Do List", description="", color=PINK)
+        embed = discord.Embed(color=PINK)
+
+        if not is_first and page_start and page_end:
+            embed.title = f"📋 To-Do List (Continued - Items {page_start}-{page_end})"
+        else:
+            embed.title = "📋 To-Do List"
 
         # Group items by priority
         high_priority = [item for item in items if item["priority"] == "high"]
         medium_priority = [item for item in items if item["priority"] == "medium"]
         low_priority = [item for item in items if item["priority"] == "low"]
 
+        # Build description
+        description_parts = []
+
         # Add high priority items
         if high_priority:
-            embed.description += f"\n{PRIORITY_EMOJIS['high']} **High Priority**\n"
+            description_parts.append(f"\n{PRIORITY_EMOJIS['high']} **High Priority**")
             for i, item in enumerate(high_priority):
-                embed.description += f"{item['title']}\n"
+                description_parts.append(f"{item['title']}")
                 if item.get("description"):
-                    embed.description += f"{item['description']}\n"
-                embed.description += f"👤 *Added by {item.get('author_name', 'Unknown')}*\n\n"
+                    description_parts.append(f"{item['description']}")
+                description_parts.append(f"👤 *Added by {item.get('author_name', 'Unknown')}*")
+                description_parts.append("")  # Empty line
 
         # Add medium priority items
         if medium_priority:
-            embed.description += f"\n{PRIORITY_EMOJIS['medium']} **Medium Priority**\n"
+            description_parts.append(f"\n{PRIORITY_EMOJIS['medium']} **Medium Priority**")
             for i, item in enumerate(medium_priority):
-                embed.description += f"{item['title']}\n"
+                description_parts.append(f"{item['title']}")
                 if item.get("description"):
-                    embed.description += f"{item['description']}\n"
-                embed.description += f"👤 *Added by {item.get('author_name', 'Unknown')}*\n\n"
+                    description_parts.append(f"{item['description']}")
+                description_parts.append(f"👤 *Added by {item.get('author_name', 'Unknown')}*")
+                description_parts.append("")  # Empty line
 
         # Add low priority items
         if low_priority:
-            embed.description += f"\n{PRIORITY_EMOJIS['low']} **Low Priority**\n"
+            description_parts.append(f"\n{PRIORITY_EMOJIS['low']} **Low Priority**")
             for i, item in enumerate(low_priority):
-                embed.description += f"{item['title']}\n"
+                description_parts.append(f"{item['title']}")
                 if item.get("description"):
-                    embed.description += f"{item['description']}\n"
-                embed.description += f"👤 *Added by {item.get('author_name', 'Unknown')}*\n\n"
+                    description_parts.append(f"{item['description']}")
+                description_parts.append(f"👤 *Added by {item.get('author_name', 'Unknown')}*")
+                description_parts.append("")  # Empty line
 
         if not items:
-            embed.description = "No items yet! Use `/todo-update` to add one."
+            description_parts.append("No items yet! Use `/todo-update` to add one.")
 
-        embed.description += "\n🚀 Stay tuned for updates!"
+        description_parts.append("\n🚀 Stay tuned for updates!")
+
+        # Join
+        full_description = "\n".join(description_parts)
+
+        # For first embed, check if needs truncation
+        if is_first and total_items and total_items > len(items):
+            shown = len(items)
+            total = total_items
+            embed.description = (
+                full_description + "\n\n⚠️ **List truncated due to length.**\n"
+                f"Showing first {shown} items.\n"
+                f"Total items: {total}"
+            )
+        else:
+            embed.description = full_description
+
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 
@@ -365,7 +447,11 @@ class TodoManageView(discord.ui.View):
     async def add_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # Check if user is mod or admin
         if not is_mod_or_admin(interaction.user):
-            await interaction.response.send_message("❌ You do not have permission to use this.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
             return
 
         # Send priority selection view
@@ -376,19 +462,23 @@ class TodoManageView(discord.ui.View):
         )
         set_pink_footer(embed, bot=self.bot.user)
         view = PrioritySelectView(self.bot, action="add")
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
 
     @discord.ui.button(label="Edit Item", style=discord.ButtonStyle.primary, emoji="✏️")
     async def edit_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # Check if user is mod or admin
         if not is_mod_or_admin(interaction.user):
-            await interaction.response.send_message("❌ You do not have permission to use this.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
             return
 
         # Load data
         data = await load_todo_data()
         if not data["items"]:
-            await interaction.response.send_message("❌ No items to edit!", ephemeral=True)
+            await interaction.response.send_message("❌ No items to edit!", ephemeral=True, delete_after=10)
             return
 
         # Create view with select
@@ -397,19 +487,23 @@ class TodoManageView(discord.ui.View):
         embed = discord.Embed(title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK)
         set_pink_footer(embed, bot=self.bot.user)
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
 
     @discord.ui.button(label="Remove Item", style=discord.ButtonStyle.red, emoji="🗑️")
     async def remove_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # Check if user is mod or admin
         if not is_mod_or_admin(interaction.user):
-            await interaction.response.send_message("❌ You do not have permission to use this.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
             return
 
         # Load data
         data = await load_todo_data()
         if not data["items"]:
-            await interaction.response.send_message("❌ No items to remove!", ephemeral=True)
+            await interaction.response.send_message("❌ No items to remove!", ephemeral=True, delete_after=10)
             return
 
         # Create view with select
@@ -417,20 +511,28 @@ class TodoManageView(discord.ui.View):
 
         # Check if select was created
         if not view.select:
-            await interaction.response.send_message("❌ Failed to create removal options. Try again.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ Failed to create removal options. Try again.",
+                ephemeral=True,
+                delete_after=10,
+            )
             return
 
         embed = discord.Embed(
             title="🗑️ Remove To-Do Item", description="Select the item you want to remove:", color=discord.Color.red()
         )
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
 
     @discord.ui.button(label="Clear All", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def clear_all(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # Check if user is mod or admin
         if not is_mod_or_admin(interaction.user):
-            await interaction.response.send_message("❌ You do not have permission to use this.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
             return
 
         # Defer immediately to prevent timeout
@@ -461,7 +563,7 @@ class TodoManageView(discord.ui.View):
                 pass
         except Exception as e:
             logger.error(f"Error clearing to-do items: {e}")
-            await interaction.followup.send(f"❌ Error clearing items: {str(e)}", ephemeral=True, delete_after=5)
+            await interaction.followup.send(f"❌ Error clearing items: {str(e)}", ephemeral=True)
 
 
 # === Select view for editing specific items ===
@@ -521,7 +623,7 @@ class TodoEditSelectView(discord.ui.View):
                 current_priority=current_priority,
                 current_text=current_text,
             )
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
 
 
 # === Select view for removing specific items ===
@@ -613,7 +715,11 @@ class TodoList(commands.Cog):
             if hasattr(ctx_or_interaction, "send"):
                 await ctx_or_interaction.send(message, delete_after=5)
             else:
-                await ctx_or_interaction.response.send_message(message, ephemeral=True)
+                await ctx_or_interaction.response.send_message(
+                    message,
+                    ephemeral=True,
+                    delete_after=10,
+                )
             return
 
         # Check if command is used in the correct channel
@@ -623,7 +729,7 @@ class TodoList(commands.Cog):
             if hasattr(ctx_or_interaction, "send"):
                 await ctx_or_interaction.send(message, delete_after=5)
             else:
-                await ctx_or_interaction.response.send_message(message, ephemeral=True)
+                await ctx_or_interaction.response.send_message(message, ephemeral=True, delete_after=10)
             return
 
         # Show management view
@@ -640,7 +746,7 @@ class TodoList(commands.Cog):
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed, view=view)
         else:
-            await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
         logger.info(f"todo-update used by {user} in {ctx_or_interaction.guild}")
 
     # 🧩 Shared handler for todo-show logic
@@ -657,7 +763,7 @@ class TodoList(commands.Cog):
             return
 
         modal = TodoModal(self.bot)
-        embed = modal.create_todo_embed(data["items"])
+        embed = modal.create_todo_embed(data["items"], is_first=True, total_items=len(data["items"]))
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed)
         else:
