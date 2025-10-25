@@ -51,7 +51,7 @@ class Presence(commands.Cog):
             # Set presence
             activity = discord.Game(name=message)
             await self.bot.change_presence(activity=activity, status=discord.Status.online)
-            Logger.info(f"🎮 Presence updated: {message}")
+            Logger.info(f"👤 [Presence] Presence updated: {message}")
         except Exception as e:
             Logger.error(f"Error updating presence: {e}")
 

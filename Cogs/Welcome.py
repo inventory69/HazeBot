@@ -181,7 +181,7 @@ class AcceptRulesButton(discord.ui.Button):
                 if member.id not in self.cog.sent_messages:
                     self.cog.sent_messages[member.id] = []
                 self.cog.sent_messages[member.id].extend([mention_msg, embed_msg])
-                Logger.info(f"Sent polished welcome embed for {member} in {welcome_channel}")
+                Logger.info(f"👋 [Welcome] Sent polished welcome embed for {member} in {welcome_channel}")
                 channel_link = f"https://discord.com/channels/{guild.id}/{welcome_channel.id}"
                 response_text = (
                     f"You accepted the rules and are now unlocked! 🎉\n"
@@ -249,17 +249,21 @@ class AcceptRulesView(discord.ui.View):
         Deletes the rules messages.
         """
         Logger.info(
-            f"Rules acceptance timed out for: {self.member.display_name} ({self.member.id})"
+            f"👋 [Welcome] Rules acceptance timed out for: {self.member.display_name} ({self.member.id})"
         )  # Added logging for timeouts
         guild = self.member.guild
         if self.member in guild.members:
             try:
                 await self.member.kick(reason="Did not accept rules within 15 minutes")
-                Logger.info(f"Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time")
+                Logger.info(
+                    f"👋 [Welcome] Kicked {self.member.display_name} ({self.member.id}) for not accepting rules in time"
+                )
             except Exception as e:
                 Logger.error(f"Failed to kick {self.member}: {e}")
         else:
-            Logger.info(f"{self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout")
+            Logger.info(
+                f"👋 [Welcome] {self.member.display_name} ({self.member.id}) left the server before the 15-minute timeout"
+            )
 
         # Always delete the rules messages
         if self.cog:
@@ -268,7 +272,7 @@ class AcceptRulesView(discord.ui.View):
                 try:
                     await msg.delete()
                     Logger.info(
-                        f"Deleted rules message for {self.member.display_name} ({self.member.id}) (timeout/leave)"
+                        f"👋 [Welcome] Deleted rules message for {self.member.display_name} ({self.member.id}) (timeout/leave)"
                     )
                 except Exception as e:
                     Logger.warning(
@@ -368,7 +372,7 @@ class WelcomeButton(discord.ui.Button):
         if member_id not in self.cog.sent_messages:
             self.cog.sent_messages[member_id] = []
         self.cog.sent_messages[member_id].append(reply_msg)
-        Logger.info(f"{user} welcomed {self.parent_view.new_member} via button")
+        Logger.info(f"👋 [Welcome] {user} welcomed {self.parent_view.new_member} via button")
 
 
 class Welcome(commands.Cog):
@@ -404,7 +408,7 @@ class Welcome(commands.Cog):
         Event: Triggered when a new member joins the server.
         Sends rules embed and interactive view.
         """
-        Logger.info(f"New member joined: {member.display_name} ({member.id})")  # Added logging for joins
+        Logger.info(f"👋 [Welcome] New member joined: {member.display_name} ({member.id})")  # Added logging for joins
         guild = member.guild
         rules_channel = guild.get_channel(WELCOME_RULES_CHANNEL_ID)
         if rules_channel:
@@ -462,7 +466,7 @@ class Welcome(commands.Cog):
                 Logger.warning(f"Could not delete rules message for {member}: {e}")
         if deleted_count > 0:
             Logger.info(
-                f"Deleted {deleted_count} rules message(s) for {member.display_name} ({member.id}) who left the server"
+                f"👋 [Welcome] Deleted {deleted_count} rules message(s) for {member.display_name} ({member.id}) who left the server"
             )
 
         # Delete all sent welcome messages
@@ -476,7 +480,7 @@ class Welcome(commands.Cog):
                 Logger.error(f"Failed to delete welcome message for {member}: {e}")
         if deleted_welcome_count > 0:
             Logger.info(
-                f"Deleted {deleted_welcome_count} welcome message(s) for {member.display_name} ({member.id}) who left the server"
+                f"👋 [Welcome] Deleted {deleted_welcome_count} welcome message(s) for {member.display_name} ({member.id}) who left the server"
             )
 
         # New lines: Remove from active_rules_views_data
@@ -523,7 +527,7 @@ class Welcome(commands.Cog):
         self.persistent_views_data = cleaned_persistent_views_data
         with open(self.persistent_views_file, "w") as f:
             json.dump(self.persistent_views_data, f)
-        Logger.info(f"Restored {restored_count} persistent welcome views.")
+        Logger.info(f"👋 [Welcome] Restored {restored_count} persistent welcome views.")
 
         # Restore active_rules_views
         restored_rules_count = 0  # Separate counter
@@ -570,7 +574,7 @@ class Welcome(commands.Cog):
         self.active_rules_views_data = cleaned_active_rules_views_data
         with open(self.active_rules_views_file, "w") as f:
             json.dump(self.active_rules_views_data, f)
-        Logger.info(f"Restored {restored_rules_count} active rules views.")
+        Logger.info(f"👋 [Welcome] Restored {restored_rules_count} active rules views.")
 
 
 async def setup(bot: commands.Bot) -> None:

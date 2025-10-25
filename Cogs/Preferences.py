@@ -93,7 +93,7 @@ class ToggleChangelogButton(discord.ui.Button):
             await member.add_roles(role)
             status = "enabled"
         await interaction.response.send_message(f"Changelog notifications {status}.", ephemeral=True)
-        Logger.info(f"User {interaction.user} toggled changelog role to {status}.")
+        Logger.info(f"⚙️ [Preferences] User {interaction.user} toggled changelog role to {status}.")
 
         # Note: Since the message is ephemeral, we can't edit it. The status is shown in the button label and embed initially.
 

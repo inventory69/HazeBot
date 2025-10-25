@@ -128,6 +128,7 @@ class ConfirmLinkView(discord.ui.View):
             embed=None,
             view=None,
         )
+        Logger.info(f"🚀 [RocketLeague] Rocket League account linked by {interaction.user}")
         self.stop()
         await asyncio.sleep(5)
         await self.message.delete()
@@ -159,7 +160,7 @@ class RocketLeague(commands.Cog):
         Start the rank check task when the bot is ready.
         """
         self.check_ranks.start()
-        Logger.info("Rank check task started.")
+        Logger.info("🚀 [RocketLeague] Rank check task started.")
 
     def fetch_stats_sync(self, platform: str, username: str) -> Optional[Dict[str, Any]]:
         """
@@ -177,7 +178,6 @@ class RocketLeague(commands.Cog):
             },
         }
 
-        Logger.info(f"🔍 Fetching RL stats for {username} on {platform}: {url}")
         try:
             response = requests.post(self.flaresolverr_url, json=payload, timeout=60)
             if response.status_code != 200:
@@ -375,6 +375,9 @@ class RocketLeague(commands.Cog):
         channel = guild.get_channel(RL_CHANNEL_ID)
         if not channel:
             return
+        if not accounts:
+            Logger.info("🚀 [RocketLeague] No linked accounts, skipping rank check.")
+            return
         tier_order = [
             "Unranked",
             "Bronze I",
@@ -400,6 +403,7 @@ class RocketLeague(commands.Cog):
             "Grand Champion III",
             "Supersonic Legend",
         ]
+        Logger.info(f"🚀 [RocketLeague] Starting rank check for {len(accounts)} linked accounts.")
         for user_id, data in accounts.items():
             if not force:
                 last_fetched_str = data.get("last_fetched")
@@ -434,12 +438,15 @@ class RocketLeague(commands.Cog):
                             view = CongratsView(user)
                             embed_msg = await channel.send(embed=embed, view=view)
                             view.message = embed_msg
-                            Logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
+                            Logger.info(
+                                f"🚀 [RocketLeague] Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}"
+                            )
                 # Update ranks and last_fetched
                 data["ranks"] = new_ranks
                 data["icon_urls"] = new_icon_urls
                 data["last_fetched"] = now.isoformat()
                 save_rl_accounts(accounts)
+        Logger.info("🚀 [RocketLeague] Rank check completed.")
 
     @tasks.loop(hours=1)
     async def check_ranks(self) -> None:
@@ -471,6 +478,7 @@ class RocketLeague(commands.Cog):
         await ctx.send(
             f"✅ Successfully linked your Rocket League account to {stats['username']} on {platform.upper()}."
         )
+        Logger.info(f"🚀 [RocketLeague] Rocket League account linked by {ctx.author}")
 
     @app_commands.command(name="setrlaccount", description="Set your main Rocket League account")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
@@ -525,7 +533,7 @@ class RocketLeague(commands.Cog):
 
         embed = await self._create_rl_embed(stats, platform)
         await ctx.send(embed=embed)
-        Logger.info(f"Rocket League stats requested for {username} by {ctx.author}")
+        Logger.info(f"🚀 [RocketLeague] Rocket League stats requested for {username} by {ctx.author}")
 
     @app_commands.command(
         name="rlstats",
@@ -571,7 +579,36 @@ class RocketLeague(commands.Cog):
         msg2 = await ctx.send("✅ Rank check completed for all linked accounts.")
         await asyncio.sleep(5)
         await msg2.delete()
-        Logger.info(f"Admin manual rank check triggered by {ctx.author}")
+        Logger.info(f"🚀 [RocketLeague] Admin manual rank check triggered by {ctx.author}")
+
+    @commands.command(name="unlinkrlaccount")
+    async def unlinkrlaccount(self, ctx: commands.Context) -> None:
+        """
+        🚀 Unlink your Rocket League account.
+        Usage: !unlinkrlaccount
+        """
+        accounts = load_rl_accounts()
+        user_id = str(ctx.author.id)
+        if user_id not in accounts:
+            await ctx.send("❌ No Rocket League account linked.")
+            return
+        del accounts[user_id]
+        save_rl_accounts(accounts)
+        await ctx.send("✅ Successfully unlinked your Rocket League account.")
+        Logger.info(f"🚀 [RocketLeague] Rocket League account unlinked by {ctx.author}")
+
+    @app_commands.command(name="unlinkrlaccount", description="Unlink your Rocket League account")
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
+    async def unlinkrlaccount_slash(self, interaction: discord.Interaction) -> None:
+        accounts = load_rl_accounts()
+        user_id = str(interaction.user.id)
+        if user_id not in accounts:
+            await interaction.response.send_message("❌ No Rocket League account linked.", ephemeral=True)
+            return
+        del accounts[user_id]
+        save_rl_accounts(accounts)
+        await interaction.response.send_message("✅ Successfully unlinked your Rocket League account.", ephemeral=True)
+        Logger.info(f"🚀 [RocketLeague] Rocket League account unlinked by {interaction.user}")
 
     async def cog_unload(self) -> None:
         await self.session.close()

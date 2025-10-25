@@ -245,7 +245,7 @@ class Utility(commands.Cog):
             len(interaction.client.guilds),
         )
         await interaction.response.send_message(embed=embed, ephemeral=False)
-        Logger.info(f"Slash command /status used by {interaction.user} in {interaction.guild}")
+        Logger.info(f"🔧 [Utility] Slash command /status used by {interaction.user} in {interaction.guild}")
 
     # !clear (Prefix) - Only prefix, no slash
     @commands.command(name="clear")
@@ -394,7 +394,7 @@ class Utility(commands.Cog):
 
                 # Send embed with view
                 await interaction.response.send_message(embed=embed, view=view)
-                Logger.info(f"Interactive embed created by {interaction.user}")
+                Logger.info(f"🔧 [Utility] Interactive embed created by {interaction.user}")
 
             except Exception as e:
                 import traceback
@@ -507,7 +507,7 @@ class Utility(commands.Cog):
                 else:
                     await ctx.send(content=data.get("content", ""), view=view)
 
-                Logger.info(f"JSON message sent by {ctx.author}")
+                Logger.info(f"🔧 [Utility] JSON message sent by {ctx.author}")
 
             except json.JSONDecodeError as e:
                 error_embed = discord.Embed(
@@ -528,13 +528,13 @@ class Utility(commands.Cog):
             message = message[8:].strip()
             embed = self.create_say_embed(message, self.bot.user)
             await ctx.send(embed=embed)
-            Logger.info(f"Simple embed sent by {ctx.author}")
+            Logger.info(f"🔧 [Utility] Simple embed sent by {ctx.author}")
         # Plain Text
         else:
             await ctx.send(message)
-            Logger.info(f"Plain message sent by {ctx.author}")
+            Logger.info(f"🔧 [Utility] Plain message sent by {ctx.author}")
 
-        Logger.info(f"Prefix command !say used by {ctx.author}")
+        Logger.info(f"🔧 [Utility] Prefix command !say used by {ctx.author}")
 
 
 async def setup(bot: commands.Bot) -> None:

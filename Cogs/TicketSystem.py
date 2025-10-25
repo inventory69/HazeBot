@@ -217,7 +217,7 @@ def send_transcript_email(
         with smtplib.SMTP_SSL(os.getenv("SMTP_SERVER"), int(os.getenv("SMTP_PORT", 465))) as smtp:
             smtp.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASS"))
             smtp.send_message(msg)
-        Logger.info(f"Transcript email sent to {to_email}.")
+        Logger.info(f"🎫 [TicketSystem] Transcript email sent to {to_email}.")
     except Exception as e:
         Logger.error(f"Error sending email: {e}")
 
@@ -382,7 +382,7 @@ async def create_ticket(
             await channel.send(
                 f"{' '.join(roles_to_mention)} New ticket #{ticket_num} created by {interaction.user.mention}."
             )
-            Logger.info("Admin/Moderator roles notified in ticket channel.")
+            Logger.info("🎫 [TicketSystem] Admin/Moderator roles notified in ticket channel.")
         except Exception as e:
             Logger.error(f"Error sending admin/moderator notification: {e}")
     else:
@@ -394,7 +394,7 @@ async def create_ticket(
     # If initial_message provided, send it in the channel
     if initial_message:
         await channel.send(f"**Initial details from {interaction.user.name}:**\n{initial_message}")
-    Logger.info(f"Ticket #{ticket_num} created by {interaction.user}.")
+    Logger.info(f"🎫 [TicketSystem] Ticket #{ticket_num} created by {interaction.user}.")
 
 
 # === Select for assignment ===
@@ -426,7 +426,7 @@ class AssignSelect(discord.ui.Select):
             await interaction.message.delete()
         except Exception:
             pass
-        Logger.info(f"Ticket in {interaction.channel} assigned to {user_id}.")
+        Logger.info(f"🎫 [TicketSystem] Ticket in {interaction.channel} assigned to {user_id}.")
 
 
 # === View for assignment ===
@@ -476,12 +476,12 @@ async def disable_buttons_for_closed_ticket(channel: discord.TextChannel, ticket
         if isinstance(item, discord.ui.Button):
             if item.label != "Reopen":
                 item.disabled = True
-    try:
-        msg = await channel.fetch_message(ticket["embed_message_id"])
-        await msg.edit(embed=embed, view=view)
-        Logger.info(f"Embed for ticket {ticket['ticket_num']} updated.")
-    except Exception as e:
-        Logger.error(f"Error updating embed for ticket {ticket['ticket_num']}: {e}")
+        try:
+            msg = await channel.fetch_message(ticket["embed_message_id"])
+            await msg.edit(embed=embed, view=view)
+            Logger.info(f"🎫 [TicketSystem] Embed for ticket {ticket['ticket_num']} updated.")
+        except Exception as e:
+            Logger.error(f"Error updating embed for ticket {ticket['ticket_num']}: {e}")
 
 
 # === Asynchronous function for ticket closing ===
@@ -569,7 +569,7 @@ async def close_ticket_async(
     if transcript_channel:
         try:
             await transcript_channel.send(embed=embed)
-            Logger.info(f"Transcript for ticket #{ticket['ticket_num']} posted to transcript channel.")
+            Logger.info(f"🎫 [TicketSystem] Transcript for ticket #{ticket['ticket_num']} posted to transcript channel.")
         except Exception as e:
             Logger.error(f"Error posting transcript to transcript channel: {e}")
     else:
@@ -585,7 +585,7 @@ async def close_ticket_async(
             )
             set_pink_footer(close_embed, bot=bot.user)
             await creator.send(embed=close_embed)
-            Logger.info(f"Closing message sent to creator {creator.name}")
+            Logger.info(f"🎫 [TicketSystem] Closing message sent to creator {creator.name}")
         except discord.Forbidden:
             Logger.warning(f"Could not send closing message to creator {creator.name} (DMs disabled).")
         except Exception as e:
@@ -599,7 +599,7 @@ async def close_ticket_async(
     await disable_buttons_for_closed_ticket(channel, ticket)
 
     # Log ticket closed (green)
-    Logger.info("\033[92mTicket closed.\033[0m")
+    Logger.info("🎫 [TicketSystem] \033[92mTicket closed.\033[0m")
 
 
 # === Modal for optional close message ===
@@ -642,7 +642,7 @@ async def close_ticket_with_message(
     asyncio.create_task(
         close_ticket_async(interaction.client, interaction.channel, ticket, followup, msg, close_message)
     )
-    Logger.info(f"Ticket closing started for {interaction.channel}.")
+    Logger.info(f"🎫 [TicketSystem] Ticket closing started for {interaction.channel}.")
 
 
 # === View with ticket buttons ===
@@ -660,7 +660,7 @@ class TicketControlView(discord.ui.View):
         await update_ticket(interaction.channel.id, {"claimed_by": interaction.user.id})
         await update_embed_and_disable_buttons(interaction)
         await interaction.response.send_message(f"{interaction.user.mention} has claimed the ticket.", ephemeral=False)
-        Logger.info(f"Ticket in {interaction.channel} claimed by {interaction.user}.")
+        Logger.info(f"🎫 [TicketSystem] Ticket in {interaction.channel} claimed by {interaction.user}.")
 
     @discord.ui.button(label="Assign", style=discord.ButtonStyle.gray, emoji="📋")
     async def assign(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -731,7 +731,7 @@ class TicketControlView(discord.ui.View):
                     add_reactions=True,
                     reason=f"Ticket #{ticket['ticket_num']} reopened",
                 )
-                Logger.info(f"Restored send permissions for creator {creator.name} in reopened ticket.")
+                Logger.info(f"🎫 [TicketSystem] Restored send permissions for creator {creator.name} in reopened ticket.")
             except Exception as e:
                 Logger.error(f"Error restoring permissions for creator: {e}")
 
@@ -749,7 +749,7 @@ class TicketControlView(discord.ui.View):
         await update_embed_and_disable_buttons(interaction)
         await update_ticket(interaction.channel.id, {"status": "Open"})
         await interaction.response.send_message(f"{interaction.user.mention} has reopened the ticket.", ephemeral=False)
-        Logger.info(f"Ticket #{ticket['ticket_num']} reopened by {interaction.user}.")
+        Logger.info(f"🎫 [TicketSystem] Ticket #{ticket['ticket_num']} reopened by {interaction.user}.")
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️")
     async def delete(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -764,7 +764,7 @@ class TicketControlView(discord.ui.View):
         # Delete the channel
         try:
             await interaction.channel.delete()
-            Logger.info(f"Ticket channel {interaction.channel.name} deleted by {interaction.user}.")
+            Logger.info(f"🎫 [TicketSystem] Ticket channel {interaction.channel.name} deleted by {interaction.user}.")
         except Exception as e:
             Logger.error(f"Error deleting channel {interaction.channel.name}: {e}")
             await interaction.followup.send("Error deleting the ticket channel.", ephemeral=True)
@@ -819,7 +819,7 @@ class TicketSystem(commands.Cog):
     # On ready: Restore views for open and closed tickets and start cleanup
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        Logger.info("TicketSystem Cog ready. Restoring views for open and closed tickets...")
+        Logger.info("🎫 [TicketSystem] TicketSystem Cog ready. Restoring views for open and closed tickets...")
         tickets = await load_tickets()
         for ticket in tickets:
             if ticket["status"] in ["Open", "Closed"]:
@@ -843,7 +843,7 @@ class TicketSystem(commands.Cog):
                                 elif item.label == "Reopen" and ticket["status"] == "Open":
                                     item.disabled = True
                         await msg.edit(embed=embed, view=view)
-                        Logger.info(f"View for ticket #{ticket['ticket_num']} restored.")
+                        Logger.info(f"🎫 [TicketSystem] View for ticket #{ticket['ticket_num']} restored.")
                     await asyncio.sleep(6)  # Further increased sleep to avoid rate limits on server
                 except Exception as e:
                     Logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
@@ -854,7 +854,7 @@ class TicketSystem(commands.Cog):
     async def cleanup_old_tickets(self) -> None:
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            Logger.info("Checking old tickets for deletion...")
+            Logger.info("🎫 [TicketSystem] Checking old tickets for deletion...")
             tickets = await load_tickets()
             now = datetime.now()
             to_delete = []

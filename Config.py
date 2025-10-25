@@ -134,6 +134,7 @@ SLASH_COMMANDS = [
     "status",
     "rlstats",
     "setrlaccount",
+    "unlinkrlaccount",
     "ticket",
     "preferences",
     "roleinfo",
