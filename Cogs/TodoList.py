@@ -142,11 +142,11 @@ class TodoConfirmView(discord.ui.View):
 
         if self.action == "add":
             data["items"].append(new_item)
-            Logger.info(f"To-do item added by {interaction.user}")
+            Logger.info(f"✅ [TodoList] To-do item added by {interaction.user}")
         elif self.action == "edit" and self.item_index is not None:
             if 0 <= self.item_index < len(data["items"]):
                 data["items"][self.item_index] = new_item
-                Logger.info(f"To-do item {self.item_index} edited by {interaction.user}")
+                Logger.info(f"✅ [TodoList] To-do item {self.item_index} edited by {interaction.user}")
 
         # Save data
         save_todo_data(data)
@@ -295,7 +295,7 @@ Rules:
                 if old_channel:
                     old_message = await old_channel.fetch_message(data["message_id"])
                     await old_message.delete()
-                    Logger.info(f"Deleted old to-do message {data['message_id']}")
+                    Logger.info(f"✅ [TodoList] Deleted old to-do message {data['message_id']}")
             except Exception as e:
                 Logger.warning(f"Could not delete old to-do message: {e}")
 
@@ -307,7 +307,7 @@ Rules:
         data["message_id"] = new_message.id
         save_todo_data(data)
 
-        Logger.info(f"Posted new to-do message {new_message.id} in {interaction.channel}")
+        Logger.info(f"✅ [TodoList] Posted new to-do message {new_message.id} in {interaction.channel}")
 
     def create_todo_embed(self, items: List[Dict[str, Any]]) -> discord.Embed:
         """Create a formatted to-do list embed."""
@@ -392,9 +392,7 @@ class TodoManageView(discord.ui.View):
         # Create view with select
         view = TodoEditSelectView(self.bot, data["items"])
 
-        embed = discord.Embed(
-            title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK
-        )
+        embed = discord.Embed(title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK)
         set_pink_footer(embed, bot=self.bot.user)
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -448,7 +446,7 @@ class TodoManageView(discord.ui.View):
             modal = TodoModal(self.bot)
             await modal.update_todo_message(interaction, data)
 
-            Logger.info(f"All to-do items cleared by {interaction.user}")
+            Logger.info(f"✅ [TodoList] All to-do items cleared by {interaction.user}")
 
             # Send confirmation (stays for 3 seconds)
             confirm_msg = await interaction.followup.send("✅ All to-do items cleared!", ephemeral=True)
@@ -582,7 +580,7 @@ class TodoRemoveSelectView(discord.ui.View):
 
         # Log removed items
         removed_titles = ", ".join([f"'{item['title']}'" for item in reversed(removed_items)])
-        Logger.info(f"Removed {len(removed_items)} to-do item(s): {removed_titles} by {interaction.user}")
+        Logger.info(f"✅ [TodoList] Removed {len(removed_items)} to-do item(s): {removed_titles} by {interaction.user}")
 
         # Send confirmation
         confirm_msg = await interaction.followup.send(f"✅ Removed {len(removed_items)} item(s)!", ephemeral=True)
@@ -641,7 +639,7 @@ class TodoList(commands.Cog):
             await ctx_or_interaction.send(embed=embed, view=view)
         else:
             await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        Logger.info(f"todo-update used by {user} in {ctx_or_interaction.guild}")
+        Logger.info(f"✅ [TodoList] todo-update used by {user} in {ctx_or_interaction.guild}")
 
     # 🧩 Shared handler for todo-show logic
     async def handle_todo_show(self, ctx_or_interaction: Any) -> None:
@@ -664,7 +662,7 @@ class TodoList(commands.Cog):
             await ctx_or_interaction.response.send_message(embed=embed, ephemeral=False)
 
         user = ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
-        Logger.info(f"todo-update used by {user} in {ctx_or_interaction.guild}")
+        Logger.info(f"✅ [TodoList] todo-update used by {user} in {ctx_or_interaction.guild}")
 
     # !todo-update (Prefix) - Mod/Admin only
     @commands.command(name="todo-update")
