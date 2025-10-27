@@ -1,6 +1,6 @@
-# HazeWorldBot 🌿
+# HazeBot 🌿
 
-A Discord bot designed for The Chillventory server ("Haze" on Discord). Built with Python and discord.py, HazeWorldBot enhances moderation, onboarding, changelogs, and community engagement with a modular, inventory-themed experience.
+A Discord bot designed for The Chillventory server ("Haze" on Discord). Built with Python and discord.py, HazeBot enhances moderation, onboarding, changelogs, and community engagement with a modular, inventory-themed experience.
 
 **Note:** This is a personal project. Feel free to fork and adapt it for your own server!
 
@@ -11,7 +11,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Test & Production Mode:** The bot automatically detects via the `PROD_MODE` environment variable whether it is running in test or production mode. IDs and tokens are dynamically loaded from `.env` and managed in `Config.py`, allowing safe operation in multiple environments.
 - **Rich Logging:** All logs are output with colored emojis and highlights using the `rich` framework (`Utils/Logger.py`). This makes debugging and monitoring in the terminal much easier.
 - **Caching Strategies:** The bot uses both in-memory and file-based caching (`Utils/CacheUtils.py`). Frequently used data (e.g., activity, moderation data, API responses) is cached with a configurable TTL to optimize performance and avoid rate limits.
-- **AI Features:** For changelog and to-do formatting, the bot exclusively uses the **GPT-4.1-nano** model from OpenAI (see Cogs `Changelog.py` and `TodoList.py`).
+- **AI Features:** For changelog and to-do formatting, the bot uses OpenAI GPT-4.1-Nano models.
 
 ---
 
@@ -23,9 +23,11 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Status:** `/status` and `!status` display bot latency and server count.
 - **Message Management:** `!clear` for admins and Slot Keepers (mods) to purge messages.
 - **Say Command:** `!say` lets admins send bot messages (with embed option).
-- **Mod Command:** `/mod` and `!mod` for various moderation actions and controls (admin-only).
+- **Mod Command:** `/mod` and `!mod` for various moderation actions and controls (mod/admin).
 - **Mod Panel:** `/modpanel` and `!modpanel` for Slot Keepers and Admins to select users and perform moderation actions (Mute, Kick, Ban, Warn with optional reason), lock channels, and set slowmode. Dynamic button states reflect current channel conditions (locked/unlocked, slowmode enabled/disabled). Warnings are tracked per user and stored in `Data/mod_data.json`.
+- **Mod Overview:** `/modoverview` and `!modoverview` for Slot Keepers and Admins to view moderation statistics and overview.
 - **Mod Details:** `/moddetails` and `!moddetails` for Slot Keepers and Admins to view detailed moderation history for specific users.
+- **Opt-ins Statistics:** `/optins` and `!optins` for Slot Keepers and Admins to view changelog notification opt-in statistics.
 - **Centralized Command Lists:** All admin/mod commands are managed in `Config.py` for consistency.
 
 ### 🎫 Ticket System
@@ -41,6 +43,8 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 ### 🚀 Rocket League Integration
 - **Stats Fetching:** `/rlstats` and `!rlstats` show player stats for 1v1, 2v2, 3v3, 4v4.
 - **Account Linking:** `/setrlaccount` and `!setrlaccount` to save your RL account.
+- **Account Unlinking:** `/unlinkrlaccount` to remove your linked RL account.
+- **Admin Stats:** `/adminrlstats` (admin-only) bypasses cache for immediate stats.
 - **Rank Promotion Notifications:** Automatic notifications and congratulation embeds for rank-ups.
 - **Performance Caching:** API calls are cached for 1 hour to reduce external requests and improve response times.
 
@@ -78,7 +82,6 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Manage Tasks:** `/todo-update` and `!todo-update` for admins/mods to add, remove, and clear tasks.
 - **Multi-Delete:** Select up to 25 tasks at once for batch deletion with confirmation.
 - **AI Formatting:** OpenAI GPT-4.1-Nano automatically formats tasks with emojis and descriptions.
-- **View Tasks:** `/todo-show` and `!todo-show` display the current to-do list.
 - **Priority Levels:** Tasks organized by priority (🔴 High, 🟡 Medium, 🟢 Low).
 - **Author Tracking:** Each task shows who added it.
 - **Channel Restriction:** Management commands restricted to designated todo channel.
@@ -99,7 +102,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 ## 🛠️ Setup
 
 ### Prerequisites
-- **Python 3.8+** - The bot requires Python 3.8 or higher
+- **Python 3.9+** - The bot requires Python 3.9 or higher
 - **Discord Bot Token** - Create a bot at [Discord Developer Portal](https://discord.com/developers/applications)
 - **External Services** - Various API keys for Rocket League stats, email, etc.
 
@@ -107,14 +110,16 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/inventory69/HazeWorldBot.git
-   cd HazeWorldBot
+   git clone https://github.com/inventory69/HazeBot.git
+   cd HazeBot
    ```
 
 2. **Create Virtual Environment (Recommended)**
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   # For fish shell: source .venv/bin/activate.fish
+   # For PowerShell: .venv\Scripts\Activate.ps1
    ```
 
 3. **Install Dependencies**
@@ -179,27 +184,34 @@ For contributors and developers:
 
 3. **Project Structure**
    ```
-   HazeWorldBot/
+   HazeBot/
    ├── Cogs/                 # Discord bot cogs (features)
    │   ├── Changelog.py      # Changelog generation
    │   ├── Leaderboard.py    # Leaderboards and activity tracking
    │   ├── ModPerks.py       # Moderation tools
    │   ├── Preferences.py    # User preferences
+   │   ├── Presence.py       # Dynamic presence updates
    │   ├── Profile.py        # User profiles
    │   ├── RocketLeague.py   # RL stats integration
    │   ├── RoleInfo.py       # Role information
    │   ├── TicketSystem.py   # Support ticket system
-   │   └── Welcome.py        # Welcome system
+   │   ├── TodoList.py       # To-do list management
+   │   ├── Utility.py        # Utility commands
+   │   ├── Welcome.py        # Welcome system
+   │   └── __init__.py       # Cog initialization
    ├── Utils/                # Utility modules
    │   ├── CacheUtils.py     # Caching system
    │   ├── EmbedUtils.py     # Embed formatting
    │   ├── Env.py           # Environment validation
    │   └── Logger.py        # Logging utilities
-   ├── Data/                # Persistent data storage
-   ├── Logs/                # Log files
-   ├── Config.py            # Bot configuration
-   ├── Main.py              # Bot entry point
-   └── requirements.txt     # Python dependencies
+   ├── TestData/             # Test data storage (for PROD_MODE=false)
+   ├── Cache/                # Cache files
+   ├── Logs/                 # Log files
+   ├── Config.py             # Bot configuration
+   ├── Main.py               # Bot entry point
+   ├── pyproject.toml        # Project configuration
+   ├── requirements.txt      # Python dependencies
+   └── .env.example          # Environment variables template
    ```
 
 ---
@@ -221,6 +233,7 @@ For contributors and developers:
 # Rocket League features
 /rlstats platform username  # Get RL stats
 /setrlaccount platform username  # Link your RL account
+/unlinkrlaccount  # Unlink your RL account
 
 # Preferences and settings
 /preferences  # Toggle changelog notifications
@@ -237,10 +250,12 @@ For contributors and developers:
 ### For Moderators (Slot Keepers)
 ```bash
 # Moderation commands
+/mod  # Moderation actions and controls
 /modpanel  # Open moderation panel
 /modoverview  # View moderation statistics
 /moddetails @user  # View user's moderation history
 /clear 5  # Clear 5 messages
+/optins  # View changelog opt-in statistics
 
 # Ticket management
 # Use interactive buttons in ticket channels:
@@ -254,8 +269,6 @@ For contributors and developers:
 # All moderator commands plus:
 !say Hello everyone!  # Send message as bot
 !changelog text:"Your PR text here"  # Create changelog from changes
-!mod  # Moderation actions and controls
-!optins  # View changelog opt-in statistics
 ```
 
 ### Command Reference
@@ -269,20 +282,23 @@ For contributors and developers:
 | `/profile` | `!profile` | User profile information |
 | `/rlstats [platform] [username]` | `!rlstats` | Rocket League statistics |
 | `/setrlaccount [platform] [username]` | `!setrlaccount` | Link RL account |
+| `/unlinkrlaccount` | `!unlinkrlaccount` | Unlink RL account |
 | `/preferences` | `!preferences` | Toggle changelog notifications |
 | `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
 | `/ticket` | `!ticket` | Create support ticket |
 | `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
-| `/todo-show` | `!todo-show` | Display current to-do list |
+| `/todo-update` | `!todo-update` | Update to-do list (Mod/Admin only) |
 
 #### Moderator Commands (Slot Keepers+)
 
 | Command | Prefix | Description |
 |---------|--------|-------------|
 | `/clear [amount]` | `!clear` | Delete messages in bulk |
+| `/mod` | `!mod` | Moderation actions and controls |
 | `/modpanel` | `!modpanel` | Moderation control panel |
 | `/modoverview` | `!modoverview` | Moderation statistics |
 | `/moddetails [@user]` | `!moddetails` | User moderation history |
+| `/optins` | `!optins` | View opt-in statistics |
 | `/todo-update` | `!todo-update` | Create/update to-do items with AI formatting |
 
 #### Administrator Commands (Admins Only)
@@ -291,8 +307,7 @@ For contributors and developers:
 |---------|--------|-------------|
 | `/changelog` | `!changelog` | Generate and post bot changelogs with AI |
 | `/say [message]` | `!say` | Send message as bot |
-| `/mod [action]` | `!mod` | Moderation actions and controls |
-| `/optins` | `!optins` | View opt-in statistics |
+| `/adminrlstats [platform] [username]` | `!adminrlstats` | Admin RL stats (bypass cache) |
 
 ---
 
@@ -337,7 +352,7 @@ The bot includes advanced caching to optimize performance:
 - **rich** - Enhanced console output
 
 ### System Requirements
-- Python 3.8+
+- Python 3.9+
 - 100MB RAM minimum
 - Stable internet connection
 - Discord bot token with appropriate permissions
@@ -354,23 +369,15 @@ python Main.py
 
 ### Production Deployment
 Consider using:
-- **Docker** - Containerized deployment
 - **PM2** - Process management
 - **Systemd** - Service management on Linux
 - **Railway** or **Heroku** - Cloud hosting
-
-### Docker Support
-The project includes Docker configuration for easy deployment:
-```bash
-docker build -t hazeworldbot .
-docker run -d --env-file .env hazeworldbot
-```
 
 ---
 
 ## 🤝 Contributing
 
-**Want to help improve HazeWorldBot?** Contributions are welcome!
+**Want to help improve HazeBot?** Contributions are welcome!
 
 Please see our [**CONTRIBUTING.md**](CONTRIBUTING.md) for detailed guidelines on how to contribute.
 
@@ -378,8 +385,8 @@ Please see our [**CONTRIBUTING.md**](CONTRIBUTING.md) for detailed guidelines on
 
 1. **Fork the Repository**
    ```bash
-   git clone https://github.com/inventory69/HazeWorldBot.git
-   cd HazeWorldBot
+   git clone https://github.com/inventory69/HazeBot.git
+   cd HazeBot
    ```
 
 2. **Create a Feature Branch**
@@ -434,7 +441,7 @@ You're free to fork, modify, and use this project for your own Discord server!
 
 - Built with 💖 for The Chillventory community
 - Powered by [discord.py](https://github.com/Rapptz/discord.py)
-- AI features powered by [OpenAI GPT-4](https://openai.com/)
+- AI features powered by [OpenAI GPT-4.1-Nano](https://openai.com/)
 - Special thanks to all contributors and community members
 - Thanks to the open-source libraries that make this project possible
 

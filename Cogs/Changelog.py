@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class ChangelogCog(commands.Cog):
     """
-    📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4 Turbo.
+    📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4.1-nano.
     """
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -21,7 +21,7 @@ class ChangelogCog(commands.Cog):
 
     async def generate_changelog_title(self, text: str) -> str:
         """
-        Generate a concise title from PR text using OpenAI GPT-4 Turbo.
+        Generate a concise title from PR text using OpenAI GPT-4.1-nano.
         """
         if not openai.api_key:
             raise ValueError("OpenAI API key not configured.")
@@ -29,7 +29,7 @@ class ChangelogCog(commands.Cog):
         prompt = f"Generate a concise, catchy title for this PR changelog based on the text. Keep it under 10 words.\n\nPR Text:\n{text}"
 
         response = openai.chat.completions.create(
-            model="gpt-4-turbo",
+            model="GPT-4.1-nano",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=50,
             temperature=0.7,
@@ -38,7 +38,7 @@ class ChangelogCog(commands.Cog):
 
     async def generate_changelog_text(self, text: str, project: str, author: str) -> str:
         """
-        Generate changelog text using OpenAI GPT-4 Turbo.
+        Generate changelog text using OpenAI GPT-4.1-nano.
         """
         if not openai.api_key:
             raise ValueError("OpenAI API key not configured.")
