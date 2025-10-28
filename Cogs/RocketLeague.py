@@ -272,12 +272,29 @@ class RocketLeague(commands.Cog):
     def _ensure_https(self, url: Optional[str]) -> Optional[str]:
         """
         Ensure URL uses HTTPS protocol instead of HTTP.
+        Converts http:// to https://, but allows localhost and 127.0.0.1 to remain as HTTP for development.
         """
         if not url:
             return url
+        
+        # Strip whitespace
+        url = url.strip()
+        
+        # Only convert HTTP to HTTPS if it's not a localhost/development URL
         if url.startswith("http://"):
+            # Allow HTTP for localhost and 127.0.0.1 (development environments)
+            if "://localhost" in url or "://127.0.0.1" in url:
+                logger.info(f"ℹ️ Allowing HTTP for local development: {url}")
+                return url
+            # Convert HTTP to HTTPS for all other URLs
             logger.warning(f"⚠️ Converting HTTP to HTTPS: {url}")
             return url.replace("http://", "https://", 1)
+        
+        # If URL doesn't start with http:// or https://, assume it's malformed
+        if not url.startswith("https://"):
+            logger.warning(f"⚠️ URL missing protocol, assuming HTTPS: {url}")
+            return f"https://{url}"
+        
         return url
 
     @commands.Cog.listener()
