@@ -82,6 +82,7 @@ class EmojiRichFormatter(logging.Formatter):
                 "TicketSystem": "🎫 [TicketSystem]",
                 "TodoList": "✅ [TodoList]",
                 "Welcome": "👋 [Welcome]",
+                "ServerGuide": "🌟 [ServerGuide]",
                 "Presence": "👤 [Presence]",
                 "RocketLeague": "🚀 [RocketLeague]",
                 "SupportButtons": "🎫 [SupportButtons]",
