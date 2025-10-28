@@ -39,6 +39,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Transcript & Email:** Closed tickets generate transcripts (including close messages) and can send via email.
 - **Automatic Cleanup:** Old closed tickets are deleted after 7 days.
 - **Persistent Views:** All ticket buttons remain functional across bot restarts.
+- **Persistent Support Buttons:** `!create-button` (admin-only) creates dynamic persistent buttons for any command type (ticket, slash commands, prefix commands).
 
 ### 🚀 Rocket League Integration
 - **Stats Fetching:** `/rlstats` and `!rlstats` show player stats for 1v1, 2v2, 3v3, 4v4.
@@ -308,6 +309,7 @@ For contributors and developers:
 | `/changelog` | `!changelog` | Generate and post bot changelogs with AI |
 | `/say [message]` | `!say` | Send message as bot |
 | `/adminrlstats [platform] [username]` | `!adminrlstats` | Admin RL stats (bypass cache) |
+| `!create-button [--text] [--command] [--emoji] [--type]` | - | Create persistent buttons for any command type |
 
 ---
 

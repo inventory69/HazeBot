@@ -84,6 +84,7 @@ class EmojiRichFormatter(logging.Formatter):
                 "Welcome": "👋 [Welcome]",
                 "Presence": "👤 [Presence]",
                 "RocketLeague": "🚀 [RocketLeague]",
+                "SupportButtons": "🎫 [SupportButtons]",
             }
             return prefixes.get(cog_name, "")
         return ""

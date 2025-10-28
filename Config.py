@@ -158,6 +158,7 @@ ADMIN_COMMANDS = [
     "optins",
     "todo-update",
     "adminrlstats",
+    "create-button",
 ]  # Commands restricted to Admins only
 MOD_COMMANDS = [
     "clear",
