@@ -10,6 +10,7 @@ import discord
 from discord import app_commands
 from bs4 import BeautifulSoup
 from typing import Dict, Optional, Tuple, Any
+from urllib.parse import urlparse
 from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS, get_guild_id, RL_CHANNEL_ID
 
 from Utils.EmbedUtils import set_pink_footer
@@ -273,6 +274,7 @@ class RocketLeague(commands.Cog):
         """
         Ensure URL uses HTTPS protocol instead of HTTP.
         Converts http:// to https://, but allows localhost and 127.0.0.1 to remain as HTTP for development.
+        Uses proper URL parsing to avoid security issues with substring matching.
         """
         if not url:
             return url
@@ -280,22 +282,30 @@ class RocketLeague(commands.Cog):
         # Strip whitespace
         url = url.strip()
         
-        # Only convert HTTP to HTTPS if it's not a localhost/development URL
-        if url.startswith("http://"):
-            # Allow HTTP for localhost and 127.0.0.1 (development environments)
-            if "://localhost" in url or "://127.0.0.1" in url:
-                logger.info(f"ℹ️ Allowing HTTP for local development: {url}")
-                return url
-            # Convert HTTP to HTTPS for all other URLs
-            logger.warning(f"⚠️ Converting HTTP to HTTPS: {url}")
-            return url.replace("http://", "https://", 1)
-        
-        # If URL doesn't start with http:// or https://, assume it's malformed
-        if not url.startswith("https://"):
+        # If URL doesn't have a protocol, add https://
+        if not url.startswith(("http://", "https://")):
             logger.warning(f"⚠️ URL missing protocol, assuming HTTPS: {url}")
-            return f"https://{url}"
+            url = f"https://{url}"
         
-        return url
+        # Parse the URL to safely check the hostname
+        try:
+            parsed = urlparse(url)
+            
+            # Only convert HTTP to HTTPS if it's not a localhost/development URL
+            if parsed.scheme == "http":
+                # Allow HTTP for localhost and 127.0.0.1 (development environments)
+                if parsed.hostname in ("localhost", "127.0.0.1"):
+                    logger.info(f"ℹ️ Allowing HTTP for local development: {url}")
+                    return url
+                # Convert HTTP to HTTPS for all other URLs
+                logger.warning(f"⚠️ Converting HTTP to HTTPS: {url}")
+                return url.replace("http://", "https://", 1)
+            
+            return url
+        except Exception as e:
+            logger.error(f"❌ Error parsing URL '{url}': {e}")
+            # If parsing fails, return the original URL to avoid breaking functionality
+            return url
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
