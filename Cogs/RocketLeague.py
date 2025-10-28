@@ -263,10 +263,22 @@ class RocketLeague(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.session = aiohttp.ClientSession()
-        self.api_base = os.getenv("ROCKET_API_BASE")
-        self.flaresolverr_url = os.getenv("FLARESOLVERR_URL")
+        # Ensure URLs always use HTTPS
+        self.api_base = self._ensure_https(os.getenv("ROCKET_API_BASE"))
+        self.flaresolverr_url = self._ensure_https(os.getenv("FLARESOLVERR_URL"))
         self.executor = ThreadPoolExecutor(max_workers=5)
         # Do not start task here
+
+    def _ensure_https(self, url: Optional[str]) -> Optional[str]:
+        """
+        Ensure URL uses HTTPS protocol instead of HTTP.
+        """
+        if not url:
+            return url
+        if url.startswith("http://"):
+            logger.warning(f"⚠️ Converting HTTP to HTTPS: {url}")
+            return url.replace("http://", "https://", 1)
+        return url
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
