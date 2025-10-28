@@ -174,10 +174,6 @@ class RocketLeague(commands.Cog):
             "cmd": "request.get",
             "url": url,
             "maxTimeout": 60000,
-            "headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                "Accept": "application/json",
-            },
         }
 
         try:
@@ -306,7 +302,7 @@ class RocketLeague(commands.Cog):
         finally:
             import time
 
-            time.sleep(8)  # Rate limit to avoid overwhelming the API
+            time.sleep(15)  # Rate limit to avoid overwhelming the API
 
     async def get_player_stats(
         self, platform: str, username: str, force_refresh: bool = False
