@@ -20,6 +20,118 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# === Rocket League Hub View ===
+class RocketLeagueHubView(discord.ui.View):
+    """View with buttons for Rocket League commands"""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Link Account", style=discord.ButtonStyle.primary, emoji="🔗", custom_id="rl_link_button")
+    async def link_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Open modal to link RL account"""
+        await interaction.response.send_modal(LinkAccountModal())
+
+    @discord.ui.button(label="View Stats", style=discord.ButtonStyle.primary, emoji="📊", custom_id="rl_stats_button")
+    async def stats_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Show RL stats for the user"""
+        rl_cog = interaction.client.get_cog("RocketLeague")
+        if not rl_cog:
+            await interaction.response.send_message("❌ Rocket League system not available.", ephemeral=True)
+            return
+
+        # Check if account is linked
+        accounts = load_rl_accounts()
+        user_data = accounts.get(str(interaction.user.id))
+        if not user_data:
+            await interaction.response.send_message(
+                "❌ No Rocket League account linked. Use the **Link Account** button first!", ephemeral=True
+            )
+            return
+
+        # Call the show_stats method
+        await rl_cog.show_stats(interaction)
+
+    @discord.ui.button(
+        label="Unlink Account", style=discord.ButtonStyle.secondary, emoji="🔓", custom_id="rl_unlink_button"
+    )
+    async def unlink_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Unlink RL account"""
+        rl_cog = interaction.client.get_cog("RocketLeague")
+        if not rl_cog:
+            await interaction.response.send_message("❌ Rocket League system not available.", ephemeral=True)
+            return
+
+        # Call the unlink_account method
+        await rl_cog.unlink_account(interaction)
+
+
+class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
+    platform_input = discord.ui.TextInput(
+        label="Platform",
+        placeholder="steam, epic, psn, xbl, or switch",
+        required=True,
+        style=discord.TextStyle.short,
+        max_length=10,
+    )
+
+    username_input = discord.ui.TextInput(
+        label="Username/Steam ID",
+        placeholder="Your username or Steam ID (17 digits for Steam)",
+        required=True,
+        style=discord.TextStyle.short,
+        max_length=100,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        platform = self.platform_input.value.lower().strip()
+        username = self.username_input.value.strip()
+
+        if platform not in ["steam", "epic", "psn", "xbl", "switch"]:
+            await interaction.response.send_message(
+                "❌ Invalid platform. Use: steam, epic, psn, xbl, or switch.", ephemeral=True
+            )
+            return
+
+        # Fetch stats to verify account
+        rl_cog = interaction.client.get_cog("RocketLeague")
+        if not rl_cog:
+            await interaction.response.send_message("❌ Rocket League system not available.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        stats = await rl_cog.get_player_stats(platform, username)
+
+        if not stats:
+            if platform == "steam":
+                await interaction.followup.send(
+                    "❌ Player not found. For Steam, try using your 17-digit Steam ID instead of the display name.\n"
+                    "Find it at https://steamid.io/ or in your Steam profile URL.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.followup.send(
+                    "❌ Player not found or error fetching stats. Please check the username and platform.",
+                    ephemeral=True,
+                )
+            return
+
+        # Save account
+        accounts = load_rl_accounts()
+        accounts[str(interaction.user.id)] = {
+            "platform": platform,
+            "username": username,
+            "ranks": stats["tier_names"],
+        }
+        save_rl_accounts(accounts)
+
+        await interaction.followup.send(
+            f"✅ Successfully linked your Rocket League account to **{stats['username']}** on **{platform.upper()}**.",
+            ephemeral=True,
+        )
+        logger.info(f"RL account linked by {interaction.user}")
+
+
 def load_rl_accounts() -> Dict[str, Any]:
     os.makedirs(os.path.dirname(RL_ACCOUNTS_FILE), exist_ok=True)
     if os.path.exists(RL_ACCOUNTS_FILE):
@@ -159,10 +271,11 @@ class RocketLeague(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         """
-        Start the rank check task when the bot is ready.
+        Start the rank check task when the bot is ready and restore persistent views.
         """
         self.check_ranks.start()
-        logger.info("Rank check task started.")
+        self.bot.add_view(RocketLeagueHubView())
+        logger.info("Rank check task started. RocketLeague hub view restored.")
 
     def fetch_stats_sync(self, platform: str, username: str) -> Optional[Dict[str, Any]]:
         """
@@ -173,11 +286,11 @@ class RocketLeague(commands.Cog):
         payload = {
             "cmd": "request.get",
             "url": url,
-            "maxTimeout": 60000,
+            "maxTimeout": 90000,  # Increased from 60s to 90s
         }
 
         try:
-            response = requests.post(self.flaresolverr_url, json=payload, timeout=60)
+            response = requests.post(self.flaresolverr_url, json=payload, timeout=90)  # Increased from 60s to 90s
             if response.status_code != 200:
                 logger.warning(f"❌ External service error: {response.status_code}")
                 return None
@@ -302,7 +415,7 @@ class RocketLeague(commands.Cog):
         finally:
             import time
 
-            time.sleep(15)  # Rate limit to avoid overwhelming the API
+            time.sleep(30)  # Increased rate limit to avoid Cloudflare blocks
 
     async def get_player_stats(
         self, platform: str, username: str, force_refresh: bool = False
@@ -560,20 +673,7 @@ class RocketLeague(commands.Cog):
         """
         🚀 Get Rocket League stats for a player.
         """
-        try:
-            platform, username = await self._get_rl_account(interaction.user.id, platform, username)
-        except ValueError as e:
-            await interaction.response.send_message(str(e), ephemeral=True)
-            return
-
-        await interaction.response.defer()
-        stats = await self.get_player_stats(platform, username)
-        if not stats:
-            await interaction.followup.send("❌ Player not found or error fetching stats.")
-            return
-
-        embed = await self._create_rl_embed(stats, platform)
-        await interaction.followup.send(embed=embed)
+        await self.show_stats(interaction, platform, username)
 
     @commands.command(name="adminrlstats")
     @commands.has_permissions(administrator=True)
@@ -607,9 +707,28 @@ class RocketLeague(commands.Cog):
         await ctx.send("✅ Successfully unlinked your Rocket League account.")
         logger.info(f"Rocket League account unlinked by {ctx.author}")
 
-    @app_commands.command(name="unlinkrlaccount", description="Unlink your Rocket League account")
-    @app_commands.guilds(discord.Object(id=get_guild_id()))
-    async def unlinkrlaccount_slash(self, interaction: discord.Interaction) -> None:
+    async def show_stats(
+        self, interaction: discord.Interaction, platform: Optional[str] = None, username: Optional[str] = None
+    ) -> None:
+        """Show RL stats (used by command and button)"""
+        try:
+            platform, username = await self._get_rl_account(interaction.user.id, platform, username)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        stats = await self.get_player_stats(platform, username)
+        if not stats:
+            await interaction.followup.send("❌ Player not found or error fetching stats.", ephemeral=True)
+            return
+
+        embed = await self._create_rl_embed(stats, platform)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        logger.info(f"RL stats viewed by {interaction.user}")
+
+    async def unlink_account(self, interaction: discord.Interaction) -> None:
+        """Unlink RL account (used by command and button)"""
         accounts = load_rl_accounts()
         user_id = str(interaction.user.id)
         if user_id not in accounts:
@@ -619,6 +738,69 @@ class RocketLeague(commands.Cog):
         save_rl_accounts(accounts)
         await interaction.response.send_message("✅ Successfully unlinked your Rocket League account.", ephemeral=True)
         logger.info(f"Rocket League account unlinked by {interaction.user}")
+
+    @app_commands.command(name="unlinkrlaccount", description="Unlink your Rocket League account")
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
+    async def unlinkrlaccount_slash(self, interaction: discord.Interaction) -> None:
+        await self.unlink_account(interaction)
+
+    async def show_rocket_hub(self, interaction: discord.Interaction) -> None:
+        """Show the Rocket League hub (used by command and button)"""
+        embed = discord.Embed(
+            title="🚀 Rocket League Hub",
+            description=(
+                "Welcome to the Rocket League stats tracking system!\n\n"
+                "**Features:**\n"
+                "• Link your Rocket League account\n"
+                "• View detailed stats and ranks\n"
+                "• Track rank promotions automatically\n"
+                "• Compare with other players\n\n"
+                "**Supported Platforms:**\n"
+                "Steam, Epic, PSN, Xbox, Nintendo Switch"
+            ),
+            color=PINK,
+        )
+
+        # Check if user has account linked
+        accounts = load_rl_accounts()
+        user_data = accounts.get(str(interaction.user.id))
+        if user_data:
+            embed.add_field(
+                name="📊 Your Linked Account",
+                value=f"**Platform:** {user_data['platform'].upper()}\n**Username:** {user_data['username']}",
+                inline=False,
+            )
+            if user_data.get("ranks"):
+                ranks_display = "\n".join([f"• {k}: {v}" for k, v in user_data["ranks"].items()])
+                embed.add_field(name="🏆 Current Ranks", value=ranks_display, inline=False)
+        else:
+            embed.add_field(
+                name="❓ No Account Linked",
+                value="Click **Link Account** below to get started!",
+                inline=False,
+            )
+
+        embed.add_field(
+            name="💡 Quick Start",
+            value=(
+                "1. Click **Link Account** and enter your details\n"
+                "2. Use **View Stats** to see your current ranks\n"
+                "3. Get notified when you rank up!"
+            ),
+            inline=False,
+        )
+
+        set_pink_footer(embed, bot=interaction.client.user)
+
+        view = RocketLeagueHubView()
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        logger.info(f"Rocket League hub opened by {interaction.user}")
+
+    @app_commands.command(name="rocket", description="🚀 Rocket League Hub - Manage your account and view stats")
+    @app_commands.guilds(discord.Object(id=get_guild_id()))
+    async def rocket_hub(self, interaction: discord.Interaction) -> None:
+        """Rocket League hub with all features"""
+        await self.show_rocket_hub(interaction)
 
     async def cog_unload(self) -> None:
         await self.session.close()
