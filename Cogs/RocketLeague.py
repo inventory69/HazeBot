@@ -265,6 +265,12 @@ class RocketLeague(commands.Cog):
         self.session = aiohttp.ClientSession()
         self.api_base = os.getenv("ROCKET_API_BASE")
         self.flaresolverr_url = os.getenv("FLARESOLVERR_URL")
+        
+        # Ensure HTTPS is used for FlareSolverr
+        if self.flaresolverr_url and self.flaresolverr_url.startswith("http://"):
+            self.flaresolverr_url = self.flaresolverr_url.replace("http://", "https://", 1)
+            logger.warning(f"⚠️ FlareSolverr URL converted from HTTP to HTTPS: {self.flaresolverr_url}")
+        
         self.executor = ThreadPoolExecutor(max_workers=5)
         # Do not start task here
 
@@ -275,7 +281,12 @@ class RocketLeague(commands.Cog):
         """
         self.check_ranks.start()
         self.bot.add_view(RocketLeagueHubView())
-        logger.info("Rank check task started. RocketLeague hub view restored.")
+        logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
+        logger.info("RocketLeague hub view restored.")
+        
+        # Validate that HTTPS is being used
+        if self.flaresolverr_url and not self.flaresolverr_url.startswith("https://"):
+            logger.error(f"❌ FlareSolverr URL is not using HTTPS: {self.flaresolverr_url}")
 
     def fetch_stats_sync(self, platform: str, username: str) -> Optional[Dict[str, Any]]:
         """

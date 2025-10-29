@@ -57,8 +57,26 @@ class HazeWorldBot(commands.Bot):
     async def setup_hook(self) -> None:
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
+        
+        # Load CogManager first to access disabled cogs
+        try:
+            await self.load_extension("Cogs.CogManager")
+            loaded_cogs.append("CogManager")
+            Logger.info("   └─ ✅ Loaded: CogManager")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
+            return  # Can't continue without CogManager
+        
+        # Get disabled cogs from CogManager
+        cog_manager = self.get_cog("CogManager")
+        disabled_cogs = cog_manager.get_disabled_cogs() if cog_manager else []
+        
+        # Load other cogs, skipping disabled ones
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_"):
+            if cog.name.startswith("_") or cog.stem == "CogManager":
+                continue
+            if cog.stem in disabled_cogs:
+                Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")
                 continue
             try:
                 await self.load_extension(f"Cogs.{cog.stem}")
@@ -66,6 +84,7 @@ class HazeWorldBot(commands.Bot):
                 Logger.info(f"   └─ ✅ Loaded: {cog.stem}")
             except Exception as e:
                 Logger.error(f"   └─ ❌ Failed to load {cog.stem}: {e}")
+        
         if loaded_cogs:
             Logger.info(f"🧩 All Cogs loaded: {', '.join(loaded_cogs)}")
         else:
