@@ -125,7 +125,7 @@ class ServerGuide(commands.Cog):
 
         # Add banner image
         embed.set_image(
-            url="https://cdn.discordapp.com/attachments/1424848960333414581/1429364665766383757/WELCOME_TO_THE.png?ex=69026554&is=690113d4&hm=9873a26e2822b42562457af5c686c62831fbf7bc6b10e73b0237499a046129f3"
+            url="https://cdn.discordapp.com/attachments/1424848960333414581/1433070391051550871/welcometochillventory.png?ex=69035a4e&is=690208ce&hm=5d57c1ca0b18e9bc3c839530d0211ca3da952e3af0fb4b4d45712d2d20dddfdd"
         )
 
         # Add sections
