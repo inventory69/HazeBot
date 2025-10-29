@@ -29,7 +29,7 @@ class ChangelogCog(commands.Cog):
         prompt = f"Generate a concise, catchy title for this PR changelog based on the text. Keep it under 10 words.\n\nPR Text:\n{text}"
 
         response = openai.chat.completions.create(
-            model="GPT-4.1-nano",
+            model="gpt-4.1-nano",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=50,
             temperature=0.7,
