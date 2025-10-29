@@ -135,6 +135,7 @@ SLASH_COMMANDS = [
     "rlstats",
     "setrlaccount",
     "unlinkrlaccount",
+    "rocket",
     "ticket",
     "preferences",
     "roleinfo",
@@ -146,6 +147,8 @@ SLASH_COMMANDS = [
     "leaderboard",
     "optins",
     "todo-update",
+    "warframe",
+    "warframemarket",
 ]  # Commands that have slash (/) versions
 ADMIN_COMMANDS = [
     "clear",
@@ -158,7 +161,13 @@ ADMIN_COMMANDS = [
     "optins",
     "todo-update",
     "adminrlstats",
+    "restorecongratsview",
     "create-button",
+    "server-guide",
+    "load",
+    "unload",
+    "reload",
+    "listcogs",
 ]  # Commands restricted to Admins only
 MOD_COMMANDS = [
     "clear",

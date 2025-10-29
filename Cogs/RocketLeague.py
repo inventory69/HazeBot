@@ -385,7 +385,7 @@ class RocketLeague(commands.Cog):
         if not self.check_ranks.is_running():
             self.check_ranks.start()
             logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
-        
+
         self.bot.add_view(RocketLeagueHubView())
         logger.info("RocketLeague hub view restored.")
 
@@ -1016,6 +1016,31 @@ class RocketLeague(commands.Cog):
         view = RocketLeagueHubView()
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         logger.info(f"Rocket League hub opened by {interaction.user}")
+
+    @commands.command(name="rocket")
+    async def rocket_command(self, ctx: commands.Context) -> None:
+        """
+        🚀 Rocket League Hub - Manage your account and view stats
+        """
+
+        # Create a mock interaction object to use the same helper
+        class MockInteraction:
+            def __init__(self, ctx):
+                self.user = ctx.author
+                self.client = ctx.bot
+                self.guild = ctx.guild
+                self.channel = ctx.channel
+                self._responded = False
+
+            async def response_send_message(self, **kwargs):
+                # Remove ephemeral for prefix commands (not supported)
+                kwargs.pop("ephemeral", None)
+                await self.channel.send(**kwargs)
+
+        # Create mock interaction and call helper
+        mock_interaction = MockInteraction(ctx)
+        mock_interaction.response = type("Response", (), {"send_message": mock_interaction.response_send_message})()
+        await self.show_rocket_hub(mock_interaction)
 
     @app_commands.command(name="rocket", description="🚀 Rocket League Hub - Manage your account and view stats")
     @app_commands.guilds(discord.Object(id=get_guild_id()))

@@ -9,12 +9,14 @@ from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
 
+
 class CogManager(commands.Cog):
     """Cog Manager: Load, unload, and reload cogs with persistent states"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.disabled_cogs_file = "TestData/disabled_cogs.json" if os.getenv("PROD_MODE", "false").lower() == "false" else "Data/disabled_cogs.json"
+        prod_mode = os.getenv("PROD_MODE", "false").lower() == "false"
+        self.disabled_cogs_file = "TestData/disabled_cogs.json" if prod_mode else "Data/disabled_cogs.json"
         self.ensure_disabled_cogs_file()
         # Ensure CogManager is never disabled
         self.enable_cog("cogmanager")
@@ -23,20 +25,20 @@ class CogManager(commands.Cog):
         """Ensure the disabled cogs file exists"""
         os.makedirs(os.path.dirname(self.disabled_cogs_file), exist_ok=True)
         if not os.path.exists(self.disabled_cogs_file):
-            with open(self.disabled_cogs_file, 'w') as f:
+            with open(self.disabled_cogs_file, "w") as f:
                 json.dump([], f)
 
     def get_disabled_cogs(self) -> list:
         """Get list of disabled cogs"""
         try:
-            with open(self.disabled_cogs_file, 'r') as f:
+            with open(self.disabled_cogs_file, "r") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return []
 
     def save_disabled_cogs(self, disabled_cogs: list):
         """Save list of disabled cogs"""
-        with open(self.disabled_cogs_file, 'w') as f:
+        with open(self.disabled_cogs_file, "w") as f:
             json.dump(disabled_cogs, f, indent=2)
 
     def is_cog_disabled(self, cog_name: str) -> bool:
@@ -67,18 +69,14 @@ class CogManager(commands.Cog):
             await self.bot.load_extension(f"Cogs.{cog_name}")
             self.enable_cog(cog_name)
             embed = discord.Embed(
-                title="✅ Cog Loaded",
-                description=f"Successfully loaded cog `{cog_name}`",
-                color=PINK
+                title="✅ Cog Loaded", description=f"Successfully loaded cog `{cog_name}`", color=PINK
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
             logger.info(f"Cog {cog_name} loaded by {ctx.author}")
         except Exception as e:
             embed = discord.Embed(
-                title="❌ Load Failed",
-                description=f"Failed to load cog `{cog_name}`: {e}",
-                color=discord.Color.red()
+                title="❌ Load Failed", description=f"Failed to load cog `{cog_name}`: {e}", color=discord.Color.red()
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
@@ -92,19 +90,17 @@ class CogManager(commands.Cog):
             embed = discord.Embed(
                 title="❌ Cannot Unload",
                 description="CogManager cannot be unloaded - it's required for cog management!",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
             return
-            
+
         try:
             await self.bot.unload_extension(f"Cogs.{cog_name}")
             self.disable_cog(cog_name)
             embed = discord.Embed(
-                title="✅ Cog Unloaded",
-                description=f"Successfully unloaded cog `{cog_name}`",
-                color=PINK
+                title="✅ Cog Unloaded", description=f"Successfully unloaded cog `{cog_name}`", color=PINK
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
@@ -113,7 +109,7 @@ class CogManager(commands.Cog):
             embed = discord.Embed(
                 title="❌ Unload Failed",
                 description=f"Failed to unload cog `{cog_name}`: {e}",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
@@ -128,9 +124,7 @@ class CogManager(commands.Cog):
             await self.bot.load_extension(f"Cogs.{cog_name}")
             # Don't change disabled state on reload
             embed = discord.Embed(
-                title="✅ Cog Reloaded",
-                description=f"Successfully reloaded cog `{cog_name}`",
-                color=PINK
+                title="✅ Cog Reloaded", description=f"Successfully reloaded cog `{cog_name}`", color=PINK
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
@@ -139,7 +133,7 @@ class CogManager(commands.Cog):
             embed = discord.Embed(
                 title="❌ Reload Failed",
                 description=f"Failed to reload cog `{cog_name}`: {e}",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
             set_pink_footer(embed, bot=self.bot.user)
             await ctx.send(embed=embed)
@@ -174,18 +168,19 @@ class CogManager(commands.Cog):
     async def on_command_error(self, ctx: commands.Context, error):
         """Handle command errors"""
         if isinstance(error, commands.MissingPermissions):
-            if ctx.command.name in ['load', 'unload', 'reload', 'listcogs']:
+            if ctx.command.name in ["load", "unload", "reload", "listcogs"]:
                 embed = discord.Embed(
                     title="❌ Permission Denied",
                     description="This command requires administrator permissions.",
-                    color=discord.Color.red()
+                    color=discord.Color.red(),
                 )
                 set_pink_footer(embed, bot=self.bot.user)
                 await ctx.send(embed=embed)
                 return
-        
+
         # Let other errors be handled by global error handler
         raise error
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(CogManager(bot))

@@ -36,31 +36,86 @@ class Utility(commands.Cog):
             description="Here are all available commands:\n",
             color=PINK,
         )
-        # List of commands that have slash versions
-        slash_commands = SLASH_COMMANDS  # Removed "say"
-        normal_commands = []
-        admin_commands = []
-        mod_commands = []
-        for cog_name, cog in self.bot.cogs.items():
-            for cmd in cog.get_commands():
-                is_admin_only = cmd.name in ADMIN_COMMANDS  # Use from Config
-                is_mod_only = cmd.name in MOD_COMMANDS
-                if not cmd.hidden:
-                    entry = f"**!{cmd.name}**\n{cmd.help or 'No description'}"
-                    if cmd.name in slash_commands:
-                        entry += " (Slash available)"
-                    entry += "\n"  # Removed long separator to save space
-                    if is_admin_only and is_admin:
-                        admin_commands.append(entry)
-                    elif is_mod_only and (is_admin or is_mod):
-                        mod_commands.append(entry)
-                    elif not is_admin_only and not is_mod_only:
-                        normal_commands.append(entry)
+
+        # Command descriptions mapping (centralized)
+        command_descriptions = {
+            "help": "📖 Show this help message",
+            "status": "📊 Bot status and latency",
+            "profile": "👤 View user profile",
+            "preferences": "⚙️ Toggle settings (changelog notifications)",
+            "roleinfo": "📋 View role information",
+            "leaderboard": "🏆 View server leaderboards",
+            "ticket": "🎫 Create a support ticket",
+            "rlstats": "🚀 View Rocket League stats",
+            "setrlaccount": "🔗 Link Rocket League account",
+            "unlinkrlaccount": "🔓 Unlink Rocket League account",
+            "rocket": "🚀 Rocket League Hub",
+            "warframe": "🎮 Warframe Hub - Market & Status (Beta)",
+            "warframemarket": "💰 Search Warframe market (Beta)",
+            "clear": "🧹 Delete messages in bulk",
+            "mod": "🛡️ Moderation actions",
+            "modpanel": "🎛️ Moderation control panel",
+            "modoverview": "📊 Moderation statistics",
+            "moddetails": "🔍 User moderation history",
+            "optins": "📈 Changelog opt-in statistics",
+            "todo-update": "✅ Update to-do list",
+            "adminrlstats": "🚀 Admin RL stats (bypass cache)",
+            "changelog": "📝 Generate and post changelogs",
+            "say": "💬 Send message as bot",
+            "restorecongratsview": "🔄 Restore congrats button",
+            "create-button": "🔘 Create persistent buttons",
+            "server-guide": "🌟 Send server guide",
+            "load": "📦 Load a cog",
+            "unload": "📤 Unload a cog",
+            "reload": "🔄 Reload a cog",
+            "listcogs": "📋 List all cogs",
+        }
+
+        # Build command lists from Config.py
+        # User commands = SLASH_COMMANDS that are NOT in MOD_COMMANDS or ADMIN_COMMANDS
+
+        restricted_commands = set(MOD_COMMANDS + ADMIN_COMMANDS)
+        user_command_names = [cmd for cmd in SLASH_COMMANDS if cmd not in restricted_commands]
+
+        # Build tuples: (name, description, has_slash)
+        user_commands_info = [
+            (cmd, command_descriptions.get(cmd, "No description"), cmd in SLASH_COMMANDS) for cmd in user_command_names
+        ]
+
+        mod_commands_info = [
+            (cmd, command_descriptions.get(cmd, "No description"), cmd in SLASH_COMMANDS) for cmd in MOD_COMMANDS
+        ]
+
+        admin_commands_info = [
+            (cmd, command_descriptions.get(cmd, "No description"), cmd in SLASH_COMMANDS)
+            for cmd in ADMIN_COMMANDS
+            if cmd not in MOD_COMMANDS  # Don't duplicate commands that are already in MOD_COMMANDS
+        ]
+
+        def format_command_list(commands_info):
+            formatted = []
+            for cmd_name, description, has_prefix in commands_info:
+                if has_prefix:
+                    entry = f"**!{cmd_name}** / **/{cmd_name}**\n{description}\n"
+                else:
+                    entry = f"**!{cmd_name}**\n{description}\n"
+                formatted.append(entry)
+            return formatted
+
+        # Format commands
+        normal_commands = format_command_list(user_commands_info)
+        mod_commands = format_command_list(mod_commands_info) if (is_admin or is_mod) else []
+        admin_commands = format_command_list(admin_commands_info) if is_admin else []
 
         # Function to add fields in chunks to avoid 1024 char limit
-        def add_chunked_fields(name_prefix, commands_list):
+        def add_chunked_fields(name_prefix, commands_list, add_separator=False):
             if not commands_list:
                 return
+
+            # Add separator as standalone field before the category
+            if add_separator:
+                embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━━━━━", inline=False)
+
             chunks = []
             current_chunk = []
             current_length = 0
@@ -80,9 +135,9 @@ class Utility(commands.Cog):
                 field_name = f"{name_prefix}" if len(chunks) == 1 else f"{name_prefix} ({idx + 1}/{len(chunks)})"
                 embed.add_field(name=field_name, value="\n".join(chunk), inline=False)
 
-        add_chunked_fields("✨ User Commands", normal_commands)
-        add_chunked_fields("📦 Mod Commands", mod_commands)
-        add_chunked_fields("🛡️ Admin Commands", admin_commands)
+        add_chunked_fields("✨ User Commands", normal_commands, add_separator=False)
+        add_chunked_fields("📦 Mod Commands", mod_commands, add_separator=True)
+        add_chunked_fields("🛡️ Admin Commands", admin_commands, add_separator=True)
 
         embed.set_footer(
             text="Powered by Haze World 💖",
@@ -136,98 +191,15 @@ class Utility(commands.Cog):
     # /help (Slash) - Public, but shows more for admins
     @app_commands.command(
         name="help",
-        description="📖 Shows all available commands with their descriptions.",
+        description="📖 Get help with available commands",
     )
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def help_slash(self, interaction: discord.Interaction) -> None:
         is_admin = any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
         is_mod = any(role.id == MODERATOR_ROLE_ID for role in interaction.user.roles)
         embed = self.create_help_embed(interaction, is_admin, is_mod)
-        if is_admin or is_mod:
-            # Check if embed is too large (over 2000 chars total)
-            embed_length = (
-                len(embed.title or "")
-                + len(embed.description or "")
-                + sum(len(field.name) + len(field.value) for field in embed.fields)
-            )
-            if embed_length > 1900:  # Buffer for safety
-                # Split into multiple embeds if needed (simple split by fields)
-                embeds = []
-                current_embed = discord.Embed(title=embed.title, description=embed.description, color=embed.color)
-                for field in embed.fields:
-                    if (
-                        len(current_embed.fields) >= 5
-                        or (
-                            len(current_embed.title or "")
-                            + len(current_embed.description or "")
-                            + sum(len(f.name) + len(f.value) for f in current_embed.fields)
-                            + len(field.name)
-                            + len(field.value)
-                        )
-                        > 1900
-                    ):
-                        embeds.append(current_embed)
-                        current_embed = discord.Embed(title=embed.title, description="", color=embed.color)
-                    current_embed.add_field(name=field.name, value=field.value, inline=field.inline)
-                if current_embed.fields:
-                    embeds.append(current_embed)
-                for e in embeds:
-                    set_pink_footer(e, bot=interaction.client.user)
-                # Send embeds via DM
-                try:
-                    for additional_embed in embeds:
-                        await interaction.user.send(embed=additional_embed)
-                    await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
-                except discord.Forbidden:
-                    await interaction.response.send_message(
-                        "❌ I couldn't send you a DM. Please check your privacy settings.",
-                        ephemeral=True,
-                    )
-            else:
-                try:
-                    await interaction.user.send(embed=embed)
-                    await interaction.response.send_message("📬 Help sent to your DMs!", ephemeral=True)
-                except discord.Forbidden:
-                    await interaction.response.send_message(
-                        "❌ I couldn't send you a DM. Please check your privacy settings.",
-                        ephemeral=True,
-                    )
-        else:
-            # Check if embed is too large (over 2000 chars total)
-            embed_length = (
-                len(embed.title or "")
-                + len(embed.description or "")
-                + sum(len(field.name) + len(field.value) for field in embed.fields)
-            )
-            if embed_length > 1900:  # Buffer for safety
-                # Split into multiple embeds if needed (simple split by fields)
-                embeds = []
-                current_embed = discord.Embed(title=embed.title, description=embed.description, color=embed.color)
-                for field in embed.fields:
-                    if (
-                        len(current_embed.fields) >= 5
-                        or (
-                            len(current_embed.title or "")
-                            + len(current_embed.description or "")
-                            + sum(len(f.name) + len(f.value) for f in current_embed.fields)
-                            + len(field.name)
-                            + len(field.value)
-                        )
-                        > 1900
-                    ):
-                        embeds.append(current_embed)
-                        current_embed = discord.Embed(title=embed.title, description="", color=embed.color)
-                    current_embed.add_field(name=field.name, value=field.value, inline=field.inline)
-                if current_embed.fields:
-                    embeds.append(current_embed)
-                for e in embeds:
-                    set_pink_footer(e, bot=interaction.client.user)
-                # Send first embed with response, then followups for the rest
-                await interaction.response.send_message(embed=embeds[0], ephemeral=False)
-                for additional_embed in embeds[1:]:
-                    await interaction.followup.send(embed=additional_embed, ephemeral=False)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=False)
+        set_pink_footer(embed, bot=interaction.client.user)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # !status (Prefix)
     @commands.command(name="status")

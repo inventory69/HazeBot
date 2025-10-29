@@ -57,7 +57,7 @@ class HazeWorldBot(commands.Bot):
     async def setup_hook(self) -> None:
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
-        
+
         # Load CogManager first to access disabled cogs
         try:
             await self.load_extension("Cogs.CogManager")
@@ -66,11 +66,11 @@ class HazeWorldBot(commands.Bot):
         except Exception as e:
             Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
             return  # Can't continue without CogManager
-        
+
         # Get disabled cogs from CogManager
         cog_manager = self.get_cog("CogManager")
         disabled_cogs = cog_manager.get_disabled_cogs() if cog_manager else []
-        
+
         # Load other cogs, skipping disabled ones
         for cog in pathlib.Path("Cogs").glob("*.py"):
             if cog.name.startswith("_") or cog.stem == "CogManager":
@@ -84,7 +84,7 @@ class HazeWorldBot(commands.Bot):
                 Logger.info(f"   └─ ✅ Loaded: {cog.stem}")
             except Exception as e:
                 Logger.error(f"   └─ ❌ Failed to load {cog.stem}: {e}")
-        
+
         if loaded_cogs:
             Logger.info(f"🧩 All Cogs loaded: {', '.join(loaded_cogs)}")
         else:
@@ -221,10 +221,10 @@ class HazeWorldBot(commands.Bot):
 
         # Check message cooldown (skip for admin commands)
         now = message.created_at.timestamp()
-        is_admin_command = message.content.startswith('!') and any(
-            cmd in message.content.lower() for cmd in ['load', 'unload', 'reload', 'listcogs']
+        is_admin_command = message.content.startswith("!") and any(
+            cmd in message.content.lower() for cmd in ["load", "unload", "reload", "listcogs"]
         )
-        
+
         if not is_admin_command:
             if message.author.id in self.UserCooldowns:
                 if now - self.UserCooldowns[message.author.id] < MessageCooldown:

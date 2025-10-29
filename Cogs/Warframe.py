@@ -1212,13 +1212,26 @@ class Warframe(commands.Cog):
 
     @commands.command(name="warframe")
     async def warframe_info(self, ctx: commands.Context):
-        """Show Warframe Hub (redirects to slash command)"""
-        await ctx.send(
-            "🌌 **Warframe Hub** is now available as a slash command!\n\n"
-            "Use `/warframe` to access the interactive Warframe hub with all features.\n\n"
-            "⚠️ **Note:** Warframe features are currently in beta testing."
-        )
-        logger.info(f"Warframe hub redirect shown to {ctx.author}")
+        """🌌 Warframe Hub - Game status, market, and more (Beta)"""
+
+        # Create a mock interaction object to use the same helper
+        class MockInteraction:
+            def __init__(self, ctx):
+                self.user = ctx.author
+                self.client = ctx.bot
+                self.guild = ctx.guild
+                self.channel = ctx.channel
+                self._responded = False
+
+            async def response_send_message(self, **kwargs):
+                # Remove ephemeral for prefix commands (not supported)
+                kwargs.pop("ephemeral", None)
+                await self.channel.send(**kwargs)
+
+        # Create mock interaction and call helper
+        mock_interaction = MockInteraction(ctx)
+        mock_interaction.response = type("Response", (), {"send_message": mock_interaction.response_send_message})()
+        await self.show_warframe_hub(mock_interaction)
 
     @app_commands.command(name="warframe", description="🌌 Warframe Hub - Game status, market, and more (Beta)")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
