@@ -86,6 +86,7 @@ class EmojiRichFormatter(logging.Formatter):
                 "Presence": "👤 [Presence]",
                 "RocketLeague": "🚀 [RocketLeague]",
                 "SupportButtons": "🎫 [SupportButtons]",
+                "Warframe": "🎮 [Warframe]",
             }
             return prefixes.get(cog_name, "")
         return ""
