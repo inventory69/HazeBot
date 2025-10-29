@@ -393,6 +393,9 @@ async def create_ticket(
     await channel.send(
         "Please describe your problem, application, or support request in detail here. An admin or moderator will handle it soon."
     )
+    await channel.send(
+        "💡 **Notification Tip:** To get notified when someone responds, right-click this channel → Notification Settings → All Messages. This ensures you don't miss any updates!"
+    )
     # If initial_message provided, send it in the channel
     if initial_message:
         await channel.send(f"**Initial details from {interaction.user.name}:**\n{initial_message}")
