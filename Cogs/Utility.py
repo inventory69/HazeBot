@@ -69,6 +69,8 @@ class Utility(commands.Cog):
             "unload": "📤 Unload a cog",
             "reload": "🔄 Reload a cog",
             "listcogs": "📋 List all cogs",
+            "togglediscordlogs": "📡 Toggle Discord logging",
+            "testdiscordlog": "🧪 Test Discord logging",
         }
 
         # Build command lists from Config.py

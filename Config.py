@@ -78,6 +78,7 @@ PROD_IDS = {
     "WELCOME_PUBLIC_CHANNEL_ID": 1424164269775392858,
     "TODO_CHANNEL_ID": 1424862421650247730,
     "RL_CHANNEL_ID": 1425472657293443236,
+    "LOG_CHANNEL_ID": 1433187806347526244,  # Discord logging channel (PROD)
 }
 
 # Test IDs (Test Discord Server)
@@ -112,6 +113,7 @@ TEST_IDS = {
     "WELCOME_PUBLIC_CHANNEL_ID": 1429722992857976854,
     "TODO_CHANNEL_ID": 1429724097570541618,
     "RL_CHANNEL_ID": 1429804818481938463,
+    "LOG_CHANNEL_ID": 1433187651191701688,  # Discord logging channel (TEST)
 }
 
 # Select IDs based on PROD_MODE
@@ -127,6 +129,30 @@ CHANGELOG_CHANNEL_ID = CURRENT_IDS["CHANGELOG_CHANNEL_ID"]
 
 INTEREST_ROLE_IDS = CURRENT_IDS["INTEREST_ROLE_IDS"]
 INTEREST_ROLES = CURRENT_IDS["INTEREST_ROLES"]
+
+# === Logging ===
+LOG_CHANNEL_ID = CURRENT_IDS["LOG_CHANNEL_ID"]
+
+# Cog prefixes for logging (emoji + label)
+COG_PREFIXES = {
+    "CogManager": "🔧 [CogManager]",
+    "Changelog": "📝 [Changelog]",
+    "DiscordLogging": "📡 [DiscordLogging]",
+    "Leaderboard": "🏆 [Leaderboard]",
+    "ModPerks": "🛡️ [ModPerks]",
+    "Preferences": "⚙️ [Preferences]",
+    "Presence": "👤 [Presence]",
+    "Profile": "👤 [Profile]",
+    "RocketLeague": "🚀 [RocketLeague]",
+    "RoleInfo": "📋 [RoleInfo]",
+    "ServerGuide": "🌟 [ServerGuide]",
+    "SupportButtons": "🎫 [SupportButtons]",
+    "TicketSystem": "🎫 [TicketSystem]",
+    "TodoList": "✅ [TodoList]",
+    "Utility": "🔧 [Utility]",
+    "Warframe": "🎮 [Warframe]",
+    "Welcome": "👋 [Welcome]",
+}
 
 # === Commands ===
 SLASH_COMMANDS = [
@@ -168,6 +194,8 @@ ADMIN_COMMANDS = [
     "unload",
     "reload",
     "listcogs",
+    "togglediscordlogs",
+    "testdiscordlog",
 ]  # Commands restricted to Admins only
 MOD_COMMANDS = [
     "clear",
