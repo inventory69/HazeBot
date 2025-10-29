@@ -288,6 +288,25 @@ class RocketLeague(commands.Cog):
         if self.flaresolverr_url and not self.flaresolverr_url.startswith("https://"):
             logger.error(f"❌ FlareSolverr URL is not using HTTPS: {self.flaresolverr_url}")
 
+    async def cog_unload(self):
+        """
+        Cleanup when cog is unloaded.
+        """
+        # Stop the rank check task
+        if hasattr(self, 'check_ranks') and self.check_ranks.is_running():
+            self.check_ranks.cancel()
+            logger.info("Rank check task cancelled.")
+        
+        # Shutdown the thread pool executor
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=True)
+            logger.info("Thread pool executor shutdown.")
+        
+        # Close the aiohttp session
+        if hasattr(self, 'session') and not self.session.closed:
+            await self.session.close()
+            logger.info("HTTP session closed.")
+
     def fetch_stats_sync(self, platform: str, username: str) -> Optional[Dict[str, Any]]:
         """
         Synchronous fetch using external service.
