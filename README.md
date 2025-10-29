@@ -47,6 +47,7 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Account Unlinking:** `/unlinkrlaccount` to remove your linked RL account.
 - **Admin Stats:** `/adminrlstats` (admin-only) bypasses cache for immediate stats.
 - **Rank Promotion Notifications:** Automatic notifications and congratulation embeds for rank-ups.
+- **Persistent Congrats Buttons:** Community can congratulate players on rank-ups (3.5 day timeout, survives bot restarts).
 - **Performance Caching:** API calls are cached for 1 hour to reduce external requests and improve response times.
 
 ### 📝 Changelog System
@@ -69,6 +70,16 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 ### 🏆 Leaderboard System
 - **Various Leaderboards:** `/leaderboard` and `!leaderboard` with categories for RL ranks (overall/1v1/2v2/3v3/4v4), resolved tickets, most messages, and most images posted.
 - **Real-time Updates:** Activity data is cached for 30 seconds for optimal performance.
+
+### 🎮 Warframe Integration (Beta)
+- **Interactive Hub:** `/warframe` opens persistent hub with quick-access buttons for status and market features.
+- **Game Status Tracking:** Real-time alerts, fissures, sortie, and invasions via tenno.tools API.
+- **Market Search:** Smart item search with fuzzy matching across 3600+ tradeable items.
+- **Price Statistics:** Live price data (48h/90d averages, volume, median) from warframe.market v2 API.
+- **Order Listings:** View top buy/sell orders with online status indicators (🟢 Ingame/Online, ⚫ Offline).
+- **Trade Message Generator:** Copy-paste ready in-game chat messages in warframe.market format.
+- **Interactive UI:** Ephemeral responses, modal search, dropdown selections, and refresh buttons.
+- **Smart Caching:** Status (60s), stats (10min), items (1h) for optimal performance.
 
 ### 🎮 Dynamic Presence
 - **Inventory-Themed Status:** Bot presence updates hourly with fun inventory messages and emojis.
@@ -188,16 +199,20 @@ For contributors and developers:
    HazeBot/
    ├── Cogs/                 # Discord bot cogs (features)
    │   ├── Changelog.py      # Changelog generation
+   │   ├── CogManager.py     # Dynamic cog loading/unloading
    │   ├── Leaderboard.py    # Leaderboards and activity tracking
    │   ├── ModPerks.py       # Moderation tools
    │   ├── Preferences.py    # User preferences
    │   ├── Presence.py       # Dynamic presence updates
    │   ├── Profile.py        # User profiles
-   │   ├── RocketLeague.py   # RL stats integration
+   │   ├── RocketLeague.py   # RL stats integration with persistent congrats views
    │   ├── RoleInfo.py       # Role information
+   │   ├── ServerGuide.py    # Server guide and info
+   │   ├── SupportButtons.py # Persistent support buttons
    │   ├── TicketSystem.py   # Support ticket system
    │   ├── TodoList.py       # To-do list management
    │   ├── Utility.py        # Utility commands
+   │   ├── Warframe.py       # Warframe market and status integration (Beta)
    │   ├── Welcome.py        # Welcome system
    │   └── __init__.py       # Cog initialization
    ├── Utils/                # Utility modules
@@ -288,6 +303,8 @@ For contributors and developers:
 | `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
 | `/ticket` | `!ticket` | Create support ticket |
 | `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
+| `/warframe` | `!warframe` | Warframe hub with market and status (Beta) |
+| `/warframemarket [item]` | `!warframemarket` | Search Warframe market items (Beta) |
 | `/todo-update` | `!todo-update` | Update to-do list (Mod/Admin only) |
 
 #### Moderator Commands (Slot Keepers+)
@@ -309,6 +326,7 @@ For contributors and developers:
 | `/changelog` | `!changelog` | Generate and post bot changelogs with AI |
 | `/say [message]` | `!say` | Send message as bot |
 | `/adminrlstats [platform] [username]` | `!adminrlstats` | Admin RL stats (bypass cache) |
+| `!restorecongratsview [message_id] [user_id]` | - | Restore persistent congrats button (Admin only) |
 | `!create-button [--text] [--command] [--emoji] [--type]` | - | Create persistent buttons for any command type |
 
 ---
@@ -348,6 +366,7 @@ The bot includes advanced caching to optimize performance:
 - **requests** - Synchronous HTTP requests
 - **beautifulsoup4** - HTML parsing for web scraping
 - **openai** - OpenAI API for changelog generation
+- **difflib** - Fuzzy matching for Warframe item search
 
 ### Development Dependencies
 - **ruff** - Fast Python linter and formatter
