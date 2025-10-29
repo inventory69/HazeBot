@@ -381,9 +381,12 @@ class RocketLeague(commands.Cog):
         """
         Start the rank check task when the bot is ready and restore persistent views.
         """
-        self.check_ranks.start()
+        # Only start once
+        if not self.check_ranks.is_running():
+            self.check_ranks.start()
+            logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
+        
         self.bot.add_view(RocketLeagueHubView())
-        logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
         logger.info("RocketLeague hub view restored.")
 
         # Restore congrats views
@@ -416,8 +419,6 @@ class RocketLeague(commands.Cog):
         with open(self.congrats_views_file, "w") as f:
             json.dump(self.congrats_views_data, f)
         logger.info(f"Restored {restored_count} congrats views.")
-        logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
-        logger.info("RocketLeague hub view restored.")
 
         # Validate that HTTPS is being used
         if self.flaresolverr_url and not self.flaresolverr_url.startswith("https://"):

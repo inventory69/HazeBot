@@ -77,6 +77,20 @@ class CommandButtonView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Rocket League system not available.", ephemeral=True)
 
+    @discord.ui.button(
+        label="Warframe", style=discord.ButtonStyle.primary, emoji="🎮", custom_id="guide_warframe_button"
+    )
+    async def warframe_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Trigger /warframe command"""
+        # Get the warframe cog
+        wf_cog = interaction.client.get_cog("Warframe")
+        if wf_cog:
+            # Call the warframe hub method
+            await wf_cog.show_warframe_hub(interaction)
+            logger.info(f"Warframe hub button pressed by {interaction.user}")
+        else:
+            await interaction.response.send_message("❌ Warframe system not available.", ephemeral=True)
+
 
 class ServerGuide(commands.Cog):
     """Helper cog for server guide message with command buttons"""
@@ -122,7 +136,8 @@ class ServerGuide(commands.Cog):
                 "• **Help** – View all available commands\n"
                 "• **Ticket** – Create a support ticket\n"
                 "• **Profile** – Check your server profile\n"
-                "• **Rocket League** – Track your RL ranks"
+                "• **Rocket League** – Track your RL ranks\n"
+                "• **Warframe** – Market & game status (Beta)"
             ),
             inline=False,
         )
