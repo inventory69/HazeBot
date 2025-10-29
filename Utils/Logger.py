@@ -13,6 +13,7 @@ from typing import Tuple
 from Config import (
     LogLevel,
     CommandPrefix,
+    COG_PREFIXES,
 )  # Assuming CommandPrefix is available in HazeWorldBot Config
 
 
@@ -76,19 +77,7 @@ class EmojiRichFormatter(logging.Formatter):
         parts = name.split(".")
         if len(parts) >= 2 and parts[-2] == "Cogs":
             cog_name = parts[-1]
-            prefixes = {
-                "Utility": "🔧 [Utility]",
-                "Preferences": "⚙️ [Preferences]",
-                "TicketSystem": "🎫 [TicketSystem]",
-                "TodoList": "✅ [TodoList]",
-                "Welcome": "👋 [Welcome]",
-                "ServerGuide": "🌟 [ServerGuide]",
-                "Presence": "👤 [Presence]",
-                "RocketLeague": "🚀 [RocketLeague]",
-                "SupportButtons": "🎫 [SupportButtons]",
-                "Warframe": "🎮 [Warframe]",
-            }
-            return prefixes.get(cog_name, "")
+            return COG_PREFIXES.get(cog_name, "")
         return ""
 
 

@@ -67,13 +67,21 @@ class HazeWorldBot(commands.Bot):
             Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
             return  # Can't continue without CogManager
 
+        # Load DiscordLogging second to capture as many startup logs as possible
+        try:
+            await self.load_extension("Cogs.DiscordLogging")
+            loaded_cogs.append("DiscordLogging")
+            Logger.info("   └─ ✅ Loaded: DiscordLogging")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load DiscordLogging: {e}")
+
         # Get disabled cogs from CogManager
         cog_manager = self.get_cog("CogManager")
         disabled_cogs = cog_manager.get_disabled_cogs() if cog_manager else []
 
-        # Load other cogs, skipping disabled ones
+        # Load other cogs, skipping disabled ones and already loaded ones
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_") or cog.stem == "CogManager":
+            if cog.name.startswith("_") or cog.stem in ["CogManager", "DiscordLogging"]:
                 continue
             if cog.stem in disabled_cogs:
                 Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")

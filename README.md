@@ -106,6 +106,11 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 
 ### 📊 Logging & Monitoring
 - **Rich Logging:** Emoji-based, color-highlighted logs for all major actions.
+- **Discord Logging:** Real-time log streaming to Discord channel (all levels: DEBUG, INFO, WARNING, ERROR, CRITICAL).
+- **Live Log Channel:** Automatically posts all bot logs with ANSI formatting and cog-specific emojis.
+- **Toggle Control:** `!togglediscordlogs` to enable/disable Discord logging (Admin only).
+- **Test Command:** `!testdiscordlog` to test logging with sample messages.
+- **Batching System:** Logs are sent in batches every 5 seconds to avoid rate limits.
 - **Startup Overview:** Lists all loaded cogs and available commands.
 - **Comprehensive Monitoring:** Tracks bot performance and user interactions.
 
@@ -200,6 +205,7 @@ For contributors and developers:
    ├── Cogs/                 # Discord bot cogs (features)
    │   ├── Changelog.py      # Changelog generation
    │   ├── CogManager.py     # Dynamic cog loading/unloading
+   │   ├── DiscordLogging.py # Real-time log streaming to Discord
    │   ├── Leaderboard.py    # Leaderboards and activity tracking
    │   ├── ModPerks.py       # Moderation tools
    │   ├── Preferences.py    # User preferences
@@ -306,6 +312,10 @@ For contributors and developers:
 !changelog  # Create and post changelog with AI formatting
 !changelog --text "Your PR text here"  # Generate changelog from text
 
+# Discord logging
+!togglediscordlogs  # Toggle Discord logging on/off
+!testdiscordlog  # Send test logs to Discord channel
+
 # Bot management
 !create-button  # Create persistent support buttons
 !server-guide  # Send interactive server guide
@@ -364,6 +374,8 @@ For contributors and developers:
 | `!unload [cog_name]` | - | Unload a cog dynamically (prefix only) |
 | `!reload [cog_name]` | - | Reload a cog dynamically (prefix only) |
 | `!listcogs` | - | List all available cogs and their status (prefix only) |
+| `!togglediscordlogs` | - | Toggle Discord logging on/off (prefix only) |
+| `!testdiscordlog` | - | Test Discord logging with sample messages (prefix only) |
 
 ---
 
