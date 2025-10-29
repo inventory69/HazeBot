@@ -219,12 +219,17 @@ class HazeWorldBot(commands.Bot):
         if message.author.bot:
             return
 
-        # Check message cooldown
+        # Check message cooldown (skip for admin commands)
         now = message.created_at.timestamp()
-        if message.author.id in self.UserCooldowns:
-            if now - self.UserCooldowns[message.author.id] < MessageCooldown:
-                return  # Ignore message if on cooldown
-        self.UserCooldowns[message.author.id] = now
+        is_admin_command = message.content.startswith('!') and any(
+            cmd in message.content.lower() for cmd in ['load', 'unload', 'reload', 'listcogs']
+        )
+        
+        if not is_admin_command:
+            if message.author.id in self.UserCooldowns:
+                if now - self.UserCooldowns[message.author.id] < MessageCooldown:
+                    return  # Ignore message if on cooldown
+            self.UserCooldowns[message.author.id] = now
 
         await self.process_commands(message)
 

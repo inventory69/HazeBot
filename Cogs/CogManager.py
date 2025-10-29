@@ -4,6 +4,9 @@ import json
 import os
 import logging
 
+from Config import PINK
+from Utils.EmbedUtils import set_pink_footer
+
 logger = logging.getLogger(__name__)
 
 class CogManager(commands.Cog):
@@ -63,10 +66,22 @@ class CogManager(commands.Cog):
         try:
             await self.bot.load_extension(f"Cogs.{cog_name}")
             self.enable_cog(cog_name)
-            await ctx.send(f"✅ Cog `{cog_name}` loaded successfully!")
+            embed = discord.Embed(
+                title="✅ Cog Loaded",
+                description=f"Successfully loaded cog `{cog_name}`",
+                color=PINK
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             logger.info(f"Cog {cog_name} loaded by {ctx.author}")
         except Exception as e:
-            await ctx.send(f"❌ Failed to load cog `{cog_name}`: {e}")
+            embed = discord.Embed(
+                title="❌ Load Failed",
+                description=f"Failed to load cog `{cog_name}`: {e}",
+                color=discord.Color.red()
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             logger.error(f"Failed to load cog {cog_name}: {e}")
 
     @commands.command(name="unload")
@@ -74,16 +89,34 @@ class CogManager(commands.Cog):
     async def unload_cog(self, ctx: commands.Context, cog_name: str):
         """Unload a cog"""
         if cog_name.lower() == "cogmanager":
-            await ctx.send("❌ Cannot unload CogManager - it's required for cog management!")
+            embed = discord.Embed(
+                title="❌ Cannot Unload",
+                description="CogManager cannot be unloaded - it's required for cog management!",
+                color=discord.Color.red()
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             return
             
         try:
             await self.bot.unload_extension(f"Cogs.{cog_name}")
             self.disable_cog(cog_name)
-            await ctx.send(f"✅ Cog `{cog_name}` unloaded successfully!")
+            embed = discord.Embed(
+                title="✅ Cog Unloaded",
+                description=f"Successfully unloaded cog `{cog_name}`",
+                color=PINK
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             logger.info(f"Cog {cog_name} unloaded by {ctx.author}")
         except Exception as e:
-            await ctx.send(f"❌ Failed to unload cog `{cog_name}`: {e}")
+            embed = discord.Embed(
+                title="❌ Unload Failed",
+                description=f"Failed to unload cog `{cog_name}`: {e}",
+                color=discord.Color.red()
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             logger.error(f"Failed to unload cog {cog_name}: {e}")
 
     @commands.command(name="reload")
@@ -94,30 +127,65 @@ class CogManager(commands.Cog):
             await self.bot.unload_extension(f"Cogs.{cog_name}")
             await self.bot.load_extension(f"Cogs.{cog_name}")
             # Don't change disabled state on reload
-            await ctx.send(f"✅ Cog `{cog_name}` reloaded successfully!")
+            embed = discord.Embed(
+                title="✅ Cog Reloaded",
+                description=f"Successfully reloaded cog `{cog_name}`",
+                color=PINK
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             logger.info(f"Cog {cog_name} reloaded by {ctx.author}")
         except Exception as e:
-            await ctx.send(f"❌ Failed to reload cog `{cog_name}`: {e}")
+            embed = discord.Embed(
+                title="❌ Reload Failed",
+                description=f"Failed to reload cog `{cog_name}`: {e}",
+                color=discord.Color.red()
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
             logger.error(f"Failed to reload cog {cog_name}: {e}")
 
     @commands.command(name="listcogs")
     @commands.has_permissions(administrator=True)
     async def list_cogs(self, ctx: commands.Context):
         """List all cogs and their status"""
-        disabled = self.get_disabled_cogs()
-        loaded = [cog for cog in self.bot.cogs.keys()]
+        try:
+            disabled = self.get_disabled_cogs()
+            loaded = [cog for cog in self.bot.cogs.keys()]
 
-        embed = discord.Embed(title="🔧 Cog Status", color=0x00ff00)
+            embed = discord.Embed(title="🔧 Cog Status", color=PINK)
 
-        # Loaded cogs
-        loaded_text = "\n".join([f"✅ {cog}" for cog in loaded]) or "None"
-        embed.add_field(name="Loaded Cogs", value=loaded_text, inline=False)
+            # Loaded cogs
+            loaded_text = "\n".join([f"✅ {cog}" for cog in loaded]) or "None"
+            embed.add_field(name="Loaded Cogs", value=loaded_text, inline=False)
 
-        # Disabled cogs
-        disabled_text = "\n".join([f"❌ {cog}" for cog in disabled]) or "None"
-        embed.add_field(name="Disabled Cogs", value=disabled_text, inline=False)
+            # Disabled cogs
+            disabled_text = "\n".join([f"❌ {cog}" for cog in disabled]) or "None"
+            embed.add_field(name="Disabled Cogs", value=disabled_text, inline=False)
 
-        await ctx.send(embed=embed)
+            set_pink_footer(embed, bot=self.bot.user)
+            await ctx.send(embed=embed)
+            logger.info(f"Cog list requested by {ctx.author}")
+        except Exception as e:
+            await ctx.send("❌ Error retrieving cog status.")
+            logger.error(f"Error in list_cogs: {e}")
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error):
+        """Handle command errors"""
+        if isinstance(error, commands.MissingPermissions):
+            if ctx.command.name in ['load', 'unload', 'reload', 'listcogs']:
+                embed = discord.Embed(
+                    title="❌ Permission Denied",
+                    description="This command requires administrator permissions.",
+                    color=discord.Color.red()
+                )
+                set_pink_footer(embed, bot=self.bot.user)
+                await ctx.send(embed=embed)
+                return
+        
+        # Let other errors be handled by global error handler
+        raise error
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(CogManager(bot))
