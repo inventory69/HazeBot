@@ -49,7 +49,7 @@ class RocketLeagueHubView(discord.ui.View):
             )
             return
 
-        # Call the show_stats method
+        # Call the show_stats method (uses cache like the command)
         await rl_cog.show_stats(interaction)
 
     @discord.ui.button(
@@ -320,10 +320,17 @@ class RocketLeague(commands.Cog):
         }
 
         try:
-            response = requests.post(self.flaresolverr_url, json=payload, timeout=90)  # Increased from 60s to 90s
-            if response.status_code != 200:
-                logger.warning(f"❌ External service error: {response.status_code}")
-                return None
+            response = requests.post(self.flaresolverr_url, json=payload, timeout=30)  # Kürzerer Timeout
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"FlareSolverr request failed: {e}")
+            return None
+        finally:
+            import time
+
+            time.sleep(30)  # Immer warten, auch bei Fehlern
+
+        try:
             data = response.json()
             if data.get("status") != "ok":
                 logger.warning(f"❌ External service failed: {data.get('message')}")
