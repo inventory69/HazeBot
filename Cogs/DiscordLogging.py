@@ -4,6 +4,7 @@ import logging
 import asyncio
 from collections import deque
 import os
+from datetime import datetime, timedelta, timezone
 
 from Config import PINK, ADMIN_ROLE_ID, COG_PREFIXES
 
@@ -167,6 +168,7 @@ class DiscordLogging(commands.Cog):
 
         # Start the flush task
         self.flush_logs_task.start()
+        self.cleanup_old_logs_task.start()
 
         logger.info("Discord logging handler started - logs streaming to Discord")
 
@@ -174,6 +176,9 @@ class DiscordLogging(commands.Cog):
         """Called when the cog is unloaded"""
         if self.flush_logs_task.is_running():
             self.flush_logs_task.cancel()
+
+        if self.cleanup_old_logs_task.is_running():
+            self.cleanup_old_logs_task.cancel()
 
         if self.discord_handler:
             # Remove handler from root logger
@@ -190,6 +195,50 @@ class DiscordLogging(commands.Cog):
 
     @flush_logs_task.before_loop
     async def before_flush_logs(self):
+        """Wait for bot to be ready before starting the task"""
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(hours=24.0)
+    async def cleanup_old_logs_task(self):
+        """Delete log messages older than 3 days"""
+        try:
+            channel = self.bot.get_channel(self.log_channel_id)
+            if not channel:
+                logger.warning("Log channel not found for cleanup")
+                return
+
+            # Calculate cutoff time (3 days ago)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=3)
+            deleted_count = 0
+
+            cutoff_str = cutoff.strftime("%Y-%m-%d %H:%M:%S UTC")
+            logger.info(f"Starting log cleanup - deleting messages older than {cutoff_str}")
+
+            # Fetch messages from oldest to newest
+            async for message in channel.history(limit=None, oldest_first=True):
+                # Stop if we reach messages newer than cutoff
+                if message.created_at >= cutoff:
+                    break
+
+                # Only delete bot's own messages
+                if message.author == self.bot.user:
+                    try:
+                        await message.delete()
+                        deleted_count += 1
+                        await asyncio.sleep(1)  # Rate limit protection
+                    except discord.errors.NotFound:
+                        # Message already deleted
+                        pass
+                    except Exception as e:
+                        logger.error(f"Failed to delete log message: {e}")
+
+            logger.info(f"Log cleanup completed - deleted {deleted_count} old messages")
+
+        except Exception as e:
+            logger.error(f"Error during log cleanup: {e}")
+
+    @cleanup_old_logs_task.before_loop
+    async def before_cleanup_old_logs(self):
         """Wait for bot to be ready before starting the task"""
         await self.bot.wait_until_ready()
 
