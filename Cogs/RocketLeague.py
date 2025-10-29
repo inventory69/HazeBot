@@ -10,11 +10,19 @@ import discord
 from discord import app_commands
 from bs4 import BeautifulSoup
 from typing import Dict, Optional, Tuple, Any
-from Config import PINK, RL_TIER_ORDER, RL_ACCOUNTS_FILE, RANK_EMOJIS, get_guild_id, RL_CHANNEL_ID
+from Config import (
+    PINK,
+    RL_TIER_ORDER,
+    RL_ACCOUNTS_FILE,
+    RANK_EMOJIS,
+    get_guild_id,
+    RL_CHANNEL_ID,
+    RL_CONGRATS_VIEWS_FILE,
+)
 
 from Utils.EmbedUtils import set_pink_footer
 from Utils.CacheUtils import file_cache
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,11 +42,11 @@ class RocketLeagueHubView(discord.ui.View):
         accounts = load_rl_accounts()
         if str(interaction.user.id) in accounts:
             await interaction.response.send_message(
-                "❌ You already have a Rocket League account linked. Use **Unlink Account** first if you want to change it.", 
-                ephemeral=True
+                "❌ You already have a Rocket League account linked. Use **Unlink Account** first if you want to change it.",
+                ephemeral=True,
             )
             return
-        
+
         await interaction.response.send_modal(LinkAccountModal())
 
     @discord.ui.button(label="View Stats", style=discord.ButtonStyle.primary, emoji="📊", custom_id="rl_stats_button")
@@ -59,7 +67,9 @@ class RocketLeagueHubView(discord.ui.View):
             return
 
         # Determine if response should be ephemeral (only in server-guide channel)
-        is_ephemeral = interaction.channel and ("server-guide" in interaction.channel.name.lower() or "guide" in interaction.channel.name.lower())
+        is_ephemeral = interaction.channel and (
+            "server-guide" in interaction.channel.name.lower() or "guide" in interaction.channel.name.lower()
+        )
 
         # Defer immediately to show loading state
         await interaction.response.defer(ephemeral=is_ephemeral)
@@ -76,8 +86,7 @@ class RocketLeagueHubView(discord.ui.View):
             if not stats:
                 await loading_msg.delete()
                 await interaction.followup.send(
-                    "❌ Unable to fetch stats right now. Please try again in a moment.",
-                    ephemeral=is_ephemeral
+                    "❌ Unable to fetch stats right now. Please try again in a moment.", ephemeral=is_ephemeral
                 )
                 return
 
@@ -90,8 +99,7 @@ class RocketLeagueHubView(discord.ui.View):
             logger.error(f"Error in stats_button for {interaction.user}: {e}")
             await loading_msg.delete()
             await interaction.followup.send(
-                "❌ An error occurred while fetching stats. Please try again later.",
-                ephemeral=is_ephemeral
+                "❌ An error occurred while fetching stats. Please try again later.", ephemeral=is_ephemeral
             )
 
     @discord.ui.button(
@@ -167,7 +175,11 @@ class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
         embed.add_field(
-            name="Current Ranks", value="\n".join([f"• {k}: {v}" for k, v in (stats.get("rank_display") or stats.get("tier_names") or {}).items()]), inline=False
+            name="Current Ranks",
+            value="\n".join(
+                [f"• {k}: {v}" for k, v in (stats.get("rank_display") or stats.get("tier_names") or {}).items()]
+            ),
+            inline=False,
         )
         set_pink_footer(embed, bot=interaction.client.user)
         msg = await interaction.followup.send(embed=embed, ephemeral=True)  # Send without view first
@@ -240,12 +252,50 @@ class CongratsButton(discord.ui.Button):
 class CongratsView(discord.ui.View):
     """
     View containing the congrats button for rank promotions.
+    Times out after 3.5 days (half a week).
     """
 
-    def __init__(self, ranked_user: discord.User) -> None:
-        super().__init__(timeout=None)  # Persistent view
+    def __init__(
+        self, ranked_user: discord.User, start_time: Optional[datetime] = None, cog: Optional[Any] = None
+    ) -> None:
+        if start_time:
+            # Ensure both datetimes are timezone-aware
+            now = datetime.now(timezone.utc)
+            if start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=timezone.utc)
+            elapsed = (now - start_time).total_seconds()
+            remaining = 302400 - elapsed  # 3.5 days in seconds
+            timeout = max(remaining, 0)
+        else:
+            timeout = 302400  # 3.5 days
+        super().__init__(timeout=timeout)
         self.ranked_user = ranked_user
+        self.start_time = start_time or datetime.now(timezone.utc)
+        self.cog = cog
         self.add_item(CongratsButton(self))
+
+    async def on_timeout(self) -> None:
+        """
+        Called when the view times out (3.5 days).
+        Disables the button and removes from persistent data.
+        """
+        for item in self.children:
+            item.disabled = True
+        # Try to edit the message to show disabled button
+        if hasattr(self, "message") and self.message:
+            try:
+                await self.message.edit(view=self)
+                logger.info(f"Congrats button disabled after timeout for {self.ranked_user}")
+            except Exception as e:
+                logger.error(f"Failed to disable congrats button: {e}")
+
+            # Remove from persistent data
+            if self.cog:
+                self.cog.congrats_views_data = [
+                    d for d in self.cog.congrats_views_data if d["message_id"] != self.message.id
+                ]
+                with open(self.cog.congrats_views_file, "w") as f:
+                    json.dump(self.cog.congrats_views_data, f)
 
 
 class ConfirmLinkView(discord.ui.View):
@@ -309,14 +359,22 @@ class RocketLeague(commands.Cog):
         self.session = aiohttp.ClientSession()
         self.api_base = os.getenv("ROCKET_API_BASE")
         self.flaresolverr_url = os.getenv("FLARESOLVERR_URL")
-        
+
         # Ensure HTTPS is used for FlareSolverr
         if self.flaresolverr_url and self.flaresolverr_url.startswith("http://"):
             self.flaresolverr_url = self.flaresolverr_url.replace("http://", "https://", 1)
             logger.warning(f"⚠️ FlareSolverr URL converted from HTTP to HTTPS: {self.flaresolverr_url}")
-        
+
         self.executor = ThreadPoolExecutor(max_workers=5)
-        # Do not start task here
+
+        # Load congrats views data
+        self.congrats_views_file = RL_CONGRATS_VIEWS_FILE
+        if os.path.exists(self.congrats_views_file):
+            with open(self.congrats_views_file, "r") as f:
+                self.congrats_views_data = json.load(f)
+        else:
+            os.makedirs(os.path.dirname(self.congrats_views_file), exist_ok=True)
+            self.congrats_views_data = []
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
@@ -327,7 +385,40 @@ class RocketLeague(commands.Cog):
         self.bot.add_view(RocketLeagueHubView())
         logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
         logger.info("RocketLeague hub view restored.")
-        
+
+        # Restore congrats views
+        restored_count = 0
+        cleaned_congrats_views_data = []
+        for data in self.congrats_views_data:
+            channel = self.bot.get_channel(data["channel_id"])
+            if channel:
+                try:
+                    message = await channel.fetch_message(data["message_id"])
+                    start_time = datetime.fromisoformat(data["start_time"])
+                    user = self.bot.get_user(data["user_id"])
+                    if user:
+                        view = CongratsView(user, start_time=start_time, cog=self)
+                        view.message = message
+                        await message.edit(view=view)
+                        restored_count += 1
+                        cleaned_congrats_views_data.append(data)
+                    await asyncio.sleep(1)  # Avoid rate limits
+                except discord.NotFound:
+                    logger.warning(f"Congrats message {data['message_id']} not found, removing from data.")
+                except Exception as e:
+                    logger.error(f"Failed to restore congrats view for message {data['message_id']}: {e}")
+                    cleaned_congrats_views_data.append(data)  # Keep on other errors
+            else:
+                cleaned_congrats_views_data.append(data)  # Keep if channel not found
+
+        # Save cleaned data
+        self.congrats_views_data = cleaned_congrats_views_data
+        with open(self.congrats_views_file, "w") as f:
+            json.dump(self.congrats_views_data, f)
+        logger.info(f"Restored {restored_count} congrats views.")
+        logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
+        logger.info("RocketLeague hub view restored.")
+
         # Validate that HTTPS is being used
         if self.flaresolverr_url and not self.flaresolverr_url.startswith("https://"):
             logger.error(f"❌ FlareSolverr URL is not using HTTPS: {self.flaresolverr_url}")
@@ -337,17 +428,17 @@ class RocketLeague(commands.Cog):
         Cleanup when cog is unloaded.
         """
         # Stop the rank check task
-        if hasattr(self, 'check_ranks') and self.check_ranks.is_running():
+        if hasattr(self, "check_ranks") and self.check_ranks.is_running():
             self.check_ranks.cancel()
             logger.info("Rank check task cancelled.")
-        
+
         # Shutdown the thread pool executor
-        if hasattr(self, 'executor'):
+        if hasattr(self, "executor"):
             self.executor.shutdown(wait=True)
             logger.info("Thread pool executor shutdown.")
-        
+
         # Close the aiohttp session
-        if hasattr(self, 'session') and not self.session.closed:
+        if hasattr(self, "session") and not self.session.closed:
             await self.session.close()
             logger.info("HTTP session closed.")
 
@@ -628,9 +719,21 @@ class RocketLeague(commands.Cog):
                             if icon_url:
                                 embed.set_thumbnail(url=icon_url)
                             set_pink_footer(embed, bot=self.bot.user)
-                            view = CongratsView(user)
+                            view = CongratsView(user, cog=self)
                             embed_msg = await channel.send(embed=embed, view=view)
                             view.message = embed_msg
+
+                            # Save congrats view data persistently
+                            congrats_data = {
+                                "user_id": user.id,
+                                "channel_id": channel.id,
+                                "message_id": embed_msg.id,
+                                "start_time": view.start_time.isoformat(),
+                            }
+                            self.congrats_views_data.append(congrats_data)
+                            with open(self.congrats_views_file, "w") as f:
+                                json.dump(self.congrats_views_data, f)
+
                             logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
                 # Update ranks and last_fetched
                 data["ranks"] = new_ranks
@@ -655,9 +758,11 @@ class RocketLeague(commands.Cog):
         # Check if account is already linked
         accounts = load_rl_accounts()
         if str(ctx.author.id) in accounts:
-            await ctx.send("❌ You already have a Rocket League account linked. Use **!unlinkrlaccount** first if you want to change it.")
+            await ctx.send(
+                "❌ You already have a Rocket League account linked. Use **!unlinkrlaccount** first if you want to change it."
+            )
             return
-            
+
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             await ctx.send("❌ Invalid platform.")
             return
@@ -692,11 +797,11 @@ class RocketLeague(commands.Cog):
         accounts = load_rl_accounts()
         if str(interaction.user.id) in accounts:
             await interaction.response.send_message(
-                "❌ You already have a Rocket League account linked. Use **Unlink Account** first if you want to change it.", 
-                ephemeral=True
+                "❌ You already have a Rocket League account linked. Use **Unlink Account** first if you want to change it.",
+                ephemeral=True,
             )
             return
-            
+
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             await interaction.response.send_message("❌ Invalid platform.", ephemeral=True)
             return
@@ -724,7 +829,11 @@ class RocketLeague(commands.Cog):
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
         embed.add_field(
-            name="Current Ranks", value="\n".join([f"• {k}: {v}" for k, v in (stats.get("rank_display") or stats.get("tier_names") or {}).items()]), inline=False
+            name="Current Ranks",
+            value="\n".join(
+                [f"• {k}: {v}" for k, v in (stats.get("rank_display") or stats.get("tier_names") or {}).items()]
+            ),
+            inline=False,
         )
         set_pink_footer(embed, bot=self.bot.user)
         msg = await interaction.followup.send(embed=embed, ephemeral=True)  # Send without view first
@@ -806,7 +915,11 @@ class RocketLeague(commands.Cog):
         logger.info(f"Rocket League account unlinked by {ctx.author}")
 
     async def show_stats(
-        self, interaction: discord.Interaction, platform: Optional[str] = None, username: Optional[str] = None, ephemeral: bool = False
+        self,
+        interaction: discord.Interaction,
+        platform: Optional[str] = None,
+        username: Optional[str] = None,
+        ephemeral: bool = False,
     ) -> None:
         """Show RL stats (used by command and button)"""
         try:
@@ -873,7 +986,12 @@ class RocketLeague(commands.Cog):
                 embed.add_field(name="🏆 Current Ranks", value=ranks_display, inline=False)
             elif user_data.get("ranks"):
                 # Fallback for old accounts that only have tier names
-                ranks_display = "\n".join([f"• {k}: {RANK_EMOJIS.get(v, '<:unranked:1425389712276721725>')} {v}" for k, v in user_data["ranks"].items()])
+                ranks_display = "\n".join(
+                    [
+                        f"• {k}: {RANK_EMOJIS.get(v, '<:unranked:1425389712276721725>')} {v}"
+                        for k, v in user_data["ranks"].items()
+                    ]
+                )
                 embed.add_field(name="🏆 Current Ranks", value=ranks_display, inline=False)
         else:
             embed.add_field(
@@ -904,9 +1022,56 @@ class RocketLeague(commands.Cog):
         """Rocket League hub with all features"""
         await self.show_rocket_hub(interaction)
 
-    async def cog_unload(self) -> None:
-        await self.session.close()
-        self.executor.shutdown()
+    @commands.command(name="restorecongratsview")
+    @commands.is_owner()
+    async def restore_congrats_view(self, ctx: commands.Context, message_id: int, user_id: int) -> None:
+        """
+        Restore a congrats view for an old rank promotion message.
+        Usage: !restorecongratsview <message_id> <user_id>
+        """
+        try:
+            # Fetch the message
+            channel = self.bot.get_channel(RL_CHANNEL_ID)
+            if not channel:
+                await ctx.send("❌ Rocket League channel not found!")
+                return
+
+            message = await channel.fetch_message(message_id)
+            if not message:
+                await ctx.send("❌ Message not found!")
+                return
+
+            # Get the user
+            user = self.bot.get_user(user_id)
+            if not user:
+                await ctx.send("❌ User not found!")
+                return
+
+            # Create view with the message's creation time as start_time
+            view = CongratsView(user, start_time=message.created_at, cog=self)
+
+            # Edit the message to add the view
+            await message.edit(view=view)
+            view.message = message
+
+            # Save to persistent data
+            congrats_data = {
+                "user_id": user.id,
+                "channel_id": channel.id,
+                "message_id": message.id,
+                "start_time": message.created_at.isoformat(),
+            }
+            # Remove old entry if exists
+            self.congrats_views_data = [d for d in self.congrats_views_data if d["message_id"] != message_id]
+            self.congrats_views_data.append(congrats_data)
+            with open(self.congrats_views_file, "w") as f:
+                json.dump(self.congrats_views_data, f)
+
+            await ctx.send(f"✅ Congrats view restored for message {message_id}!")
+            logger.info(f"Congrats view restored for message {message_id} by {ctx.author}")
+        except Exception as e:
+            await ctx.send(f"❌ Error restoring view: {e}")
+            logger.error(f"Error restoring congrats view: {e}")
 
 
 async def setup(bot: commands.Bot) -> None:

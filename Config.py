@@ -239,6 +239,7 @@ WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
 WELCOME_PUBLIC_CHANNEL_ID = CURRENT_IDS["WELCOME_PUBLIC_CHANNEL_ID"]
 PERSISTENT_VIEWS_FILE = f"{DATA_DIR}/persistent_views.json"  # File for persistent welcome card views
 ACTIVE_RULES_VIEWS_FILE = f"{DATA_DIR}/active_rules_views.json"  # File for active rules acceptance views
+RL_CONGRATS_VIEWS_FILE = f"{DATA_DIR}/rl_congrats_views.json"  # File for persistent congrats views
 
 # === Todo List ===
 TODO_CHANNEL_ID = CURRENT_IDS["TODO_CHANNEL_ID"]
