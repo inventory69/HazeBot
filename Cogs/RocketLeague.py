@@ -30,6 +30,15 @@ class RocketLeagueHubView(discord.ui.View):
     @discord.ui.button(label="Link Account", style=discord.ButtonStyle.primary, emoji="🔗", custom_id="rl_link_button")
     async def link_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Open modal to link RL account"""
+        # Check if account is already linked
+        accounts = load_rl_accounts()
+        if str(interaction.user.id) in accounts:
+            await interaction.response.send_message(
+                "❌ You already have a Rocket League account linked. Use **Unlink Account** first if you want to change it.", 
+                ephemeral=True
+            )
+            return
+        
         await interaction.response.send_modal(LinkAccountModal())
 
     @discord.ui.button(label="View Stats", style=discord.ButtonStyle.primary, emoji="📊", custom_id="rl_stats_button")
@@ -49,8 +58,41 @@ class RocketLeagueHubView(discord.ui.View):
             )
             return
 
-        # Call the show_stats method (uses cache like the command)
-        await rl_cog.show_stats(interaction)
+        # Determine if response should be ephemeral (only in server-guide channel)
+        is_ephemeral = interaction.channel and ("server-guide" in interaction.channel.name.lower() or "guide" in interaction.channel.name.lower())
+
+        # Defer immediately to show loading state
+        await interaction.response.defer(ephemeral=is_ephemeral)
+
+        # Show loading message
+        loading_msg = await interaction.followup.send("🔍 Fetching stats...", ephemeral=is_ephemeral)
+
+        try:
+            # Get stats (uses cache like the command)
+            platform = user_data["platform"]
+            username = user_data["username"]
+            stats = await rl_cog.get_player_stats(platform, username)
+
+            if not stats:
+                await loading_msg.delete()
+                await interaction.followup.send(
+                    "❌ Unable to fetch stats right now. Please try again in a moment.",
+                    ephemeral=is_ephemeral
+                )
+                return
+
+            embed = await rl_cog._create_rl_embed(stats, platform)
+            await loading_msg.delete()
+            await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
+            logger.info(f"RL stats viewed by {interaction.user} (button)")
+
+        except Exception as e:
+            logger.error(f"Error in stats_button for {interaction.user}: {e}")
+            await loading_msg.delete()
+            await interaction.followup.send(
+                "❌ An error occurred while fetching stats. Please try again later.",
+                ephemeral=is_ephemeral
+            )
 
     @discord.ui.button(
         label="Unlink Account", style=discord.ButtonStyle.secondary, emoji="🔓", custom_id="rl_unlink_button"
@@ -116,20 +158,21 @@ class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
                 )
             return
 
-        # Save account
-        accounts = load_rl_accounts()
-        accounts[str(interaction.user.id)] = {
-            "platform": platform,
-            "username": username,
-            "ranks": stats["tier_names"],
-        }
-        save_rl_accounts(accounts)
-
-        await interaction.followup.send(
-            f"✅ Successfully linked your Rocket League account to **{stats['username']}** on **{platform.upper()}**.",
-            ephemeral=True,
+        # Show confirmation
+        embed = discord.Embed(
+            title="🔗 Confirm Rocket League Account Linking",
+            description=f"Player found: **{stats['username']}**\nPlatform: **{platform.upper()}**\n\nDo you want to link this account?",
+            color=PINK,
         )
-        logger.info(f"RL account linked by {interaction.user}")
+        if stats.get("highest_icon_url"):
+            embed.set_thumbnail(url=stats["highest_icon_url"])
+        embed.add_field(
+            name="Current Ranks", value="\n".join([f"• {k}: {v}" for k, v in (stats.get("rank_display") or stats.get("tier_names") or {}).items()]), inline=False
+        )
+        set_pink_footer(embed, bot=interaction.client.user)
+        msg = await interaction.followup.send(embed=embed, ephemeral=True)  # Send without view first
+        view = ConfirmLinkView(interaction, platform, username, stats, rl_cog, msg)
+        await msg.edit(embed=embed, view=view)
 
 
 def load_rl_accounts() -> Dict[str, Any]:
@@ -234,7 +277,8 @@ class ConfirmLinkView(discord.ui.View):
         accounts[str(interaction.user.id)] = {
             "platform": self.platform.lower(),
             "username": self.username,
-            "ranks": self.stats["tier_names"],
+            "ranks": self.stats["tier_names"],  # Keep for compatibility
+            "rank_display": self.stats["rank_display"],  # Add full display with emojis
         }
         save_rl_accounts(accounts)
         await self.message.edit(
@@ -325,10 +369,6 @@ class RocketLeague(commands.Cog):
         except requests.exceptions.RequestException as e:
             logger.error(f"FlareSolverr request failed: {e}")
             return None
-        finally:
-            import time
-
-            time.sleep(30)  # Immer warten, auch bei Fehlern
 
         try:
             data = response.json()
@@ -438,6 +478,7 @@ class RocketLeague(commands.Cog):
                 "rank_4v4": ranks["4v4"],
                 "highest_icon_url": highest_icon_url,
                 "tier_names": tier_names,
+                "rank_display": ranks,  # Full display with emojis
                 "icon_urls": icon_urls,
             }
         except requests.exceptions.RequestException as e:
@@ -449,10 +490,6 @@ class RocketLeague(commands.Cog):
         except Exception as e:
             logger.error(f"Error fetching stats for {username}: {e}")
             return None
-        finally:
-            import time
-
-            time.sleep(30)  # Increased rate limit to avoid Cloudflare blocks
 
     async def get_player_stats(
         self, platform: str, username: str, force_refresh: bool = False
@@ -465,11 +502,19 @@ class RocketLeague(commands.Cog):
         if force_refresh:
             # Bypass cache and fetch directly
             loop = self.bot.loop
-            return await loop.run_in_executor(self.executor, self.fetch_stats_sync, platform, username)
+            result = await loop.run_in_executor(self.executor, self.fetch_stats_sync, platform, username)
+            # Rate limit only for actual API calls
+            if result is not None:
+                await asyncio.sleep(30)
+            return result
 
         async def fetch_and_cache():
             loop = self.bot.loop
-            return await loop.run_in_executor(self.executor, self.fetch_stats_sync, platform, username)
+            result = await loop.run_in_executor(self.executor, self.fetch_stats_sync, platform, username)
+            # Rate limit only for actual API calls (when cache miss)
+            if result is not None:
+                await asyncio.sleep(30)
+            return result
 
         # Cache for 1 hour (3600 seconds) since RL ranks don't change that frequently
         return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=3600)
@@ -607,6 +652,12 @@ class RocketLeague(commands.Cog):
         🚀 Set your main Rocket League account.
         Usage: !setrlaccount <platform> <username>
         """
+        # Check if account is already linked
+        accounts = load_rl_accounts()
+        if str(ctx.author.id) in accounts:
+            await ctx.send("❌ You already have a Rocket League account linked. Use **!unlinkrlaccount** first if you want to change it.")
+            return
+            
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             await ctx.send("❌ Invalid platform.")
             return
@@ -624,7 +675,8 @@ class RocketLeague(commands.Cog):
         accounts[str(ctx.author.id)] = {
             "platform": platform.lower(),
             "username": username,
-            "ranks": stats["tier_names"],
+            "ranks": stats["tier_names"],  # Keep for compatibility
+            "rank_display": stats["rank_display"],  # Add full display with emojis
         }
         save_rl_accounts(accounts)
         await ctx.send(
@@ -636,6 +688,15 @@ class RocketLeague(commands.Cog):
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(platform="Platform", username="Username")
     async def setrlaccount_slash(self, interaction: discord.Interaction, platform: str, username: str) -> None:
+        # Check if account is already linked
+        accounts = load_rl_accounts()
+        if str(interaction.user.id) in accounts:
+            await interaction.response.send_message(
+                "❌ You already have a Rocket League account linked. Use **Unlink Account** first if you want to change it.", 
+                ephemeral=True
+            )
+            return
+            
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             await interaction.response.send_message("❌ Invalid platform.", ephemeral=True)
             return
@@ -663,7 +724,7 @@ class RocketLeague(commands.Cog):
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
         embed.add_field(
-            name="Current Ranks", value="\n".join([f"• {k}: {v}" for k, v in stats["tier_names"].items()]), inline=False
+            name="Current Ranks", value="\n".join([f"• {k}: {v}" for k, v in (stats.get("rank_display") or stats.get("tier_names") or {}).items()]), inline=False
         )
         set_pink_footer(embed, bot=self.bot.user)
         msg = await interaction.followup.send(embed=embed, ephemeral=True)  # Send without view first
@@ -745,23 +806,23 @@ class RocketLeague(commands.Cog):
         logger.info(f"Rocket League account unlinked by {ctx.author}")
 
     async def show_stats(
-        self, interaction: discord.Interaction, platform: Optional[str] = None, username: Optional[str] = None
+        self, interaction: discord.Interaction, platform: Optional[str] = None, username: Optional[str] = None, ephemeral: bool = False
     ) -> None:
         """Show RL stats (used by command and button)"""
         try:
             platform, username = await self._get_rl_account(interaction.user.id, platform, username)
         except ValueError as e:
-            await interaction.response.send_message(str(e), ephemeral=True)
+            await interaction.response.send_message(str(e), ephemeral=ephemeral)
             return
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=ephemeral)
         stats = await self.get_player_stats(platform, username)
         if not stats:
-            await interaction.followup.send("❌ Player not found or error fetching stats.", ephemeral=True)
+            await interaction.followup.send("❌ Player not found or error fetching stats.", ephemeral=ephemeral)
             return
 
         embed = await self._create_rl_embed(stats, platform)
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=ephemeral)
         logger.info(f"RL stats viewed by {interaction.user}")
 
     async def unlink_account(self, interaction: discord.Interaction) -> None:
@@ -807,8 +868,12 @@ class RocketLeague(commands.Cog):
                 value=f"**Platform:** {user_data['platform'].upper()}\n**Username:** {user_data['username']}",
                 inline=False,
             )
-            if user_data.get("ranks"):
-                ranks_display = "\n".join([f"• {k}: {v}" for k, v in user_data["ranks"].items()])
+            if user_data.get("rank_display"):
+                ranks_display = "\n".join([f"• {k}: {v}" for k, v in user_data["rank_display"].items()])
+                embed.add_field(name="🏆 Current Ranks", value=ranks_display, inline=False)
+            elif user_data.get("ranks"):
+                # Fallback for old accounts that only have tier names
+                ranks_display = "\n".join([f"• {k}: {RANK_EMOJIS.get(v, '<:unranked:1425389712276721725>')} {v}" for k, v in user_data["ranks"].items()])
                 embed.add_field(name="🏆 Current Ranks", value=ranks_display, inline=False)
         else:
             embed.add_field(

@@ -105,7 +105,7 @@ class ServerGuide(commands.Cog):
 
         # Create welcome embed
         embed = discord.Embed(
-            title="Welcome to Haze World! 🌟",
+            title="Welcome to the Chillventory! 🌟",
             color=PINK,
         )
 
