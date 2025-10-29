@@ -246,13 +246,12 @@ For contributors and developers:
 /profile
 /profile @username  # View another user's profile
 
-# Rocket League features
-/rlstats platform username  # Get RL stats
-/setrlaccount platform username  # Link your RL account
-/unlinkrlaccount  # Unlink your RL account
-
 # Preferences and settings
 /preferences  # Toggle changelog notifications
+
+# Role information
+/roleinfo Admin  # View Admin role info
+/roleinfo "Slot Keeper"  # View Moderator role info
 
 # View leaderboards
 /leaderboard messages  # Most active members
@@ -261,30 +260,62 @@ For contributors and developers:
 
 # Create support tickets
 /ticket  # Start ticket creation process
+
+# Rocket League features
+/rlstats platform username  # Get RL stats
+/setrlaccount platform username  # Link your RL account
+/unlinkrlaccount  # Unlink your RL account
+/rocket  # Open interactive RL Hub
+
+# Warframe features (Beta)
+/warframe  # Open interactive Warframe Hub
+/warframemarket Ash Prime Set  # Search Warframe market
 ```
 
 ### For Moderators (Slot Keepers)
 ```bash
 # Moderation commands
 /mod  # Moderation actions and controls
-/modpanel  # Open moderation panel
+/modpanel  # Open moderation panel with interactive buttons
 /modoverview  # View moderation statistics
 /moddetails @user  # View user's moderation history
-/clear 5  # Clear 5 messages
+!clear 5  # Clear 5 messages (prefix only)
 /optins  # View changelog opt-in statistics
+!adminrlstats platform username  # Admin RL stats - bypass cache (prefix only)
+
+# To-Do management
+/todo-update  # Manage server to-do list with AI formatting
 
 # Ticket management
 # Use interactive buttons in ticket channels:
 # - Claim: Claim a ticket
-# - Close: Close a ticket
+# - Close: Close a ticket with optional message
 # - Assign: Assign ticket to another mod
+# - Reopen: Reopen a closed ticket
 ```
 
 ### For Administrators
 ```bash
 # All moderator commands plus:
 !say Hello everyone!  # Send message as bot
-!changelog text:"Your PR text here"  # Create changelog from changes
+!say --embed Your message here  # Send as simple embed
+!say --json {...}  # Send with full JSON control
+!say --builder  # Interactive embed builder
+
+# Changelog management
+!changelog  # Create and post changelog with AI formatting
+!changelog --text "Your PR text here"  # Generate changelog from text
+
+# Bot management
+!create-button  # Create persistent support buttons
+!server-guide  # Send interactive server guide
+!restorecongratsview message_id user_id  # Restore congrats button
+
+# Cog management
+!load CogName  # Load a cog
+!unload CogName  # Unload a cog
+!reload CogName  # Reload a cog
+!listcogs  # List all cogs and their status
 ```
 
 ### Command Reference
@@ -295,39 +326,44 @@ For contributors and developers:
 |---------|--------|-------------|
 | `/help` | `!help` | Show available commands |
 | `/status` | `!status` | Bot status and latency |
-| `/profile` | `!profile` | User profile information |
+| `/profile [@user]` | `!profile` | User profile information |
+| `/preferences` | `!preferences` | Toggle changelog notifications |
+| `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
+| `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
+| `/ticket` | `!ticket` | Create support ticket |
 | `/rlstats [platform] [username]` | `!rlstats` | Rocket League statistics |
 | `/setrlaccount [platform] [username]` | `!setrlaccount` | Link RL account |
 | `/unlinkrlaccount` | `!unlinkrlaccount` | Unlink RL account |
-| `/preferences` | `!preferences` | Toggle changelog notifications |
-| `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
-| `/ticket` | `!ticket` | Create support ticket |
-| `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
+| `/rocket` | `!rocket` | Rocket League Hub |
 | `/warframe` | `!warframe` | Warframe hub with market and status (Beta) |
 | `/warframemarket [item]` | `!warframemarket` | Search Warframe market items (Beta) |
-| `/todo-update` | `!todo-update` | Update to-do list (Mod/Admin only) |
 
 #### Moderator Commands (Slot Keepers+)
 
 | Command | Prefix | Description |
 |---------|--------|-------------|
-| `/clear [amount]` | `!clear` | Delete messages in bulk |
+| `!clear [amount]` | - | Delete messages in bulk (prefix only) |
 | `/mod` | `!mod` | Moderation actions and controls |
 | `/modpanel` | `!modpanel` | Moderation control panel |
 | `/modoverview` | `!modoverview` | Moderation statistics |
 | `/moddetails [@user]` | `!moddetails` | User moderation history |
-| `/optins` | `!optins` | View opt-in statistics |
+| `/optins` | `!optins` | View changelog opt-in statistics |
 | `/todo-update` | `!todo-update` | Create/update to-do items with AI formatting |
+| `!adminrlstats [platform] [username]` | - | Admin RL stats - bypass cache (prefix only) |
 
 #### Administrator Commands (Admins Only)
 
 | Command | Prefix | Description |
 |---------|--------|-------------|
-| `/changelog` | `!changelog` | Generate and post bot changelogs with AI |
-| `/say [message]` | `!say` | Send message as bot |
-| `/adminrlstats [platform] [username]` | `!adminrlstats` | Admin RL stats (bypass cache) |
-| `!restorecongratsview [message_id] [user_id]` | - | Restore persistent congrats button (Admin only) |
-| `!create-button [--text] [--command] [--emoji] [--type]` | - | Create persistent buttons for any command type |
+| `!changelog [--text]` | - | Generate and post bot changelogs with AI (prefix only) |
+| `!say [message]` | - | Send message as bot (prefix only) |
+| `!restorecongratsview [message_id] [user_id]` | - | Restore persistent congrats button (prefix only) |
+| `!create-button` | - | Create persistent buttons for any command type (prefix only) |
+| `!server-guide` | - | Send interactive server guide with command buttons (prefix only) |
+| `!load [cog_name]` | - | Load a cog dynamically (prefix only) |
+| `!unload [cog_name]` | - | Unload a cog dynamically (prefix only) |
+| `!reload [cog_name]` | - | Reload a cog dynamically (prefix only) |
+| `!listcogs` | - | List all available cogs and their status (prefix only) |
 
 ---
 
