@@ -98,6 +98,25 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Author Tracking:** Each task shows who added it.
 - **Channel Restriction:** Management commands restricted to designated todo channel.
 
+### 🎭 Daily Meme System
+- **Daily Memes:** Automatically posts a trending meme every day at 12:00 PM.
+- **Multi-Platform Sources:** Supports both Reddit and Lemmy for meme fetching.
+  - **Reddit:** Standard subreddit format (e.g., `memes`, `dankmemes`)
+  - **Lemmy:** Instance@community format (e.g., `lemmy.world@memes`)
+- **Quality Curation:** Sources from configurable source list (default: 10 curated sources).
+- **Smart Selection:** Picks from top upvoted/scored memes for quality content.
+- **NSFW Support:** Includes NSFW memes with proper warnings if funny.
+- **Manual Command:** `/meme` and `!meme` to get a random meme anytime.
+- **Score Display:** Shows upvotes/score, source, and author for both platforms.
+- **Role Notification:** Mentions meme notification role for daily posts.
+- **Admin Management:** Full source list management commands.
+  - `!memesubreddits` - List current meme sources (Reddit & Lemmy)
+  - `!addsubreddit <name>` - Add a Reddit subreddit or Lemmy community
+  - `!removesubreddit <name>` - Remove a source
+  - `!resetsubreddits` - Reset to defaults
+- **Test Commands:** `!testmeme` (Reddit) and `!testlemmymeme <instance@community>` (Lemmy) for testing.
+- **Persistent Configuration:** Source list saved to file across restarts.
+
 ### ⚡ Performance & Caching
 - **Advanced Caching System:** Custom-built caching utilities with in-memory and file-based caching for optimal performance.
 - **Optimized Data Loading:** All data operations use async caching with configurable TTL to reduce I/O operations.
@@ -205,6 +224,7 @@ For contributors and developers:
    ├── Cogs/                 # Discord bot cogs (features)
    │   ├── Changelog.py      # Changelog generation
    │   ├── CogManager.py     # Dynamic cog loading/unloading
+   │   ├── DailyMeme.py      # Daily meme system with Reddit integration
    │   ├── DiscordLogging.py # Real-time log streaming to Discord
    │   ├── Leaderboard.py    # Leaderboards and activity tracking
    │   ├── ModPerks.py       # Moderation tools
@@ -251,6 +271,9 @@ For contributors and developers:
 # View your profile
 /profile
 /profile @username  # View another user's profile
+
+# Get memes
+/meme  # Get a random trending meme from Reddit
 
 # Preferences and settings
 /preferences  # Toggle changelog notifications
@@ -326,6 +349,15 @@ For contributors and developers:
 !unload CogName  # Unload a cog
 !reload CogName  # Reload a cog
 !listcogs  # List all cogs and their status
+
+# Meme management
+!memesubreddits  # List current meme sources (Reddit & Lemmy)
+!addsubreddit funny  # Add a Reddit subreddit
+!addsubreddit lemmy.world@memes  # Add a Lemmy community
+!removesubreddit funny  # Remove a source
+!resetsubreddits  # Reset to default sources
+!testmeme  # Test Reddit meme fetching
+!testlemmymeme lemmy.world@memes  # Test Lemmy meme fetching
 ```
 
 ### Command Reference
@@ -341,6 +373,7 @@ For contributors and developers:
 | `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
 | `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
 | `/ticket` | `!ticket` | Create support ticket |
+| `/meme` | `!meme` | Get a random trending meme from Reddit |
 | `/rlstats [platform] [username]` | `!rlstats` | Rocket League statistics |
 | `/setrlaccount [platform] [username]` | `!setrlaccount` | Link RL account |
 | `/unlinkrlaccount` | `!unlinkrlaccount` | Unlink RL account |
@@ -367,6 +400,12 @@ For contributors and developers:
 |---------|--------|-------------|
 | `!changelog [--text]` | - | Generate and post bot changelogs with AI (prefix only) |
 | `!say [message]` | - | Send message as bot (prefix only) |
+| `!testmeme` | - | Test daily meme function with Reddit (prefix only) |
+| `!testlemmymeme [instance@community]` | - | Test Lemmy meme fetching (prefix only) |
+| `!memesubreddits` | - | List current meme sources (Reddit & Lemmy) (prefix only) |
+| `!addsubreddit [name]` | - | Add a Reddit subreddit or Lemmy community (format: instance@community) (prefix only) |
+| `!removesubreddit [name]` | - | Remove a meme source (prefix only) |
+| `!resetsubreddits` | - | Reset meme sources to defaults (prefix only) |
 | `!restorecongratsview [message_id] [user_id]` | - | Restore persistent congrats button (prefix only) |
 | `!create-button` | - | Create persistent buttons for any command type (prefix only) |
 | `!server-guide` | - | Send interactive server guide with command buttons (prefix only) |

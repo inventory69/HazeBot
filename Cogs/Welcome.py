@@ -24,24 +24,25 @@ logger = logging.getLogger(__name__)
 RULES_TEXT = (
     "🌿 **1. Be kind and respectful to everyone.**\n"
     "✨ **2. No spam, flooding, or excessive self-promotion.**\n"
-    "🚫 **3. Illegal content, hate speech, and NSFW are strictly forbidden.**\n"
-    "🧑‍💼 **4. Follow the instructions of the team and moderators.**\n"
-    "💖 **5. Keep the vibes chill and positive!**\n\n"
-    "By clicking 'Accept Rules', you agree to follow these guidelines and unlock full access to the server. Welcome to the lounge!"
+    "🔞 **3. NSFW content is permitted only inside a clearly labeled, age-verified channel.**\n"
+    "🚫 **4. Illegal content and hate speech are strictly forbidden anywhere on the server.**\n"
+    "🧑‍💼 **5. Follow the instructions of staff and moderators.**\n"
+    "💖 **6. Keep the atmosphere calm, considerate, and positive.**\n\n"
+    "By clicking 'Accept Rules' you agree to these guidelines and unlock full access to the server. Welcome to the lounge — enjoy your stay!"
 )
 
 # Funny welcome messages for public channel (use {name} for username)
 WELCOME_MESSAGES = [
-    "Welcome {name}! Your chillventory just gained a new member. 🌿",
-    "Hey {name}, you unlocked the secret stash of good vibes! ✨",
-    "{name} joined the inventarium. Time to relax and enjoy! 😎",
-    "Give a warm welcome to {name}, our newest collector of chill moments! 🧘",
-    "{name}, you found the legendary lounge zone. Welcome aboard! 🚀",
-    "Inventory update: {name} added. Please store your good mood here! 😁",
-    "Alert: {name} has entered the realm of ultimate relaxation. 🛋️",
-    "Welcome {name}! May your inventory always be full of chill and fun. 🎉",
-    "New item in stock: {name}, the ultimate chill collector! 📦",
-    "{name} discovered the hidden inventory of positivity. Welcome! 🌟",
+    "Welcome {name}! The chill inventory just gained a legendary item — you. 🌿",
+    "Hey {name}, you unlocked the secret stash of good vibes. Proceed to sofa extraction. ✨🛋️",
+    "{name} has joined the inventarium. Claim your complimentary imaginary hammock. 😎",
+    "Give it up for {name}, our newest collector of zen moments and midnight memes. 🧘‍♂️🔥",
+    "{name}, you found the legendary lounge zone — free snacks not included but vibes guaranteed. 🚀",
+    "Inventory update: {name} added. Please store your worries in the lost-and-found. 😁",
+    "Alert: {name} has entered the realm of ultimate relaxation. Please mind the plants. 🌱",
+    "Welcome {name}! May your inventory be full of chill, memes, and excellent tea. 🎉🍵",
+    "New item in stock: {name}, the ultimate chill curator. Limited edition energy. 📦✨",
+    "{name} discovered the hidden lounge of positivity — badge unlocked, mission: unwind. 🌟"
 ]
 
 
@@ -350,18 +351,20 @@ class WelcomeButton(discord.ui.Button):
         if user == self.parent_view.new_member:
             await interaction.followup.send("You can't welcome yourself! 😄", ephemeral=True)
             return
-        # Fun welcome replies with inventory vibe (no mention for welcomer)
+        # Epic welcome replies with maximum inventory vibes ✨
         welcome_replies = [
-            f"Inventory alert: {user.mention} welcomes {self.parent_view.new_member.mention} to the chillventory! 📦",
-            f"{user.mention} adds a warm welcome to {self.parent_view.new_member.mention}'s inventory! 🤗",
-            f"New stock in the lounge: {user.mention} welcomes {self.parent_view.new_member.mention}! 🛋️",
-            f"{user.mention} unlocks extra vibes for {self.parent_view.new_member.mention}! ✨",
-            f"Chillventory update: {user.mention} says hi to {self.parent_view.new_member.mention}! 😎",
-            f"{user.mention} throws positivity confetti for {self.parent_view.new_member.mention}! 🎊",
-            f"Welcome stash expanded: {user.mention} greets {self.parent_view.new_member.mention}! 🌟",
-            f"{user.mention} shares good mood from the inventory with {self.parent_view.new_member.mention}! 😁",
-            f"Realm of relaxation welcomes {self.parent_view.new_member.mention} via {user.mention}! 🧘",
-            f"{user.mention} discovers {self.parent_view.new_member.mention} in the positivity inventory! 🌿",
+            f"🎊 **LEGENDARY DROP!** {user.mention} just summoned {self.parent_view.new_member.mention} into the chillventory vault! 📦",
+            f"✨ {user.mention} equipped {self.parent_view.new_member.mention} with *Infinite Good Vibes +99* — welcome buff activated! 💫",
+            f"📦 **New inventory slot unlocked!** {user.mention} warmly stores {self.parent_view.new_member.mention} in the premium lounge section! 🛋️",
+            f"🌟 Achievement unlocked: {user.mention} successfully welcomed {self.parent_view.new_member.mention}! Friendship XP +100 🎮",
+            f"🛋️ **Sofa reservation confirmed!** {user.mention} rolls out the red carpet for {self.parent_view.new_member.mention}! 🎭",
+            f"🎨 {user.mention} adds a splash of positivity paint to {self.parent_view.new_member.mention}'s welcome canvas! Masterpiece! 🖼️",
+            f"🌿 **Rare plant spotted!** {user.mention} places {self.parent_view.new_member.mention} in the zen garden of eternal chill! 🧘",
+            f"🎉 {user.mention} throws legendary confetti bombs for {self.parent_view.new_member.mention}! The lounge is now 200% more sparkly! ✨",
+            f"🔥 **Epic combo!** {user.mention} + {self.parent_view.new_member.mention} = Maximum vibes unlocked! The inventory is blessed! 🙏",
+            f"💎 {user.mention} just found a rare gem: {self.parent_view.new_member.mention}! Added to the collection of awesome people! 💖",
+            f"🚀 **Mission success!** Agent {user.mention} has secured {self.parent_view.new_member.mention} for the chill squad! Welcome aboard! 🎯",
+            f"🧘 {user.mention} transmits good energy waves to {self.parent_view.new_member.mention}! Harmony level: MAXIMUM! 🌊",
         ]
         reply = random.choice(welcome_replies)
         reply_msg = await interaction.followup.send(reply)
