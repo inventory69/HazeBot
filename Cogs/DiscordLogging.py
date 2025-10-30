@@ -86,6 +86,13 @@ class DiscordLogFormatter(logging.Formatter):
             "CRITICAL": "\u001b[0;35m",  # Magenta
             "RESET": "\u001b[0m",  # Reset
         }
+        # Cog-specific colors for highlighting
+        self.cog_colors = {
+            "RocketLeague": "\u001b[0;33m",  # Yellow/Orange for Rocket League
+            "TicketSystem": "\u001b[0;32m",  # Green for Tickets
+            "DiscordLogging": "\u001b[0;35m",  # Magenta for Discord Logging
+            "Welcome": "\u001b[0;36m",  # Cyan for Welcome
+        }
 
     def format(self, record):
         # Get emoji based on level (matching Logger.py)
@@ -113,17 +120,38 @@ class DiscordLogFormatter(logging.Formatter):
 
         time_str = self.formatTime(record, self.datefmt)
 
-        # Add cog prefix based on logger name
-        prefix = self.get_cog_prefix(record.name)
-        message = record.getMessage()
-        if prefix:
-            message = f"{prefix} {message}"
-
-        # Add ANSI color
-        color = self.colors.get(level, self.colors["RESET"])
+        # Define reset early so it's available everywhere
         reset = self.colors["RESET"]
 
+        # Add cog prefix based on logger name
+        prefix = self.get_cog_prefix(record.name)
+        cog_name = self.get_cog_name(record.name)
+        message = record.getMessage()
+        
+        # Color the entire message if it's from a specific cog
+        cog_color = self.cog_colors.get(cog_name, "")
+        
+        if prefix:
+            if cog_color:
+                # Color the entire line (prefix + message) for specific cogs
+                message = f"{cog_color}{prefix} {message}{reset}"
+            else:
+                message = f"{prefix} {message}"
+        elif cog_color:
+            # Color just the message if no prefix but cog matches
+            message = f"{cog_color}{message}{reset}"
+
+        # Add ANSI color for level
+        color = self.colors.get(level, self.colors["RESET"])
+
         return f"{time_str} {emoji}  {color}{level:<7}{reset} │ {message}"
+
+    def get_cog_name(self, name):
+        """Extract cog name from logger name"""
+        parts = name.split(".")
+        if len(parts) >= 2 and parts[-2] == "Cogs":
+            return parts[-1]
+        return ""
 
     def get_cog_prefix(self, name):
         """Extract cog prefix (matching Logger.py)"""
