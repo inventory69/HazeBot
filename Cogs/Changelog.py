@@ -91,6 +91,30 @@ PR-Text:
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 
+    @commands.command(name="update_changelog_view")
+    @commands.has_permissions(administrator=True)
+    async def update_changelog_view(self, ctx: commands.Context, message_id: int) -> None:
+        """
+        🔄 Update an existing changelog message to add the edit button.
+        Usage: !update_changelog_view <message_id>
+        """
+        try:
+            message = await ctx.channel.fetch_message(message_id)
+            if not message.embeds:
+                await ctx.send("❌ Message has no embed.")
+                return
+            
+            embed = message.embeds[0]
+            view = ChangelogChannelView(embed)
+            await message.edit(view=view)
+            await ctx.send(f"✅ Updated message {message_id} with new view.", ephemeral=True)
+            logger.info(f"Updated changelog message {message_id} with edit button")
+        except discord.NotFound:
+            await ctx.send("❌ Message not found.")
+        except Exception as e:
+            logger.error(f"Error updating changelog view: {e}")
+            await ctx.send(f"❌ Error updating message: {e}")
+
     @commands.command(name="changelog")
     @commands.has_permissions(administrator=True)
     async def changelog_prefix(self, ctx: commands.Context, *, args: str) -> None:
@@ -151,6 +175,67 @@ PR-Text:
             await ctx.send("❌ Failed to generate changelog. Check logs.")
 
 
+# --- Edit Modal ---
+class ChangelogEditModal(discord.ui.Modal, title="Edit Changelog"):
+    def __init__(self, view: 'ChangelogChannelView') -> None:
+        super().__init__()
+        self.view = view
+        
+        # Extract current values from embed
+        current_title = view.embed.title or ""
+        current_description = view.embed.description or ""
+        
+        # Title input (without the date part for easier editing)
+        title_without_prefix = current_title.replace("🆕 ", "")
+        if " – " in title_without_prefix:
+            title_part = title_without_prefix.split(" – ")[0]
+            date_part = title_without_prefix.split(" – ")[1]
+        else:
+            title_part = title_without_prefix
+            date_part = datetime.now().strftime("%Y-%m-%d")
+        
+        self.title_input = discord.ui.TextInput(
+            label="Title",
+            placeholder="e.g. Feature Update",
+            default=title_part,
+            max_length=100,
+            required=True,
+        )
+        
+        self.date_input = discord.ui.TextInput(
+            label="Date (YYYY-MM-DD)",
+            placeholder="e.g. 2025-10-31",
+            default=date_part,
+            max_length=10,
+            required=True,
+        )
+        
+        self.description_input = discord.ui.TextInput(
+            label="Changelog Text",
+            placeholder="Enter changes here...",
+            default=current_description.replace("\n\u200b", ""),
+            style=discord.TextStyle.paragraph,
+            max_length=4000,
+            required=True,
+        )
+        
+        self.add_item(self.title_input)
+        self.add_item(self.date_input)
+        self.add_item(self.description_input)
+    
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        # Update the embed with new values
+        new_title = f"🆕 {self.title_input.value} – {self.date_input.value}"
+        new_description = self.description_input.value + "\n\u200b"
+        
+        self.view.embed.title = new_title
+        self.view.embed.description = new_description
+        
+        # Update the message with the new embed
+        await interaction.response.edit_message(embed=self.view.embed, view=self.view)
+        await interaction.followup.send("✅ Changelog updated successfully!", ephemeral=True)
+
+
 # --- Button & Channel Select View ---
 class ChangelogChannelView(discord.ui.View):
     def __init__(self, embed: discord.Embed) -> None:
@@ -167,6 +252,11 @@ class ChangelogChannelView(discord.ui.View):
             await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
         else:
             await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
+    
+    @discord.ui.button(label="Edit Manually", style=discord.ButtonStyle.secondary, emoji="✏️")
+    async def edit_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        modal = ChangelogEditModal(self)
+        await interaction.response.send_modal(modal)
 
 
 async def setup(bot: commands.Bot) -> None:
