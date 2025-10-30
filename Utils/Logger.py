@@ -31,7 +31,7 @@ class Highlighter(RegexHighlighter):
         rf"(?P<Command>{CommandPrefix}.*)",
         r"🧹 (?P<Clear>.*)",  # Highlight clear logs
         r"(?P<Discord>DC .*)",  # Highlight Discord logs
-        r"(?P<RocketLeague>RL .*)",  # Highlight Rocket League logs
+        r"🚀 \[RocketLeague\] (?P<RocketLeague>.*)",  # Highlight Rocket League logs
         r"(?P<Ticket>Ticket .*)",  # Highlight Ticket logs
     ]
 
@@ -104,7 +104,7 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
         f"{__name__}.Command": "#b5ead7",
         f"{__name__}.Clear": "#ff69b4",  # Pink for clear logs
         f"{__name__}.Discord": "#e0bbff",  # Purple for Discord logs
-        f"{__name__}.RocketLeague": "#ff9999",  # Light red for RL logs
+        f"{__name__}.RocketLeague": "#FFA500",  # Orange for RL logs (Rocket Boost color!)
         f"{__name__}.Ticket": "#99ff99",  # Light green for Ticket logs
     }
     Console = RichConsole(

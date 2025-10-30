@@ -694,20 +694,64 @@ class RocketLeague(commands.Cog):
                 last_fetched_str = data.get("last_fetched")
                 if last_fetched_str:
                     last_fetched = datetime.fromisoformat(last_fetched_str)
-                    if now - last_fetched < timedelta(hours=1):
+                    time_since_last = now - last_fetched
+                    if time_since_last < timedelta(hours=1):
+                        logger.debug(f"Skipping {data['username']} - last checked {time_since_last.total_seconds()/60:.1f} minutes ago")
                         continue  # Skip if less than 1 hour
+                else:
+                    logger.info(f"No last_fetched timestamp for {data['username']}, will check ranks")
             platform = data["platform"]
             username = data["username"]
             old_ranks = data.get("ranks", {})
+            
+            # Log old ranks before fetching new ones
+            old_ranks_str = ", ".join([f"{k}: {v}" for k, v in old_ranks.items()]) if old_ranks else "No ranks stored"
+            logger.info(f"Checking {username} (ID: {user_id}) - Stored ranks: [{old_ranks_str}]")
+            
             stats = await self.get_player_stats(platform, username, force_refresh=force)
             if stats:
                 new_ranks = stats["tier_names"]
                 new_icon_urls = stats.get("icon_urls", {})
+                
+                # Log fetched ranks
+                new_ranks_str = ", ".join([f"{k}: {v}" for k, v in new_ranks.items()])
+                logger.info(f"Fetched ranks for {username}: [{new_ranks_str}]")
+                
                 user = self.bot.get_user(int(user_id))
                 if user:
+                    # Check if this is the first check (no old ranks stored)
+                    is_first_check = not old_ranks or all(v == "Unranked" for v in old_ranks.values())
+                    
                     for playlist, new_tier in new_ranks.items():
                         old_tier = old_ranks.get(playlist, "Unranked")
+                        if new_tier != old_tier:
+                            logger.info(f"Rank change detected for {username} {playlist}: {old_tier} -> {new_tier}")
                         if new_tier != old_tier and tier_order.index(new_tier) > tier_order.index(old_tier):
+                            # Skip notification if this is the first check (initial setup)
+                            if is_first_check:
+                                logger.info(f"Skipping promotion notification for {username} {playlist} (first check/initialization)")
+                                continue
+                            
+                            # DOUBLE VALIDATION: Fetch stats again without cache to verify the promotion
+                            logger.info(f"Double-checking promotion for {username} {playlist} with fresh API call...")
+                            await asyncio.sleep(2)  # Small delay before re-fetch
+                            verification_stats = await self.get_player_stats(platform, username, force_refresh=True)
+                            
+                            if not verification_stats:
+                                logger.warning(f"Failed to verify promotion for {username} {playlist} - skipping notification")
+                                continue
+                            
+                            verified_tier = verification_stats["tier_names"].get(playlist, "Unranked")
+                            logger.info(f"Verification result for {username} {playlist}: {verified_tier}")
+                            
+                            if verified_tier != new_tier:
+                                logger.warning(f"Promotion verification FAILED for {username} {playlist}: Initial={new_tier}, Verified={verified_tier} - skipping notification")
+                                # Use the verified tier for storage
+                                new_ranks[playlist] = verified_tier
+                                continue
+                            
+                            logger.info(f"Promotion verified for {username} {playlist}: {old_tier} -> {new_tier}")
+                            
                             emoji = RANK_EMOJIS.get(new_tier, "<:unranked:1425389712276721725>")
                             icon_url = new_icon_urls.get(playlist)
                             # Sende die Notification als separate Nachricht vor dem Embed
@@ -736,11 +780,16 @@ class RocketLeague(commands.Cog):
                                 json.dump(self.congrats_views_data, f)
 
                             logger.info(f"Rank promotion notified for {user}: {playlist} {old_tier} -> {new_tier}")
+                else:
+                    logger.warning(f"User {user_id} not found in bot cache, cannot send rank promotion")
                 # Update ranks and last_fetched
                 data["ranks"] = new_ranks
                 data["icon_urls"] = new_icon_urls
                 data["last_fetched"] = now.isoformat()
                 save_rl_accounts(accounts)
+                logger.info(f"Updated stored ranks for {username}: [{new_ranks_str}], last_fetched: {now.isoformat()}")
+            else:
+                logger.warning(f"Failed to fetch stats for {username} ({platform})")
         logger.info("Rank check completed.")
 
     @tasks.loop(hours=1)
