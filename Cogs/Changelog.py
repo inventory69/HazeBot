@@ -49,10 +49,12 @@ Format the following PR text as a compact Discord-Markdown changelog.
 - Directly below the title, add these lines (with Discord markdown):
   **Project:** `{project}`
   **Author:** `{author}`
-- After a blank line, list the changes as bullet points. Each change must start with a small bullet point (•), then an emoji, then a short description.
+- After a blank line, list the changes as bullet points. Each change must start with a small bullet point (•), then EXACTLY ONE emoji, then a short description.
+- IMPORTANT: Use ONLY ONE emoji per line, never multiple emojis.
 - Format file names, command names, variables, and settings in backticks (`).
 - Do not add a summary or extra text at the end.
 - Do not use paragraphs. Only use bullet points as shown below.
+- If the input already contains emojis in the bullet points, keep them as-is and do not add additional emojis.
 
 Example:
 **Project:** `HazeWorldBot`
@@ -94,22 +96,35 @@ PR-Text:
     async def changelog_prefix(self, ctx: commands.Context, *, args: str) -> None:
         """
         📝 Generate a changelog from PR text. (Admin only)
-        Usage: !changelog title:"Title" date:"2025-10-13" project:"HazeWorldBot" author:"inventory69" text:PR text here
+        Usage: !changelog title:"Title" date:"2025-10-13" project:"HazeWorldBot" author:"inventory69" --text PR text here
         If title is omitted, it will be generated from the PR text. Date defaults to today.
         """
         params = {}
-        for part in args.split(" "):
-            if ":" in part:
-                key, value = part.split(":", 1)
-                params[key] = value
-
-        text = params.get("text", args)
+        
+        # Better parsing: Look for --text flag
+        if "--text" in args:
+            parts = args.split("--text", 1)
+            text = parts[1].strip() if len(parts) > 1 else args
+            # Parse other params from the first part
+            for part in parts[0].split():
+                if ":" in part:
+                    key, value = part.split(":", 1)
+                    params[key.strip()] = value.strip().strip('"').strip("'")
+        else:
+            # Old parsing for backward compatibility
+            text = args
+            for part in args.split():
+                if ":" in part:
+                    key, value = part.split(":", 1)
+                    params[key.strip()] = value.strip().strip('"').strip("'")
+        
         project = params.get("project", "HazeWorldBot")
         author = params.get("author", "inventory69")
 
         # Generate title if not provided
         if "title" not in params:
             try:
+                logger.info("Generating title from text...")
                 title = await self.generate_changelog_title(text)
             except Exception as e:
                 logger.error(f"Error generating title: {e}")
@@ -120,11 +135,17 @@ PR-Text:
         # Use today's date if not provided
         date = params.get("date", datetime.now().strftime("%Y-%m-%d"))
 
+        logger.info(f"Generating changelog with title='{title}', project='{project}', author='{author}'")
+        logger.info(f"Text preview: {text[:100]}...")
+
         try:
             changelog = await self.generate_changelog_text(text, project, author)
+            logger.info("Changelog generated, creating embed...")
             embed = self.create_changelog_embed(changelog, title, date, project, author)
             view = ChangelogChannelView(embed)
+            logger.info("Sending changelog embed to channel...")
             await ctx.send(embed=embed, view=view)
+            logger.info("Changelog embed sent successfully")
         except Exception as e:
             logger.error(f"Error generating changelog: {e}")
             await ctx.send("❌ Failed to generate changelog. Check logs.")
