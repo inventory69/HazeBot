@@ -8,6 +8,7 @@ import random
 from datetime import datetime, time
 import logging
 import asyncio
+from bs4 import BeautifulSoup
 
 from Config import (
     PINK,
@@ -788,13 +789,12 @@ class DailyMeme(commands.Cog):
             sources_str = ", ".join(self.meme_sources)
             logger.info(f"Enabled meme sources: {sources_str}")
 
-            # FlareSolverr check (for future sources that might need it)
-            flaresolverr_sources = ["9gag", "4chan"]  # Sources that require FlareSolverr
-            if any(src in self.meme_sources for src in flaresolverr_sources):
+            # FlareSolverr check - Required for Reddit (always returns 403) and other sources
+            if "reddit" in self.meme_sources or any(src in self.meme_sources for src in ["9gag", "4chan"]):
                 if self.flaresolverr_url:
                     logger.info(f"FlareSolverr configured: {self.flaresolverr_url}")
                 else:
-                    logger.warning("FlareSolverr-dependent sources enabled but URL not configured!")
+                    logger.warning("⚠️ FlareSolverr required for Reddit but URL not configured!")
 
             logger.info(f"Daily meme scheduled for 12:00 PM daily (Channel: {MEME_CHANNEL_ID})")
             logger.info("Daily Meme task started")
@@ -818,7 +818,7 @@ class DailyMeme(commands.Cog):
             timeout: FlareSolverr maxTimeout in milliseconds
 
         Returns:
-            dict with 'status' and 'html' keys, or None on error
+            dict with 'status' and 'response' keys, or None on error
         """
         if not self.flaresolverr_url:
             logger.warning("FlareSolverr URL not configured")
@@ -841,7 +841,7 @@ class DailyMeme(commands.Cog):
             }
 
             try:
-                async with self.session.post(self.flaresolverr_url, json=payload, timeout=35) as response:
+                async with self.session.post(self.flaresolverr_url, json=payload, timeout=65) as response:
                     self._last_flaresolverr_call = asyncio.get_event_loop().time()
 
                     if response.status != 200:
@@ -853,12 +853,20 @@ class DailyMeme(commands.Cog):
                         logger.warning(f"FlareSolverr failed: {data.get('message')}")
                         return None
 
-                    html = data.get("solution", {}).get("response")
-                    if not html:
-                        logger.warning("No HTML content from FlareSolverr")
+                    # Get the response text from FlareSolverr
+                    solution = data.get("solution", {})
+                    response_text = solution.get("response")
+                    
+                    if not response_text:
+                        logger.warning("No response content from FlareSolverr")
+                        logger.debug(f"Full FlareSolverr response: {data}")
                         return None
+                    
+                    # Debug: Log response type and preview
+                    logger.debug(f"FlareSolverr response type: {type(response_text)}, length: {len(response_text) if response_text else 0}")
+                    logger.debug(f"Response preview (first 200): {response_text[:200] if response_text else 'None'}")
 
-                    return {"status": "ok", "html": html}
+                    return {"status": "ok", "response": response_text}
 
             except asyncio.TimeoutError:
                 logger.error(f"FlareSolverr timeout for {url}")
@@ -871,48 +879,92 @@ class DailyMeme(commands.Cog):
 
     async def fetch_reddit_meme(self, subreddit: str, sort: str = "hot") -> dict:
         """
-        Fetch a meme from Reddit using the JSON API (no auth needed)
+        Fetch a meme from Reddit using FlareSolverr (Reddit blocks direct API access)
         sort: hot, top, new
         """
         url = f"https://www.reddit.com/r/{subreddit}/{sort}.json?limit=50&t=day"
-        headers = {"User-Agent": "HazeBot/1.0"}
 
         try:
-            async with self.session.get(url, headers=headers) as response:
-                if response.status != 200:
-                    logger.warning(f"Reddit API returned {response.status} for r/{subreddit}")
+            # Use FlareSolverr directly since Reddit always returns 403
+            if not self.flaresolverr_url:
+                logger.error("FlareSolverr not configured, cannot fetch from Reddit")
+                return None
+            
+            logger.debug(f"Fetching r/{subreddit} via FlareSolverr...")
+            flare_response = await self._fetch_with_flaresolverr(url)
+            
+            if not flare_response or flare_response.get("status") != "ok":
+                logger.error(f"FlareSolverr failed for r/{subreddit}")
+                return None
+            
+            # Parse JSON from response
+            response_text = flare_response.get("response", "")
+            
+            # FlareSolverr might return HTML instead of JSON if Reddit blocks it
+            # Try to extract JSON from the response
+            if not response_text or not response_text.strip():
+                logger.error(f"Empty response from FlareSolverr for r/{subreddit}")
+                return None
+            
+            # Check if response is HTML (starts with <!DOCTYPE or <html)
+            if response_text.strip().startswith(('<', '<!DOCTYPE', '<!doctype')):
+                logger.debug(f"FlareSolverr returned HTML for r/{subreddit}, attempting to extract JSON from <pre> tag")
+                
+                # Parse HTML and extract JSON from <pre> tag (Reddit returns JSON in HTML)
+                soup = BeautifulSoup(response_text, "html.parser")
+                pre_tag = soup.find("pre")
+                
+                if not pre_tag or not pre_tag.text.strip():
+                    logger.error(f"No <pre> tag found in HTML response for r/{subreddit}")
+                    logger.debug(f"HTML preview: {response_text[:500]}...")
                     return None
+                
+                response_text = pre_tag.text.strip()
+                logger.debug(f"Extracted JSON from <pre> tag, length: {len(response_text)}")
+            
+            try:
+                # FlareSolverr returns the JSON response as text
+                data = json.loads(response_text)
+                logger.debug(f"Successfully parsed JSON from r/{subreddit}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON from FlareSolverr response for r/{subreddit}: {e}")
+                logger.debug(f"Response preview (first 500 chars): {response_text[:500]}...")
+                logger.debug(f"Response preview (last 200 chars): ...{response_text[-200:]}")
+                return None
 
-                data = await response.json()
-                posts = data["data"]["children"]
+            posts = data["data"]["children"]
 
-                # Filter for image posts only
-                image_posts = []
-                for post in posts:
-                    post_data = post["data"]
-                    # Skip stickied posts, videos, and galleries
-                    if post_data.get("stickied") or post_data.get("is_video") or post_data.get("is_gallery"):
-                        continue
+            # Filter for image posts only
+            image_posts = []
+            for post in posts:
+                post_data = post["data"]
+                # Skip stickied posts, videos, and galleries
+                if post_data.get("stickied") or post_data.get("is_video") or post_data.get("is_gallery"):
+                    continue
 
-                    # Get image URL
-                    url = post_data.get("url", "")
-                    # Accept direct image links and imgur links
-                    if any(ext in url.lower() for ext in [".jpg", ".jpeg", ".png", ".gif"]) or "i.imgur.com" in url:
-                        image_posts.append(
-                            {
-                                "title": post_data.get("title"),
-                                "url": url,
-                                "subreddit": subreddit,
-                                "score": post_data.get("ups", 0),  # Use 'score' key for consistency
-                                "upvotes": post_data.get("ups", 0),  # Keep upvotes for compatibility
-                                "permalink": f"https://reddit.com{post_data.get('permalink')}",
-                                "nsfw": post_data.get("over_18", False),
-                                "author": post_data.get("author", "unknown"),
-                            }
-                        )
+                # Get image URL
+                post_url = post_data.get("url", "")
+                # Accept direct image links and imgur links
+                if any(ext in post_url.lower() for ext in [".jpg", ".jpeg", ".png", ".gif"]) or "i.imgur.com" in post_url:
+                    image_posts.append(
+                        {
+                            "title": post_data.get("title"),
+                            "url": post_url,
+                            "subreddit": subreddit,
+                            "score": post_data.get("ups", 0),  # Use 'score' key for consistency
+                            "upvotes": post_data.get("ups", 0),  # Keep upvotes for compatibility
+                            "permalink": f"https://reddit.com{post_data.get('permalink')}",
+                            "nsfw": post_data.get("over_18", False),
+                            "author": post_data.get("author", "unknown"),
+                        }
+                    )
 
-                return image_posts if image_posts else None
+            logger.info(f"Fetched {len(image_posts)} memes from r/{subreddit}")
+            return image_posts if image_posts else None
 
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout fetching meme from r/{subreddit}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching meme from r/{subreddit}: {e}")
             return None
