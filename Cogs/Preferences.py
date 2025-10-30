@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Any
-from Config import PINK, CHANGELOG_ROLE_ID, get_guild_id
+from Config import PINK, CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
 import logging
 
@@ -25,6 +25,7 @@ class PreferencesSystem(commands.Cog):
         """
         🛠️ Open your preferences menu.
         """
+        logger.info(f"Prefix command !preferences used by {ctx.author} in {ctx.guild}")
         embed = self.get_preferences_help_embed(ctx, ctx.author)
         view = PreferencesView(ctx.author.id, ctx.guild)
         await ctx.send(embed=embed, view=view)
@@ -33,24 +34,39 @@ class PreferencesSystem(commands.Cog):
     @app_commands.command(name="preferences", description="🛠️ Open your preferences menu.")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def preferences_slash(self, interaction: discord.Interaction) -> None:
+        logger.info(f"Slash command /preferences used by {interaction.user} in {interaction.guild}")
         embed = self.get_preferences_help_embed(interaction, interaction.user)
         view = PreferencesView(interaction.user.id, interaction.guild)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     # 🧩 Shared Helper for preferences embed (used in prefix and slash)
     def get_preferences_help_embed(self, ctx_or_interaction: Any, user: discord.User) -> discord.Embed:
-        has_role = any(role.id == CHANGELOG_ROLE_ID for role in user.roles)
-        status = "✅ Enabled" if has_role else "❌ Disabled"
+        # Check Changelog role status
+        has_changelog_role = any(role.id == CHANGELOG_ROLE_ID for role in user.roles)
+        changelog_status = "✅ Enabled" if has_changelog_role else "❌ Disabled"
+
+        # Check Meme role status
+        has_meme_role = any(role.id == MEME_ROLE_ID for role in user.roles)
+        meme_status = "✅ Enabled" if has_meme_role else "❌ Disabled"
+
         embed = discord.Embed(
             title="🛠️ Preferences Menu",
-            description=f"Customize your experience. Changelog notifications are currently **{status}**.",
+            description="Customize your notification preferences.",
             color=PINK,
         )
+
         embed.add_field(
-            name="Options",
-            value="🔔 Toggle Changelog Notifications – Opt-in to receive role <@&1426314743278473307> for update notifications.",
+            name="🔔 Changelog Notifications",
+            value=f"Status: **{changelog_status}**\nGet notified about bot updates and new features.",
             inline=False,
         )
+
+        embed.add_field(
+            name="🎭 Daily Meme Notifications",
+            value=f"Status: **{meme_status}**\nGet pinged when the daily meme is posted at 12:00 PM.",
+            inline=False,
+        )
+
         set_pink_footer(embed, bot=self.bot.user if hasattr(self.bot, "user") else None)
         return embed
 
@@ -58,46 +74,80 @@ class PreferencesSystem(commands.Cog):
 # === View for preferences menu ===
 class PreferencesView(discord.ui.View):
     def __init__(self, user_id: int, guild: discord.Guild) -> None:
-        super().__init__(timeout=300)  # 5 minutes
-        self.user_id = user_id
-        self.guild = guild
-        # Check current status
+        super().__init__(timeout=300)
         member = guild.get_member(user_id)
-        has_role = member and any(role.id == CHANGELOG_ROLE_ID for role in member.roles)
-        label = "Disable Changelog Notifications" if has_role else "Enable Changelog Notifications"
-        emoji = "🔕" if has_role else "🔔"
-        # Add the button with dynamic label
-        self.add_item(ToggleChangelogButton(label, emoji, user_id, guild))
+
+        # Changelog button
+        has_changelog = member and any(role.id == CHANGELOG_ROLE_ID for role in member.roles)
+        changelog_label = "🔕 Disable Changelogs" if has_changelog else "🔔 Enable Changelogs"
+        self.add_item(ToggleChangelogButton(changelog_label, user_id, guild))
+
+        # Meme button
+        has_meme = member and any(role.id == MEME_ROLE_ID for role in member.roles)
+        meme_label = "🔕 Disable Daily Memes" if has_meme else "🎭 Enable Daily Memes"
+        self.add_item(ToggleMemeButton(meme_label, user_id, guild))
 
 
 class ToggleChangelogButton(discord.ui.Button):
-    def __init__(self, label: str, emoji: str, user_id: int, guild: discord.Guild) -> None:
-        super().__init__(label=label, style=discord.ButtonStyle.primary, emoji=emoji)
+    def __init__(self, label: str, user_id: int, guild: discord.Guild) -> None:
+        super().__init__(label=label, style=discord.ButtonStyle.primary, row=0)
         self.user_id = user_id
         self.guild = guild
 
     async def callback(self, interaction: discord.Interaction) -> None:
         if interaction.user.id != self.user_id:
-            await interaction.response.send_message("This menu is not for you.", ephemeral=True)
+            await interaction.response.send_message("❌ This menu is not for you.", ephemeral=True)
             return
+
         member = self.guild.get_member(self.user_id)
         if not member:
-            await interaction.response.send_message("Member not found.", ephemeral=True)
+            await interaction.response.send_message("❌ Member not found.", ephemeral=True)
             return
+
         role = self.guild.get_role(CHANGELOG_ROLE_ID)
         if not role:
-            await interaction.response.send_message("Changelog role not found.", ephemeral=True)
+            await interaction.response.send_message("❌ Changelog role not found.", ephemeral=True)
             return
+
         if role in member.roles:
             await member.remove_roles(role)
-            status = "disabled"
+            await interaction.response.send_message("🔕 Changelog notifications **disabled**.", ephemeral=True)
+            logger.info(f"User {interaction.user} disabled changelog notifications")
         else:
             await member.add_roles(role)
-            status = "enabled"
-        await interaction.response.send_message(f"Changelog notifications {status}.", ephemeral=True)
-        logger.info(f"User {interaction.user} toggled changelog role to {status}.")
+            await interaction.response.send_message("🔔 Changelog notifications **enabled**!", ephemeral=True)
+            logger.info(f"User {interaction.user} enabled changelog notifications")
 
-        # Note: Since the message is ephemeral, we can't edit it. The status is shown in the button label and embed initially.
+
+class ToggleMemeButton(discord.ui.Button):
+    def __init__(self, label: str, user_id: int, guild: discord.Guild) -> None:
+        super().__init__(label=label, style=discord.ButtonStyle.primary, row=1)
+        self.user_id = user_id
+        self.guild = guild
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you.", ephemeral=True)
+            return
+
+        member = self.guild.get_member(self.user_id)
+        if not member:
+            await interaction.response.send_message("❌ Member not found.", ephemeral=True)
+            return
+
+        role = self.guild.get_role(MEME_ROLE_ID)
+        if not role:
+            await interaction.response.send_message("❌ Daily Meme role not found.", ephemeral=True)
+            return
+
+        if role in member.roles:
+            await member.remove_roles(role)
+            await interaction.response.send_message("🔕 Daily Meme notifications **disabled**.", ephemeral=True)
+            logger.info(f"User {interaction.user} disabled daily meme notifications")
+        else:
+            await member.add_roles(role)
+            await interaction.response.send_message("🎭 Daily Meme notifications **enabled**!", ephemeral=True)
+            logger.info(f"User {interaction.user} enabled daily meme notifications")
 
 
 # === Setup function ===

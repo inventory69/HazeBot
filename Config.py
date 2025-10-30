@@ -21,6 +21,13 @@ PINK = discord.Color(0xAD1457)  # Hot Pink color used for embeds and UI elements
 FuzzyMatchingThreshold = 0.6  # Similarity threshold for fuzzy command matching (0.0 to 1.0, higher = stricter)
 MessageCooldown = 5  # Cooldown in seconds between user messages to prevent spam
 
+# === Role Display Names ===
+ROLE_NAMES = {
+    "user": "🎒 Lootling",
+    "mod": "📦 Slot Keeper",
+    "admin": "🧊 Inventory Master",
+}
+
 # === Environment-based Configuration ===
 PROD_MODE = os.getenv("PROD_MODE", "false").lower() == "true"
 
@@ -78,6 +85,8 @@ PROD_IDS = {
     "WELCOME_PUBLIC_CHANNEL_ID": 1424164269775392858,
     "TODO_CHANNEL_ID": 1424862421650247730,
     "RL_CHANNEL_ID": 1425472657293443236,
+    "MEME_CHANNEL_ID": 1433414228840284252,
+    "MEME_ROLE_ID": 1433415594463596567,
     "LOG_CHANNEL_ID": 1433187806347526244,  # Discord logging channel (PROD)
 }
 
@@ -113,6 +122,8 @@ TEST_IDS = {
     "WELCOME_PUBLIC_CHANNEL_ID": 1429722992857976854,
     "TODO_CHANNEL_ID": 1429724097570541618,
     "RL_CHANNEL_ID": 1429804818481938463,
+    "MEME_CHANNEL_ID": 1433416191204003960,
+    "MEME_ROLE_ID": 1433416262062702686,
     "LOG_CHANNEL_ID": 1433187651191701688,  # Discord logging channel (TEST)
 }
 
@@ -137,6 +148,7 @@ LOG_CHANNEL_ID = CURRENT_IDS["LOG_CHANNEL_ID"]
 COG_PREFIXES = {
     "CogManager": "🔧 [CogManager]",
     "Changelog": "📝 [Changelog]",
+    "DailyMeme": "🎭 [DailyMeme]",
     "DiscordLogging": "📡 [DiscordLogging]",
     "Leaderboard": "🏆 [Leaderboard]",
     "ModPerks": "🛡️ [ModPerks]",
@@ -158,6 +170,7 @@ COG_PREFIXES = {
 SLASH_COMMANDS = [
     "help",
     "status",
+    "meme",
     "rlstats",
     "setrlaccount",
     "unlinkrlaccount",
@@ -196,6 +209,11 @@ ADMIN_COMMANDS = [
     "listcogs",
     "togglediscordlogs",
     "testdiscordlog",
+    "testmeme",
+    "memesubreddits",
+    "addsubreddit",
+    "removesubreddit",
+    "resetsubreddits",
 ]  # Commands restricted to Admins only
 MOD_COMMANDS = [
     "clear",
@@ -206,6 +224,15 @@ MOD_COMMANDS = [
     "optins",
     "todo-update",
     "adminrlstats",
+    "testmeme",
+    "memesubreddits",
+    "addsubreddit",
+    "removesubreddit",
+    "resetsubreddits",
+    "memesources",
+    "enablesource",
+    "disablesource",
+    "resetsources",
 ]  # Commands restricted to Moderators (Slot Keepers) only
 
 # === Rocket League ===
@@ -283,3 +310,43 @@ TODO_CHANNEL_ID = CURRENT_IDS["TODO_CHANNEL_ID"]
 
 # === Rocket League ===
 RL_CHANNEL_ID = CURRENT_IDS["RL_CHANNEL_ID"]
+
+# === Daily Meme ===
+MEME_CHANNEL_ID = CURRENT_IDS.get("MEME_CHANNEL_ID")
+MEME_ROLE_ID = CURRENT_IDS.get("MEME_ROLE_ID")
+
+# Reddit Subreddits
+MEME_SUBREDDITS_FILE = f"{DATA_DIR}/meme_subreddits.json"
+DEFAULT_MEME_SUBREDDITS = [
+    "memes",
+    "dankmemes",
+    "me_irl",
+    "wholesomememes",
+    "AdviceAnimals",
+    "MemeEconomy",
+    "PrequelMemes",
+    "gaming",
+    "ProgrammerHumor",
+    "okbuddyretard",
+]
+
+# Lemmy Communities (instance@community format)
+MEME_LEMMY_FILE = f"{DATA_DIR}/meme_lemmy_communities.json"
+DEFAULT_MEME_LEMMY = [
+    "lemmy.world@memes",
+    "lemmy.world@meirl",
+    "lemmy.world@dankmemes",
+    "lemmy.world@adhdmemes",
+    "lemmy.world@autism",
+    "lemmy.ml@memes",
+]
+
+# Meme sources - can be disabled by removing from list
+# Available sources: "reddit", "lemmy" (more sources can be added in the future)
+# 4chan removed: unstable image URLs (404s), wallpaper-focused boards, requires FlareSolverr
+# 9gag removed: unreliable author information and low-quality content
+# imgur removed: low quality memes, inconsistent content
+MEME_SOURCES = [
+    "reddit",
+    "lemmy",
+]

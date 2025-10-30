@@ -7,6 +7,7 @@ from Config import (
     SLASH_COMMANDS,
     ADMIN_COMMANDS,
     MOD_COMMANDS,
+    ROLE_NAMES,
     get_guild_id,
     ADMIN_ROLE_ID,
     MODERATOR_ROLE_ID,
@@ -31,9 +32,22 @@ class Utility(commands.Cog):
 
     # Shared helper functions for logic
     def create_help_embed(self, ctx_or_interaction: Any, is_admin: bool = False, is_mod: bool = False) -> discord.Embed:
+        # Determine user's role display name
+        if is_admin:
+            role_display = ROLE_NAMES["admin"]
+        elif is_mod:
+            role_display = ROLE_NAMES["mod"]
+        else:
+            role_display = ROLE_NAMES["user"]
+
         embed = discord.Embed(
-            title=f"{BotName} Help",
-            description="Here are all available commands:\n",
+            title=f"📚 {BotName} Help",
+            description=(
+                f"**Your Role:** {role_display}\n\n"
+                "Complete command reference organized by feature.\n"
+                "**Legend:** `!command` = Prefix only • `!cmd` / `/cmd` = Both available\n"
+                "`<parameter>` = Required • Use buttons for interactive features!"
+            ),
             color=PINK,
         )
 
@@ -42,33 +56,47 @@ class Utility(commands.Cog):
             "help": "📖 Show this help message",
             "status": "📊 Bot status and latency",
             "profile": "👤 View user profile",
-            "preferences": "⚙️ Toggle settings (changelog notifications)",
+            "preferences": "⚙️ Toggle settings (changelog/daily meme notifications)",
             "roleinfo": "📋 View role information",
             "leaderboard": "🏆 View server leaderboards",
             "ticket": "🎫 Create a support ticket",
-            "rlstats": "🚀 View Rocket League stats",
-            "setrlaccount": "🔗 Link Rocket League account",
-            "unlinkrlaccount": "🔓 Unlink Rocket League account",
-            "rocket": "🚀 Rocket League Hub",
+            "meme": "🎭 Interactive Meme Hub - Get memes, manage sources [source]",
+            "rlstats": "🚀 View Rocket League stats <username>",
+            "setrlaccount": "🔗 Link Rocket League account <username>",
+            "unlinkrlaccount": "🔓 Unlink your Rocket League account",
+            "rocket": "🚀 Rocket League Hub - Stats, rankings, profile",
             "warframe": "🎮 Warframe Hub - Market & Status (Beta)",
-            "warframemarket": "💰 Search Warframe market (Beta)",
-            "clear": "🧹 Delete messages in bulk",
+            "warframemarket": "💰 Search Warframe market <item> (Beta)",
+            "clear": "🧹 Delete messages in bulk <amount>",
             "mod": "🛡️ Moderation actions",
-            "modpanel": "🎛️ Moderation control panel",
+            "modpanel": "🎛️ Interactive moderation control panel",
             "modoverview": "📊 Moderation statistics",
-            "moddetails": "🔍 User moderation history",
+            "moddetails": "🔍 User moderation history <@user>",
             "optins": "📈 Changelog opt-in statistics",
             "todo-update": "✅ Update to-do list",
-            "adminrlstats": "🚀 Admin RL stats (bypass cache)",
+            "adminrlstats": "🚀 Admin RL stats (bypass cache) <username>",
             "changelog": "📝 Generate and post changelogs",
-            "say": "💬 Send message as bot",
+            "say": "💬 Send message as bot <message>",
+            "testmeme": "🎭 Test daily meme function (force fetch)",
+            "memesubreddits": "📋 List current meme subreddits",
+            "addsubreddit": "➕ Add a subreddit <name>",
+            "removesubreddit": "➖ Remove a subreddit <name>",
+            "resetsubreddits": "🔄 Reset subreddits to defaults",
+            "lemmycommunities": "📋 List current Lemmy communities",
+            "addlemmy": "➕ Add Lemmy community <instance@community>",
+            "removelemmy": "➖ Remove Lemmy community <instance@community>",
+            "resetlemmy": "🔄 Reset Lemmy communities to defaults",
+            "memesources": "🌐 List enabled/disabled meme sources",
+            "enablesource": "✅ Enable a meme source <reddit|lemmy>",
+            "disablesource": "❌ Disable a meme source <reddit|lemmy>",
+            "resetsources": "🔄 Reset meme sources to defaults",
             "restorecongratsview": "🔄 Restore congrats button",
-            "create-button": "🔘 Create persistent buttons",
-            "server-guide": "🌟 Send server guide",
-            "load": "📦 Load a cog",
-            "unload": "📤 Unload a cog",
-            "reload": "🔄 Reload a cog",
-            "listcogs": "📋 List all cogs",
+            "create-button": "🔘 Create persistent buttons --text <text> --command <cmd>",
+            "server-guide": "🌟 Send interactive server guide",
+            "load": "📦 Load a cog <cog_name>",
+            "unload": "📤 Unload a cog <cog_name>",
+            "reload": "🔄 Reload a cog <cog_name>",
+            "listcogs": "📋 List all cogs and their status",
             "togglediscordlogs": "📡 Toggle Discord logging",
             "testdiscordlog": "🧪 Test Discord logging",
         }
@@ -95,19 +123,85 @@ class Utility(commands.Cog):
         ]
 
         def format_command_list(commands_info):
+            """Format commands with parameters in a compact, readable way"""
             formatted = []
             for cmd_name, description, has_prefix in commands_info:
+                # Split description into emoji + text and parameters if present
+                parts = description.split("<", 1)
+                desc_main = parts[0].strip()
+                params = f"<{parts[1]}" if len(parts) > 1 else ""
+
+                # Format command name
                 if has_prefix:
-                    entry = f"**!{cmd_name}** / **/{cmd_name}**\n{description}\n"
+                    cmd_format = f"`!{cmd_name}` / `/{cmd_name}`"
                 else:
-                    entry = f"**!{cmd_name}**\n{description}\n"
+                    cmd_format = f"`!{cmd_name}`"
+
+                # Build entry
+                if params:
+                    entry = f"{cmd_format} {params}\n└─ {desc_main}"
+                else:
+                    entry = f"{cmd_format}\n└─ {desc_main}"
+
                 formatted.append(entry)
             return formatted
 
-        # Format commands
-        normal_commands = format_command_list(user_commands_info)
-        mod_commands = format_command_list(mod_commands_info) if (is_admin or is_mod) else []
+        # Format commands (these are used in grouping functions, not directly)
         admin_commands = format_command_list(admin_commands_info) if is_admin else []
+
+        # Group user commands by category for better readability
+        def group_commands_by_category(commands_info):
+            """Group commands by feature/category"""
+            categories = {
+                "🔧 General": ["help", "status", "profile", "preferences", "roleinfo", "leaderboard"],
+                "🎭 Memes": ["meme"],
+                "🎫 Support": ["ticket"],
+                "🚀 Rocket League": ["rlstats", "setrlaccount", "unlinkrlaccount", "rocket"],
+                "🎮 Warframe": ["warframe", "warframemarket"],
+            }
+
+            grouped = {}
+            for category, cmd_list in categories.items():
+                grouped[category] = []
+                for cmd_name, description, has_prefix in commands_info:
+                    if cmd_name in cmd_list:
+                        grouped[category].append((cmd_name, description, has_prefix))
+
+            return grouped
+
+        def group_mod_commands(commands_info):
+            """Group mod commands by feature"""
+            categories = {
+                "🎭 Meme Management": [
+                    "testmeme",
+                    "memesubreddits",
+                    "addsubreddit",
+                    "removesubreddit",
+                    "resetsubreddits",
+                    "lemmycommunities",
+                    "addlemmy",
+                    "removelemmy",
+                    "resetlemmy",
+                    "memesources",
+                    "enablesource",
+                    "disablesource",
+                    "resetsources",
+                ],
+                "🛡️ Moderation": ["mod", "modpanel", "modoverview", "moddetails", "clear"],
+                "🔧 Utilities": ["optins", "todo-update", "restorecongratsview", "create-button", "server-guide"],
+            }
+
+            grouped = {}
+            for category, cmd_list in categories.items():
+                grouped[category] = []
+                for cmd_name, description, has_prefix in commands_info:
+                    if cmd_name in cmd_list:
+                        grouped[category].append((cmd_name, description, has_prefix))
+
+            return grouped
+
+        user_commands_grouped = group_commands_by_category(user_commands_info)
+        mod_commands_grouped = group_mod_commands(mod_commands_info) if (is_admin or is_mod) else {}
 
         # Function to add fields in chunks to avoid 1024 char limit
         def add_chunked_fields(name_prefix, commands_list, add_separator=False):
@@ -130,16 +224,52 @@ class Utility(commands.Cog):
                     current_length = len(entry)
                 else:
                     current_chunk.append(entry)
-                    current_length += len(entry)
+                    current_length += len(entry) + 1  # +1 for newline
             if current_chunk:
                 chunks.append(current_chunk)
             for idx, chunk in enumerate(chunks):
                 field_name = f"{name_prefix}" if len(chunks) == 1 else f"{name_prefix} ({idx + 1}/{len(chunks)})"
                 embed.add_field(name=field_name, value="\n".join(chunk), inline=False)
 
-        add_chunked_fields("✨ User Commands", normal_commands, add_separator=False)
-        add_chunked_fields("📦 Mod Commands", mod_commands, add_separator=True)
-        add_chunked_fields("🛡️ Admin Commands", admin_commands, add_separator=True)
+        # Add user commands by category
+        # Add user role header
+        embed.add_field(
+            name=f"═══ {ROLE_NAMES['user']} Commands ═══",
+            value="These commands are available to all server members.",
+            inline=False,
+        )
+
+        for category, category_commands in user_commands_grouped.items():
+            if category_commands:
+                formatted_cmds = format_command_list(category_commands)
+                add_chunked_fields(category, formatted_cmds, add_separator=False)
+
+        # Add separator before mod commands
+        if mod_commands_grouped:
+            embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━━━━━", inline=False)
+            # Add mod role header
+            embed.add_field(
+                name=f"═══ {ROLE_NAMES['mod']} Commands ═══",
+                value="These commands require Slot Keeper permissions or higher.",
+                inline=False,
+            )
+
+        # Add mod commands by category
+        for category, category_commands in mod_commands_grouped.items():
+            if category_commands:
+                formatted_cmds = format_command_list(category_commands)
+                add_chunked_fields(category, formatted_cmds, add_separator=False)
+
+        # Add admin commands
+        if admin_commands:
+            embed.add_field(name="\u200b", value="━━━━━━━━━━━━━━━━━━━━", inline=False)
+            # Add admin role header
+            embed.add_field(
+                name=f"═══ {ROLE_NAMES['admin']} Commands ═══",
+                value="These commands require Inventory Master permissions.",
+                inline=False,
+            )
+            add_chunked_fields("🛡️ Admin Commands", admin_commands, add_separator=False)
 
         embed.set_footer(
             text="Powered by Haze World 💖",
@@ -175,6 +305,7 @@ class Utility(commands.Cog):
         📖 Shows all available commands with their descriptions.
         Admins and mods receive the help message without anyone being able to see it.
         """
+        logger.info(f"Prefix command !help used by {ctx.author} in {ctx.guild}")
         is_admin = any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles)
         is_mod = any(role.id == MODERATOR_ROLE_ID for role in ctx.author.roles)
         embed = self.create_help_embed(ctx, is_admin, is_mod)
@@ -197,6 +328,7 @@ class Utility(commands.Cog):
     )
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def help_slash(self, interaction: discord.Interaction) -> None:
+        logger.info(f"Slash command /help used by {interaction.user} in {interaction.guild}")
         is_admin = any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles)
         is_mod = any(role.id == MODERATOR_ROLE_ID for role in interaction.user.roles)
         embed = self.create_help_embed(interaction, is_admin, is_mod)
@@ -209,6 +341,7 @@ class Utility(commands.Cog):
         """
         💖 Shows bot status and basic info in pink.
         """
+        logger.info(f"Prefix command !status used by {ctx.author} in {ctx.guild}")
         embed = self.create_status_embed(self.bot.user, self.bot.latency, len(self.bot.guilds))
         await ctx.send(embed=embed)
 

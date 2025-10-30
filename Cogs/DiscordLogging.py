@@ -89,6 +89,7 @@ class DiscordLogFormatter(logging.Formatter):
         # Cog-specific colors for highlighting
         self.cog_colors = {
             "RocketLeague": "\u001b[0;33m",  # Yellow/Orange for Rocket League
+            "DailyMeme": "\u001b[0;35m",  # Magenta/Pink for Daily Meme
             "TicketSystem": "\u001b[0;32m",  # Green for Tickets
             "DiscordLogging": "\u001b[0;35m",  # Magenta for Discord Logging
             "Welcome": "\u001b[0;36m",  # Cyan for Welcome
