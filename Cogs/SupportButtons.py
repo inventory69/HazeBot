@@ -349,9 +349,8 @@ class SupportButtons(commands.Cog):
             f"Persistent button created by {ctx.author} in {ctx.channel} (message ID: {msg.id}, type: {button_type})."
         )
 
-    # On ready: Restore all persistent support buttons
-    @commands.Cog.listener()
-    async def on_ready(self) -> None:
+    async def _restore_support_buttons(self) -> None:
+        """Restore persistent support buttons - called on ready and after reload"""
         logger.info("SupportButtons Cog ready. Restoring persistent support buttons...")
         buttons = await load_support_buttons()
         restored_count = 0
@@ -413,6 +412,16 @@ class SupportButtons(commands.Cog):
                 logger.error(f"Unexpected error restoring support button: {e}")
 
         logger.info(f"SupportButtons restoration complete. {restored_count} buttons restored.")
+
+    # On ready: Restore all persistent support buttons
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        await self._restore_support_buttons()
+
+    async def cog_load(self) -> None:
+        """Called when the cog is loaded (including reloads)"""
+        if self.bot.is_ready():
+            await self._restore_support_buttons()
 
 
 # === Setup function ===

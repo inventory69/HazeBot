@@ -42,7 +42,7 @@ WELCOME_MESSAGES = [
     "Alert: {name} has entered the realm of ultimate relaxation. Please mind the plants. 🌱",
     "Welcome {name}! May your inventory be full of chill, memes, and excellent tea. 🎉🍵",
     "New item in stock: {name}, the ultimate chill curator. Limited edition energy. 📦✨",
-    "{name} discovered the hidden lounge of positivity — badge unlocked, mission: unwind. 🌟"
+    "{name} discovered the hidden lounge of positivity — badge unlocked, mission: unwind. 🌟",
 ]
 
 
@@ -489,11 +489,8 @@ class Welcome(commands.Cog):
         with open(self.active_rules_views_file, "w") as f:
             json.dump(self.active_rules_views_data, f)
 
-    @commands.Cog.listener()
-    async def on_ready(self) -> None:
-        """
-        Restore persistent views when the bot is ready.
-        """
+    async def _restore_persistent_views(self) -> None:
+        """Restore persistent views - called on ready and after reload"""
         restored_count = 0
         cleaned_persistent_views_data = []  # New list for cleaned data
         for data in self.persistent_views_data:
@@ -576,6 +573,18 @@ class Welcome(commands.Cog):
         with open(self.active_rules_views_file, "w") as f:
             json.dump(self.active_rules_views_data, f)
         logger.info(f"Restored {restored_rules_count} active rules views.")
+
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """
+        Restore persistent views when the bot is ready.
+        """
+        await self._restore_persistent_views()
+
+    async def cog_load(self) -> None:
+        """Called when the cog is loaded (including reloads)"""
+        if self.bot.is_ready():
+            await self._restore_persistent_views()
 
 
 async def setup(bot: commands.Bot) -> None:

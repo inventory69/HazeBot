@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from Config import ADMIN_ROLE_ID, PINK
+from Config import ADMIN_ROLE_ID, PINK, MEME_CHANNEL_ID
 from Utils.EmbedUtils import set_pink_footer
 import logging
 
@@ -91,6 +91,89 @@ class CommandButtonView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Warframe system not available.", ephemeral=True)
 
+    @discord.ui.button(
+        label="Preferences", style=discord.ButtonStyle.success, emoji="⚙️", custom_id="guide_preferences_button", row=1
+    )
+    async def preferences_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Trigger /preferences command"""
+        # Get the preferences cog (note: cog name is PreferencesSystem)
+        pref_cog = interaction.client.get_cog("PreferencesSystem")
+        if pref_cog and hasattr(pref_cog, "get_preferences_help_embed"):
+            # Import PreferencesView
+            from Cogs.Preferences import PreferencesView
+
+            embed = pref_cog.get_preferences_help_embed(interaction, interaction.user)
+            view = PreferencesView(interaction.user.id, interaction.guild)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            logger.info(f"Preferences button pressed by {interaction.user}")
+        else:
+            await interaction.response.send_message("❌ Preferences system not available.", ephemeral=True)
+
+    @discord.ui.button(
+        label="Meme", style=discord.ButtonStyle.secondary, emoji="🎭", custom_id="guide_meme_button", row=1
+    )
+    async def meme_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Open Meme Hub with channel posting enabled"""
+        # Get the meme cog
+        meme_cog = interaction.client.get_cog("DailyMeme")
+        if not meme_cog:
+            await interaction.response.send_message("❌ Meme system not available.", ephemeral=True)
+            return
+
+        # Import here to avoid circular imports
+        from Cogs._DailyMemeViews import MemeHubView, is_mod_or_admin
+
+        # Check if user is mod/admin
+        is_admin_or_mod = is_mod_or_admin(interaction.user)
+
+        # Create Meme Hub embed
+        embed = discord.Embed(
+            title="🎭 Meme Hub",
+            description=(
+                "Welcome to the Meme Hub! Get trending memes from multiple sources.\n\n"
+                "**Available Sources:** Reddit, Lemmy\n"
+                "**Memes will be posted to the meme channel!**\n"
+                "**Rate Limit:** 10 seconds between requests"
+                if not is_admin_or_mod
+                else (
+                    "**Mod/Admin Access:** Full management + no cooldown\n**Memes will be posted to the meme channel!**"
+                )
+            ),
+            color=PINK,
+        )
+
+        if is_admin_or_mod:
+            embed.add_field(
+                name="🔧 Management",
+                value=(
+                    "Use the buttons below to:\n"
+                    "• Get random memes (posted to meme channel)\n"
+                    "• Choose specific source\n"
+                    "• Manage subreddit sources\n"
+                    "• Manage Lemmy communities\n"
+                    "• Toggle meme sources"
+                ),
+                inline=False,
+            )
+        else:
+            embed.add_field(
+                name="📝 How to Use",
+                value=(
+                    "• **🎭 Get Random Meme** - Random from all sources\n"
+                    "• **🎯 Choose Source** - Pick specific subreddit/community\n"
+                    "*Memes will be posted to the meme channel*\n"
+                    "*10 second cooldown between requests*"
+                ),
+                inline=False,
+            )
+
+        set_pink_footer(embed, bot=interaction.client.user)
+
+        # Create view with channel posting enabled
+        view = MemeHubView(meme_cog, is_admin_or_mod, post_to_channel_id=MEME_CHANNEL_ID)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        logger.info(f"Meme Hub (channel posting) opened by {interaction.user} via Server Guide")
+
 
 class ServerGuide(commands.Cog):
     """Helper cog for server guide message with command buttons"""
@@ -137,7 +220,9 @@ class ServerGuide(commands.Cog):
                 "• **Ticket** – Create a support ticket\n"
                 "• **Profile** – Check your server profile\n"
                 "• **Rocket League** – Track your RL ranks\n"
-                "• **Warframe** – Market & game status (Beta)"
+                "• **Warframe** – Market & game status (Beta)\n"
+                "• **Preferences** – Configure your opt-ins & settings\n"
+                "• **Meme** – Get memes posted to the meme channel"
             ),
             inline=False,
         )
@@ -160,11 +245,20 @@ class ServerGuide(commands.Cog):
 
         logger.info(f"Server guide sent by {ctx.author} in {ctx.channel}")
 
+    async def _setup_persistent_views(self):
+        """Setup persistent views - called on ready and after reload"""
+        self.bot.add_view(CommandButtonView())
+        logger.info("ServerGuide cog ready. Persistent command buttons restored.")
+
     @commands.Cog.listener()
     async def on_ready(self):
         """Restore persistent views on bot startup"""
-        self.bot.add_view(CommandButtonView())
-        logger.info("ServerGuide cog ready. Persistent command buttons restored.")
+        await self._setup_persistent_views()
+
+    async def cog_load(self):
+        """Called when the cog is loaded (including reloads)"""
+        if self.bot.is_ready():
+            await self._setup_persistent_views()
 
 
 async def setup(bot: commands.Bot):

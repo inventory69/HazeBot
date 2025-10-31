@@ -821,9 +821,8 @@ class TicketSystem(commands.Cog):
         embed = self.get_ticket_help_embed(interaction)
         await interaction.response.send_message(embed=embed, view=TicketView(), ephemeral=True)
 
-    # On ready: Restore views for open and closed tickets and start cleanup
-    @commands.Cog.listener()
-    async def on_ready(self) -> None:
+    async def _restore_ticket_views(self) -> None:
+        """Restore views for open and closed tickets - called on ready and after reload"""
         logger.info("TicketSystem Cog ready. Restoring views for open and closed tickets...")
         tickets = await load_tickets()
         for ticket in tickets:
@@ -852,8 +851,19 @@ class TicketSystem(commands.Cog):
                     await asyncio.sleep(6)  # Further increased sleep to avoid rate limits on server
                 except Exception as e:
                     logger.error(f"Error restoring view for ticket {ticket['ticket_num']}: {e}")
-        # Start cleanup task
-        self.bot.loop.create_task(self.cleanup_old_tickets())
+        # Start cleanup task if not running
+        if not hasattr(self, "_cleanup_task") or self._cleanup_task.done():
+            self._cleanup_task = self.bot.loop.create_task(self.cleanup_old_tickets())
+
+    # On ready: Restore views for open and closed tickets and start cleanup
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        await self._restore_ticket_views()
+
+    async def cog_load(self) -> None:
+        """Called when the cog is loaded (including reloads)"""
+        if self.bot.is_ready():
+            await self._restore_ticket_views()
 
     # Background task for automatic deletion of old tickets
     async def cleanup_old_tickets(self) -> None:

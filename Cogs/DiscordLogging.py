@@ -128,10 +128,10 @@ class DiscordLogFormatter(logging.Formatter):
         prefix = self.get_cog_prefix(record.name)
         cog_name = self.get_cog_name(record.name)
         message = record.getMessage()
-        
+
         # Color the entire message if it's from a specific cog
         cog_color = self.cog_colors.get(cog_name, "")
-        
+
         if prefix:
             if cog_color:
                 # Color the entire line (prefix + message) for specific cogs
@@ -178,14 +178,8 @@ class DiscordLogging(commands.Cog):
         prod_mode = os.getenv("PROD_MODE", "false").lower() != "false"
         self.log_channel_id = 1433187806347526244 if prod_mode else 1433187651191701688
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        """Set up Discord logging when bot is ready"""
-        if self._setup_done:
-            return  # Only setup once
-
-        self._setup_done = True
-
+    async def _setup_logging(self):
+        """Setup Discord logging - called on ready and after reload"""
         # Set up Discord logging handler
         self.discord_handler = DiscordLogHandler(self.bot, self.log_channel_id)
         self.discord_handler.setLevel(logging.DEBUG)  # Log ALL levels
@@ -196,10 +190,26 @@ class DiscordLogging(commands.Cog):
         root_logger.addHandler(self.discord_handler)
 
         # Start the flush task
-        self.flush_logs_task.start()
-        self.cleanup_old_logs_task.start()
+        if not self.flush_logs_task.is_running():
+            self.flush_logs_task.start()
+        if not self.cleanup_old_logs_task.is_running():
+            self.cleanup_old_logs_task.start()
 
         logger.info("Discord logging handler started - logs streaming to Discord")
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Set up Discord logging when bot is ready"""
+        if self._setup_done:
+            return  # Only setup once
+
+        self._setup_done = True
+        await self._setup_logging()
+
+    async def cog_load(self):
+        """Called when the cog is loaded (including reloads)"""
+        if self.bot.is_ready():
+            await self._setup_logging()
 
     async def cog_unload(self):
         """Called when the cog is unloaded"""
