@@ -103,7 +103,7 @@ PR-Text:
             if not message.embeds:
                 await ctx.send("❌ Message has no embed.")
                 return
-            
+
             embed = message.embeds[0]
             view = ChangelogChannelView(embed)
             await message.edit(view=view)
@@ -124,7 +124,7 @@ PR-Text:
         If title is omitted, it will be generated from the PR text. Date defaults to today.
         """
         params = {}
-        
+
         # Better parsing: Look for --text flag
         if "--text" in args:
             parts = args.split("--text", 1)
@@ -141,7 +141,7 @@ PR-Text:
                 if ":" in part:
                     key, value = part.split(":", 1)
                     params[key.strip()] = value.strip().strip('"').strip("'")
-        
+
         project = params.get("project", "HazeWorldBot")
         author = params.get("author", "inventory69")
 
@@ -177,14 +177,14 @@ PR-Text:
 
 # --- Edit Modal ---
 class ChangelogEditModal(discord.ui.Modal, title="Edit Changelog"):
-    def __init__(self, view: 'ChangelogChannelView') -> None:
+    def __init__(self, view: "ChangelogChannelView") -> None:
         super().__init__()
         self.view = view
-        
+
         # Extract current values from embed
         current_title = view.embed.title or ""
         current_description = view.embed.description or ""
-        
+
         # Title input (without the date part for easier editing)
         title_without_prefix = current_title.replace("🆕 ", "")
         if " – " in title_without_prefix:
@@ -193,7 +193,7 @@ class ChangelogEditModal(discord.ui.Modal, title="Edit Changelog"):
         else:
             title_part = title_without_prefix
             date_part = datetime.now().strftime("%Y-%m-%d")
-        
+
         self.title_input = discord.ui.TextInput(
             label="Title",
             placeholder="e.g. Feature Update",
@@ -201,7 +201,7 @@ class ChangelogEditModal(discord.ui.Modal, title="Edit Changelog"):
             max_length=100,
             required=True,
         )
-        
+
         self.date_input = discord.ui.TextInput(
             label="Date (YYYY-MM-DD)",
             placeholder="e.g. 2025-10-31",
@@ -209,7 +209,7 @@ class ChangelogEditModal(discord.ui.Modal, title="Edit Changelog"):
             max_length=10,
             required=True,
         )
-        
+
         self.description_input = discord.ui.TextInput(
             label="Changelog Text",
             placeholder="Enter changes here...",
@@ -218,19 +218,19 @@ class ChangelogEditModal(discord.ui.Modal, title="Edit Changelog"):
             max_length=4000,
             required=True,
         )
-        
+
         self.add_item(self.title_input)
         self.add_item(self.date_input)
         self.add_item(self.description_input)
-    
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
         # Update the embed with new values
         new_title = f"🆕 {self.title_input.value} – {self.date_input.value}"
         new_description = self.description_input.value + "\n\u200b"
-        
+
         self.view.embed.title = new_title
         self.view.embed.description = new_description
-        
+
         # Update the message with the new embed
         await interaction.response.edit_message(embed=self.view.embed, view=self.view)
         await interaction.followup.send("✅ Changelog updated successfully!", ephemeral=True)
@@ -252,7 +252,7 @@ class ChangelogChannelView(discord.ui.View):
             await interaction.response.send_message(f"✅ Changelog posted to {channel.mention}.", ephemeral=True)
         else:
             await interaction.response.send_message("❌ Channel not found.", ephemeral=True)
-    
+
     @discord.ui.button(label="Edit Manually", style=discord.ButtonStyle.secondary, emoji="✏️")
     async def edit_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         modal = ChangelogEditModal(self)

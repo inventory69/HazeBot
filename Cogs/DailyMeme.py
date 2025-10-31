@@ -21,590 +21,16 @@ from Config import (
     MEME_LEMMY_FILE,
     DEFAULT_MEME_LEMMY,
     MEME_SOURCES,
-    ADMIN_ROLE_ID,
-    MODERATOR_ROLE_ID,
 )
 from Utils.EmbedUtils import set_pink_footer
 
+# Import all Views from separate module (prefixed with _ to avoid auto-loading as Cog)
+from ._DailyMemeViews import (
+    MemeHubView,
+    is_mod_or_admin,
+)
+
 logger = logging.getLogger(__name__)
-
-
-def is_mod_or_admin(member: discord.Member) -> bool:
-    """Check if member is a moderator or administrator"""
-    return any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
-
-
-class MemeHubView(discord.ui.View):
-    """Interactive Meme Hub with buttons for users and mods"""
-
-    def __init__(self, cog: "DailyMeme", is_admin_or_mod: bool):
-        super().__init__(timeout=300)  # 5 minute timeout
-        self.cog = cog
-        self.user_cooldowns = {}  # user_id -> last_use_timestamp
-        self.cooldown_seconds = 10  # 10 second cooldown for regular users
-
-        # Add "Choose Source" button for all users
-        self.add_item(ChooseSourceButton())
-
-        # Add management buttons only for mods/admins
-        if is_admin_or_mod:
-            self.add_item(SubredditManagementButton())
-            self.add_item(LemmyManagementButton())
-            self.add_item(SourceManagementButton())
-            self.add_item(TestMemeButton())
-
-    @discord.ui.button(label="🎭 Get Random Meme", style=discord.ButtonStyle.primary, row=0)
-    async def get_meme_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Button for all users to get a random meme (with rate limiting)"""
-        user_id = interaction.user.id
-        current_time = datetime.now().timestamp()
-
-        # Check cooldown (skip for mods/admins)
-        if not is_mod_or_admin(interaction.user):
-            last_use = self.user_cooldowns.get(user_id, 0)
-            if current_time - last_use < self.cooldown_seconds:
-                remaining = int(self.cooldown_seconds - (current_time - last_use))
-                await interaction.response.send_message(
-                    f"⏳ Please wait {remaining} seconds before requesting another meme!", ephemeral=True
-                )
-                return
-
-        # Update cooldown
-        self.user_cooldowns[user_id] = current_time
-
-        # Send loading message
-        await interaction.response.send_message(
-            "🔍 Fetching a fresh meme... Can take a little while, cause we do hidden / forbidden voodoo magic.",
-            ephemeral=True,
-        )
-
-        # Fetch meme
-        meme, embed = await self.cog.fetch_meme_and_create_embed()
-
-        if meme and embed:
-            await interaction.followup.send(embed=embed)
-            source_name = meme.get("subreddit", "unknown")
-            if source_name not in ["9gag"]:
-                source_name = f"r/{source_name}"
-            logger.info(f"Meme Hub: Meme requested by {interaction.user} from {source_name}")
-        else:
-            await interaction.followup.send("❌ Couldn't fetch a meme right now. Try again later!", ephemeral=True)
-
-
-class ChooseSourceButton(discord.ui.Button):
-    """Button to choose specific source (subreddit or Lemmy community)"""
-
-    def __init__(self):
-        super().__init__(label="🎯 Choose Source", style=discord.ButtonStyle.secondary, row=0)
-
-    async def callback(self, interaction: discord.Interaction):
-        cog: DailyMeme = interaction.client.get_cog("DailyMeme")
-
-        embed = discord.Embed(
-            title="🎯 Choose Meme Source",
-            description="Select a specific subreddit or Lemmy community to fetch memes from.",
-            color=PINK,
-        )
-
-        set_pink_footer(embed, bot=interaction.client.user)
-        view = SourceSelectionView(cog)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-class SourceSelectionView(discord.ui.View):
-    """View with select menus for choosing subreddit or Lemmy community"""
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__(timeout=300)
-        self.cog = cog
-        self.user_cooldowns = {}
-        self.cooldown_seconds = 10
-
-        # Add Reddit subreddit select
-        reddit_options = [
-            discord.SelectOption(label=f"r/{sub}", value=f"reddit:{sub}", emoji="🔥")
-            for sub in sorted(cog.meme_subreddits)[:25]  # Discord limit: 25 options
-        ]
-        if reddit_options:
-            reddit_select = discord.ui.Select(
-                placeholder="Choose a Reddit subreddit...",
-                options=reddit_options,
-                row=0,
-            )
-            reddit_select.callback = self._create_fetch_callback("reddit")
-            self.add_item(reddit_select)
-
-        # Add Lemmy community select
-        lemmy_options = [
-            discord.SelectOption(label=comm, value=f"lemmy:{comm}", emoji="🌐") for comm in sorted(cog.meme_lemmy)[:25]
-        ]
-        if lemmy_options:
-            lemmy_select = discord.ui.Select(
-                placeholder="Choose a Lemmy community...",
-                options=lemmy_options,
-                row=1,
-            )
-            lemmy_select.callback = self._create_fetch_callback("lemmy")
-            self.add_item(lemmy_select)
-
-    def _create_fetch_callback(self, source_type: str):
-        """Create callback for fetching meme from selected source"""
-
-        async def callback(interaction: discord.Interaction):
-            user_id = interaction.user.id
-            current_time = datetime.now().timestamp()
-
-            # Check cooldown (skip for mods/admins)
-            if not is_mod_or_admin(interaction.user):
-                last_use = self.user_cooldowns.get(user_id, 0)
-                if current_time - last_use < self.cooldown_seconds:
-                    remaining = int(self.cooldown_seconds - (current_time - last_use))
-                    await interaction.response.send_message(
-                        f"⏳ Please wait {remaining} seconds before requesting another meme!", ephemeral=True
-                    )
-                    return
-
-            # Update cooldown
-            self.user_cooldowns[user_id] = current_time
-
-            # Get selected value
-            selected = interaction.data["values"][0]  # e.g., "reddit:memes" or "lemmy:lemmy.world@memes"
-            source_type, source_name = selected.split(":", 1)
-
-            # Send loading message
-            await interaction.response.send_message(
-                f"🔍 Fetching meme from {source_name}...",
-                ephemeral=True,
-            )
-
-            # Fetch meme from specific source
-            if source_type == "reddit":
-                memes = await self.cog.fetch_reddit_meme(source_name)
-            elif source_type == "lemmy":
-                memes = await self.cog.fetch_lemmy_meme(source_name)
-            else:
-                await interaction.followup.send("❌ Unknown source type!", ephemeral=True)
-                return
-
-            if not memes:
-                await interaction.followup.send(
-                    f"❌ No memes found from {source_name}. Try another source!", ephemeral=True
-                )
-                return
-
-            # Pick random meme and create embed
-            meme = random.choice(memes)
-            embed = discord.Embed(
-                title=meme.get("title", "Meme"),
-                url=meme.get("url"),
-                color=PINK,
-            )
-            embed.set_image(url=meme.get("url"))
-
-            # Set source info
-            if source_type == "lemmy":
-                source_display = source_name
-            else:
-                source_display = f"r/{source_name}"
-
-            embed.add_field(name="📍 Source", value=source_display, inline=True)
-            embed.add_field(name="👤 Author", value=meme.get("author", "Unknown"), inline=True)
-            embed.add_field(name="⬆️ Score", value=f"{meme.get('score', 0):,}", inline=True)
-
-            set_pink_footer(embed, bot=interaction.client.user)
-
-            await interaction.followup.send(embed=embed)
-            logger.info(f"Specific meme fetched by {interaction.user} from {source_name}")
-
-        return callback
-
-
-class SubredditManagementView(discord.ui.View):
-    """Interactive view for subreddit management"""
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__(timeout=300)
-        self.cog = cog
-
-    @discord.ui.button(label="➕ Add Subreddit", style=discord.ButtonStyle.success, row=0)
-    async def add_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Add a new subreddit via modal"""
-        modal = AddSubredditModal(self.cog)
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="➖ Remove Subreddit", style=discord.ButtonStyle.danger, row=0)
-    async def remove_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Remove a subreddit via modal"""
-        modal = RemoveSubredditModal(self.cog)
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="🔄 Reset to Defaults", style=discord.ButtonStyle.secondary, row=0)
-    async def reset_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Reset subreddits to defaults"""
-        self.cog.meme_subreddits = DEFAULT_MEME_SUBREDDITS.copy()
-        self.cog.save_subreddits()
-
-        await interaction.response.send_message(
-            f"✅ Reset to {len(self.cog.meme_subreddits)} default subreddits!", ephemeral=True
-        )
-        logger.info(f"Subreddits reset by {interaction.user}")
-
-
-class AddSubredditModal(discord.ui.Modal, title="Add Subreddit"):
-    """Modal for adding a subreddit"""
-
-    subreddit_input = discord.ui.TextInput(
-        label="Subreddit Name", placeholder="Enter subreddit name (without r/)", required=True, max_length=50
-    )
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__()
-        self.cog = cog
-
-    async def on_submit(self, interaction: discord.Interaction):
-        subreddit = self.subreddit_input.value.lower().strip().replace("r/", "")
-
-        if subreddit in self.cog.meme_subreddits:
-            await interaction.response.send_message(f"❌ r/{subreddit} is already in the list!", ephemeral=True)
-            return
-
-        self.cog.meme_subreddits.append(subreddit)
-        self.cog.save_subreddits()
-
-        await interaction.response.send_message(
-            f"✅ Added r/{subreddit}! Now using {len(self.cog.meme_subreddits)} subreddits.", ephemeral=True
-        )
-        logger.info(f"Subreddit r/{subreddit} added by {interaction.user}")
-
-
-class RemoveSubredditModal(discord.ui.Modal, title="Remove Subreddit"):
-    """Modal for removing a subreddit"""
-
-    subreddit_input = discord.ui.TextInput(
-        label="Subreddit Name", placeholder="Enter subreddit name to remove (without r/)", required=True, max_length=50
-    )
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__()
-        self.cog = cog
-
-    async def on_submit(self, interaction: discord.Interaction):
-        subreddit = self.subreddit_input.value.lower().strip().replace("r/", "")
-
-        if subreddit not in self.cog.meme_subreddits:
-            await interaction.response.send_message(f"❌ r/{subreddit} is not in the list!", ephemeral=True)
-            return
-
-        if len(self.cog.meme_subreddits) <= 1:
-            await interaction.response.send_message("❌ Cannot remove the last subreddit!", ephemeral=True)
-            return
-
-        self.cog.meme_subreddits.remove(subreddit)
-        self.cog.save_subreddits()
-
-        await interaction.response.send_message(
-            f"✅ Removed r/{subreddit}! Now using {len(self.cog.meme_subreddits)} subreddits.", ephemeral=True
-        )
-        logger.info(f"Subreddit r/{subreddit} removed by {interaction.user}")
-
-
-class LemmyManagementView(discord.ui.View):
-    """Interactive view for Lemmy community management"""
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__(timeout=300)
-        self.cog = cog
-
-    @discord.ui.button(label="➕ Add Community", style=discord.ButtonStyle.success, row=0)
-    async def add_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Add a new Lemmy community via modal"""
-        modal = AddLemmyModal(self.cog)
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="➖ Remove Community", style=discord.ButtonStyle.danger, row=0)
-    async def remove_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Remove a Lemmy community via modal"""
-        modal = RemoveLemmyModal(self.cog)
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="🔄 Reset to Defaults", style=discord.ButtonStyle.secondary, row=0)
-    async def reset_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Reset Lemmy communities to defaults"""
-        self.cog.meme_lemmy = DEFAULT_MEME_LEMMY.copy()
-        self.cog.save_lemmy_communities()
-
-        await interaction.response.send_message(
-            f"✅ Reset to {len(self.cog.meme_lemmy)} default Lemmy communities!", ephemeral=True
-        )
-        logger.info(f"Lemmy communities reset by {interaction.user}")
-
-
-class AddLemmyModal(discord.ui.Modal, title="Add Lemmy Community"):
-    """Modal for adding a Lemmy community"""
-
-    community_input = discord.ui.TextInput(
-        label="Community",
-        placeholder="Enter instance@community (e.g., lemmy.world@memes)",
-        required=True,
-        max_length=100,
-    )
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__()
-        self.cog = cog
-
-    async def on_submit(self, interaction: discord.Interaction):
-        community = self.community_input.value.lower().strip()
-
-        # Validate format
-        if "@" not in community:
-            await interaction.response.send_message(
-                "❌ Invalid format! Use instance@community (e.g., lemmy.world@memes)", ephemeral=True
-            )
-            return
-
-        if community in self.cog.meme_lemmy:
-            await interaction.response.send_message(f"❌ {community} is already in the list!", ephemeral=True)
-            return
-
-        self.cog.meme_lemmy.append(community)
-        self.cog.save_lemmy_communities()
-
-        await interaction.response.send_message(
-            f"✅ Added {community}! Now using {len(self.cog.meme_lemmy)} Lemmy communities.", ephemeral=True
-        )
-        logger.info(f"Lemmy community {community} added by {interaction.user}")
-
-
-class RemoveLemmyModal(discord.ui.Modal, title="Remove Lemmy Community"):
-    """Modal for removing a Lemmy community"""
-
-    community_input = discord.ui.TextInput(
-        label="Community",
-        placeholder="Enter instance@community to remove",
-        required=True,
-        max_length=100,
-    )
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__()
-        self.cog = cog
-
-    async def on_submit(self, interaction: discord.Interaction):
-        community = self.community_input.value.lower().strip()
-
-        if community not in self.cog.meme_lemmy:
-            await interaction.response.send_message(f"❌ {community} is not in the list!", ephemeral=True)
-            return
-
-        if len(self.cog.meme_lemmy) <= 1:
-            await interaction.response.send_message("❌ Cannot remove the last Lemmy community!", ephemeral=True)
-            return
-
-        self.cog.meme_lemmy.remove(community)
-        self.cog.save_lemmy_communities()
-
-        await interaction.response.send_message(
-            f"✅ Removed {community}! Now using {len(self.cog.meme_lemmy)} Lemmy communities.", ephemeral=True
-        )
-        logger.info(f"Lemmy community {community} removed by {interaction.user}")
-
-
-class SourceManagementView(discord.ui.View):
-    """Interactive view for source management"""
-
-    def __init__(self, cog: "DailyMeme"):
-        super().__init__(timeout=300)
-        self.cog = cog
-        self._update_buttons()
-
-    def _update_buttons(self):
-        """Update button states based on current sources"""
-        self.clear_items()
-
-        # Add toggle buttons for each source
-        # Note: Can be extended with more sources in the future
-        source_info = [("reddit", "🔥 Reddit"), ("lemmy", "🌐 Lemmy")]
-
-        for source_id, source_name in source_info:
-            enabled = source_id in self.cog.meme_sources
-            button = discord.ui.Button(
-                label=f"{'✅' if enabled else '❌'} {source_name}",
-                style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.secondary,
-                custom_id=f"toggle_{source_id}",
-                row=0,
-            )
-            button.callback = self._create_toggle_callback(source_id, source_name)
-            self.add_item(button)
-
-        # Add reset button
-        reset_btn = discord.ui.Button(label="🔄 Reset to Defaults", style=discord.ButtonStyle.danger, row=2)
-        reset_btn.callback = self._reset_callback
-        self.add_item(reset_btn)
-
-    def _create_toggle_callback(self, source_id: str, source_name: str):
-        """Create callback for toggling a source"""
-
-        async def callback(interaction: discord.Interaction):
-            if source_id in self.cog.meme_sources:
-                # Disable source
-                if len(self.cog.meme_sources) <= 1:
-                    await interaction.response.send_message("❌ Cannot disable the last source!", ephemeral=True)
-                    return
-
-                self.cog.meme_sources.remove(source_id)
-                self.cog.save_sources()
-                await interaction.response.send_message(f"❌ Disabled {source_name}", ephemeral=True)
-                logger.info(f"Source {source_id} disabled by {interaction.user}")
-            else:
-                # Enable source
-                self.cog.meme_sources.append(source_id)
-                self.cog.save_sources()
-                await interaction.response.send_message(f"✅ Enabled {source_name}", ephemeral=True)
-                logger.info(f"Source {source_id} enabled by {interaction.user}")
-
-            # Update buttons to reflect new state
-            self._update_buttons()
-            await interaction.message.edit(view=self)
-
-        return callback
-
-    async def _reset_callback(self, interaction: discord.Interaction):
-        """Reset sources to defaults"""
-        self.cog.meme_sources = MEME_SOURCES.copy()
-        self.cog.save_sources()
-
-        await interaction.response.send_message(
-            f"✅ Reset to {len(self.cog.meme_sources)} default sources!", ephemeral=True
-        )
-        logger.info(f"Sources reset by {interaction.user}")
-
-        # Update buttons
-        self._update_buttons()
-        await interaction.message.edit(view=self)
-
-
-class SubredditManagementButton(discord.ui.Button):
-    """Button to manage subreddits (Mod/Admin only)"""
-
-    def __init__(self):
-        super().__init__(label="📋 Manage Subreddits", style=discord.ButtonStyle.secondary, row=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        cog: DailyMeme = interaction.client.get_cog("DailyMeme")
-
-        embed = discord.Embed(
-            title="🎭 Subreddit Management",
-            description=f"Currently using **{len(cog.meme_subreddits)}** subreddits.",
-            color=PINK,
-        )
-
-        subreddit_list = "\n".join([f"• r/{sub}" for sub in sorted(cog.meme_subreddits)])
-        embed.add_field(name="📍 Active Subreddits", value=subreddit_list[:1024] or "None", inline=False)
-
-        embed.add_field(
-            name="💡 Use the buttons below to manage",
-            value="Add, remove, or reset subreddits",
-            inline=False,
-        )
-
-        set_pink_footer(embed, bot=interaction.client.user)
-        view = SubredditManagementView(cog)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-class LemmyManagementButton(discord.ui.Button):
-    """Button to manage Lemmy communities (Mod/Admin only)"""
-
-    def __init__(self):
-        super().__init__(label="🌐 Manage Lemmy", style=discord.ButtonStyle.secondary, row=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        cog: DailyMeme = interaction.client.get_cog("DailyMeme")
-
-        embed = discord.Embed(
-            title="🎭 Lemmy Community Management",
-            description=f"Currently using **{len(cog.meme_lemmy)}** Lemmy communities.",
-            color=PINK,
-        )
-
-        community_list = "\n".join([f"• {comm}" for comm in sorted(cog.meme_lemmy)])
-        embed.add_field(name="📍 Active Communities", value=community_list[:1024] or "None", inline=False)
-
-        embed.add_field(
-            name="💡 Use the buttons below to manage",
-            value="Add, remove, or reset Lemmy communities\nFormat: instance@community (e.g., lemmy.world@memes)",
-            inline=False,
-        )
-
-        set_pink_footer(embed, bot=interaction.client.user)
-        view = LemmyManagementView(cog)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-class SourceManagementButton(discord.ui.Button):
-    """Button to manage meme sources (Mod/Admin only)"""
-
-    def __init__(self):
-        super().__init__(label="🌐 Manage Sources", style=discord.ButtonStyle.secondary, row=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        cog: DailyMeme = interaction.client.get_cog("DailyMeme")
-
-        embed = discord.Embed(
-            title="🎭 Source Management",
-            description=f"Currently using **{len(cog.meme_sources)}** meme sources.",
-            color=PINK,
-        )
-
-        # Note: source_display can be extended when adding new sources
-        source_display = {"reddit": "🔥 Reddit", "lemmy": "🌐 Lemmy"}
-
-        enabled_list = "\n".join([f"• {source_display.get(src, src)}" for src in cog.meme_sources])
-        embed.add_field(name="✅ Enabled", value=enabled_list or "None", inline=False)
-
-        all_sources = ["reddit", "lemmy"]  # Extend this list when adding new sources
-        disabled = [src for src in all_sources if src not in cog.meme_sources]
-        if disabled:
-            disabled_list = "\n".join([f"• {source_display.get(src, src)}" for src in disabled])
-            embed.add_field(name="❌ Disabled", value=disabled_list, inline=False)
-
-        embed.add_field(
-            name="💡 Use the buttons below to toggle",
-            value="Click to enable/disable sources\nMore sources can be added in the future",
-            inline=False,
-        )
-
-        set_pink_footer(embed, bot=interaction.client.user)
-        view = SourceManagementView(cog)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
-class TestMemeButton(discord.ui.Button):
-    """Button to test daily meme function (Mod/Admin only)"""
-
-    def __init__(self):
-        super().__init__(label="🧪 Test Daily Meme", style=discord.ButtonStyle.secondary, row=1)
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message("🧪 Testing daily meme function...", ephemeral=True)
-
-        cog: DailyMeme = interaction.client.get_cog("DailyMeme")
-        guild = interaction.guild
-        channel = guild.get_channel(MEME_CHANNEL_ID)
-
-        if not channel:
-            await interaction.followup.send(f"❌ Meme channel {MEME_CHANNEL_ID} not found", ephemeral=True)
-            return
-
-        meme = await cog.get_daily_meme(allow_nsfw=True)
-
-        if meme:
-            await cog.post_meme(meme, channel)
-            await interaction.followup.send("✅ Test meme posted successfully!", ephemeral=True)
-            logger.info(f"Test meme posted by {interaction.user}")
-        else:
-            await interaction.followup.send("❌ Failed to fetch test meme", ephemeral=True)
 
 
 class DailyMeme(commands.Cog):
@@ -618,7 +44,10 @@ class DailyMeme(commands.Cog):
         self.subreddits_file = MEME_SUBREDDITS_FILE
         self.lemmy_file = MEME_LEMMY_FILE
         self.sources_file = os.path.join(get_data_dir(), "meme_sources.json")
+        self.daily_config_file = os.path.join(get_data_dir(), "daily_meme_config.json")
         self._setup_done = False
+        # Load daily meme configuration
+        self.daily_config = self.load_daily_config()
         # Load subreddits from file or use defaults
         self.meme_subreddits = self.load_subreddits()
         # Load Lemmy communities from file or use defaults
@@ -631,13 +60,58 @@ class DailyMeme(commands.Cog):
         if self.flaresolverr_url and self.flaresolverr_url.startswith("http://"):
             self.flaresolverr_url = self.flaresolverr_url.replace("http://", "https://", 1)
             logger.warning(f"⚠️ FlareSolverr URL converted from HTTP to HTTPS: {self.flaresolverr_url}")
-        # Rate limiting for FlareSolverr requests (30 seconds between calls)
+        # Rate limiting for FlareSolverr requests (2 seconds between calls - cache handles most requests)
         self._flaresolverr_lock = asyncio.Lock()
         self._last_flaresolverr_call = 0
+        self._flaresolverr_rate_limit = 2  # seconds between FlareSolverr calls
+        # Per-subreddit locks for true parallel fetching
+        self._subreddit_locks = {}
+        # Cache for Reddit responses (subreddit -> {timestamp, data})
+        self._cache_duration = 3600  # 1 hour cache (Reddit hot posts stay relevant for a while)
+        self._reddit_cache_file = os.path.join(get_data_dir(), "reddit_cache.json")
+        self._reddit_cache = self.load_reddit_cache()
         # Cache for shown memes (URL -> timestamp)
         self.meme_cache_hours = 24  # Keep memes in cache for 24 hours
         self.shown_memes_file = os.path.join(get_data_dir(), "shown_memes.json")
         self.shown_memes = self.load_shown_memes()
+
+    def load_daily_config(self) -> dict:
+        """Load daily meme configuration from file"""
+        default_config = {
+            "enabled": True,
+            "hour": 12,
+            "minute": 0,
+            "channel_id": MEME_CHANNEL_ID,
+            "allow_nsfw": True,
+            "ping_role_id": MEME_ROLE_ID,
+            # Selection preferences
+            "use_subreddits": [],  # Empty = use all configured
+            "use_lemmy": [],  # Empty = use all configured
+            "min_score": 100,  # Minimum upvotes
+            "max_sources": 5,  # How many subreddits/communities to fetch from
+            "pool_size": 50,  # Pick from top X memes
+        }
+
+        try:
+            if os.path.exists(self.daily_config_file):
+                with open(self.daily_config_file, "r") as f:
+                    config = json.load(f)
+                    # Merge with defaults (in case new settings are added)
+                    return {**default_config, **config}
+        except Exception as e:
+            logger.error(f"Error loading daily meme config: {e}")
+
+        return default_config
+
+    def save_daily_config(self) -> None:
+        """Save daily meme configuration to file"""
+        try:
+            os.makedirs(os.path.dirname(self.daily_config_file), exist_ok=True)
+            with open(self.daily_config_file, "w") as f:
+                json.dump(self.daily_config, f, indent=4)
+            logger.info("Saved daily meme configuration")
+        except Exception as e:
+            logger.error(f"Error saving daily meme config: {e}")
 
     def load_subreddits(self) -> list:
         """Load subreddit list from file or return defaults"""
@@ -646,11 +120,13 @@ class DailyMeme(commands.Cog):
                 with open(self.subreddits_file, "r") as f:
                     data = json.load(f)
                     subreddits = data.get("subreddits", DEFAULT_MEME_SUBREDDITS)
-                    return subreddits
+                    # Normalize all subreddit names to lowercase
+                    return [sub.lower() for sub in subreddits]
         except Exception as e:
             logger.error(f"Error loading subreddits: {e}")
 
-        return DEFAULT_MEME_SUBREDDITS.copy()
+        # Normalize defaults to lowercase
+        return [sub.lower() for sub in DEFAULT_MEME_SUBREDDITS]
 
     def save_subreddits(self) -> None:
         """Save current subreddit list to file"""
@@ -737,6 +213,32 @@ class DailyMeme(commands.Cog):
         except Exception as e:
             logger.error(f"Error saving shown memes cache: {e}")
 
+    def load_reddit_cache(self) -> dict:
+        """Load Reddit API response cache from file"""
+        try:
+            if os.path.exists(self._reddit_cache_file):
+                with open(self._reddit_cache_file, "r") as f:
+                    data = json.load(f)
+                    # Clean old entries (older than cache duration)
+                    current_time = asyncio.get_event_loop().time()
+                    cleaned = {}
+                    for key, cache_entry in data.items():
+                        if current_time - cache_entry.get("timestamp", 0) < self._cache_duration:
+                            cleaned[key] = cache_entry
+                    return cleaned
+        except Exception as e:
+            logger.error(f"Error loading Reddit cache: {e}")
+        return {}
+
+    def save_reddit_cache(self) -> None:
+        """Save Reddit API response cache to file"""
+        try:
+            os.makedirs(os.path.dirname(self._reddit_cache_file), exist_ok=True)
+            with open(self._reddit_cache_file, "w") as f:
+                json.dump(self._reddit_cache, f, indent=4)
+        except Exception as e:
+            logger.error(f"Error saving Reddit cache: {e}")
+
     def is_meme_shown_recently(self, url: str) -> bool:
         """Check if a meme was shown recently"""
         if url not in self.shown_memes:
@@ -758,6 +260,49 @@ class DailyMeme(commands.Cog):
         self.shown_memes[url] = datetime.now().timestamp()
         self.save_shown_memes()
 
+    async def _setup_cog(self) -> None:
+        """Setup the cog - called on ready and after reload"""
+        # Create HTTP session if not exists
+        if not self.session or self.session.closed:
+            self.session = aiohttp.ClientSession()
+
+        # Configure and start the daily meme task with saved settings
+        hour = self.daily_config.get("hour", 12)
+        minute = self.daily_config.get("minute", 0)
+        self.daily_meme_task.change_interval(time=time(hour=hour, minute=minute))
+
+        if self.daily_config.get("enabled", True) and not self.daily_meme_task.is_running():
+            self.daily_meme_task.start()
+            logger.info(f"⏰ Daily meme task started for {hour:02d}:{minute:02d}")
+            # Log Reddit cache status
+            if self._reddit_cache:
+                logger.info(f"💾 Loaded {len(self._reddit_cache)} cached Reddit responses from disk")
+        elif not self.daily_config.get("enabled", True):
+            logger.info("Daily meme task is disabled")
+
+        # Log configuration (always, regardless of enabled state)
+        if os.path.exists(self.subreddits_file):
+            logger.info(f"Loaded {len(self.meme_subreddits)} subreddits from config")
+        else:
+            logger.info(f"Using default {len(self.meme_subreddits)} subreddits")
+
+        # Load Lemmy communities
+        if os.path.exists(self.lemmy_file):
+            logger.info(f"Loaded {len(self.meme_lemmy)} Lemmy communities from config")
+        else:
+            logger.info(f"Using default {len(self.meme_lemmy)} Lemmy communities")
+
+        # Log enabled meme sources
+        sources_str = ", ".join(self.meme_sources)
+        logger.info(f"Enabled meme sources: {sources_str}")
+
+        # FlareSolverr check - Required for Reddit (always returns 403) and other sources
+        if "reddit" in self.meme_sources or any(src in self.meme_sources for src in ["9gag", "4chan"]):
+            if self.flaresolverr_url:
+                logger.info(f"FlareSolverr configured: {self.flaresolverr_url}")
+            else:
+                logger.warning("⚠️ FlareSolverr required for Reddit but URL not configured!")
+
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         """Set up Daily Meme when bot is ready"""
@@ -765,39 +310,13 @@ class DailyMeme(commands.Cog):
             return  # Only setup once
 
         self._setup_done = True
+        await self._setup_cog()
 
-        # Create HTTP session
-        self.session = aiohttp.ClientSession()
-
-        # Start the daily meme task
-        if not self.daily_meme_task.is_running():
-            self.daily_meme_task.start()
-
-            # Log configuration
-            if os.path.exists(self.subreddits_file):
-                logger.info(f"Loaded {len(self.meme_subreddits)} subreddits from config")
-            else:
-                logger.info(f"Using default {len(self.meme_subreddits)} subreddits")
-
-            # Load Lemmy communities
-            if os.path.exists(self.lemmy_file):
-                logger.info(f"Loaded {len(self.meme_lemmy)} Lemmy communities from config")
-            else:
-                logger.info(f"Using default {len(self.meme_lemmy)} Lemmy communities")
-
-            # Log enabled meme sources
-            sources_str = ", ".join(self.meme_sources)
-            logger.info(f"Enabled meme sources: {sources_str}")
-
-            # FlareSolverr check - Required for Reddit (always returns 403) and other sources
-            if "reddit" in self.meme_sources or any(src in self.meme_sources for src in ["9gag", "4chan"]):
-                if self.flaresolverr_url:
-                    logger.info(f"FlareSolverr configured: {self.flaresolverr_url}")
-                else:
-                    logger.warning("⚠️ FlareSolverr required for Reddit but URL not configured!")
-
-            logger.info(f"Daily meme scheduled for 12:00 PM daily (Channel: {MEME_CHANNEL_ID})")
-            logger.info("Daily Meme task started")
+    async def cog_load(self) -> None:
+        """Called when the cog is loaded (including reloads)"""
+        # Wait a moment for bot to be ready
+        if self.bot.is_ready():
+            await self._setup_cog()
 
     async def cog_unload(self):
         """Called when the cog is unloaded"""
@@ -811,7 +330,7 @@ class DailyMeme(commands.Cog):
 
     async def _fetch_with_flaresolverr(self, url: str, timeout: int = 60000) -> dict:
         """
-        Fetch URL using FlareSolverr with rate limiting (30 seconds between calls)
+        Fetch URL using FlareSolverr (allows parallel requests, no rate limiting needed)
 
         Args:
             url: The URL to fetch
@@ -824,64 +343,66 @@ class DailyMeme(commands.Cog):
             logger.warning("FlareSolverr URL not configured")
             return None
 
-        async with self._flaresolverr_lock:
-            # Rate limiting: 30 seconds between FlareSolverr calls
-            current_time = asyncio.get_event_loop().time()
-            time_since_last_call = current_time - self._last_flaresolverr_call
+        payload = {
+            "cmd": "request.get",
+            "url": url,
+            "maxTimeout": timeout,
+        }
 
-            if time_since_last_call < 30:
-                wait_time = 30 - time_since_last_call
-                logger.debug(f"Rate limiting: waiting {wait_time:.1f}s before FlareSolverr call")
-                await asyncio.sleep(wait_time)
+        try:
+            async with self.session.post(self.flaresolverr_url, json=payload, timeout=30) as response:
+                if response.status != 200:
+                    logger.warning(f"FlareSolverr returned {response.status}")
+                    return None
 
-            payload = {
-                "cmd": "request.get",
-                "url": url,
-                "maxTimeout": timeout,
-            }
+                data = await response.json()
+                if data.get("status") != "ok":
+                    logger.warning(f"FlareSolverr failed: {data.get('message')}")
+                    return None
 
-            try:
-                async with self.session.post(self.flaresolverr_url, json=payload, timeout=65) as response:
-                    self._last_flaresolverr_call = asyncio.get_event_loop().time()
+                # Get the response text from FlareSolverr
+                solution = data.get("solution", {})
+                response_text = solution.get("response")
 
-                    if response.status != 200:
-                        logger.warning(f"FlareSolverr returned {response.status}")
-                        return None
+                if not response_text:
+                    logger.warning("No response content from FlareSolverr")
+                    logger.debug(f"Full FlareSolverr response: {data}")
+                    return None
 
-                    data = await response.json()
-                    if data.get("status") != "ok":
-                        logger.warning(f"FlareSolverr failed: {data.get('message')}")
-                        return None
+                # Debug: Log response type and preview
+                response_length = len(response_text) if response_text else 0
+                logger.debug(f"FlareSolverr response type: {type(response_text)}, length: {response_length}")
+                logger.debug(f"Response preview (first 200): {response_text[:200] if response_text else 'None'}")
 
-                    # Get the response text from FlareSolverr
-                    solution = data.get("solution", {})
-                    response_text = solution.get("response")
-                    
-                    if not response_text:
-                        logger.warning("No response content from FlareSolverr")
-                        logger.debug(f"Full FlareSolverr response: {data}")
-                        return None
-                    
-                    # Debug: Log response type and preview
-                    logger.debug(f"FlareSolverr response type: {type(response_text)}, length: {len(response_text) if response_text else 0}")
-                    logger.debug(f"Response preview (first 200): {response_text[:200] if response_text else 'None'}")
+                return {"status": "ok", "response": response_text}
 
-                    return {"status": "ok", "response": response_text}
-
-            except asyncio.TimeoutError:
-                logger.error(f"FlareSolverr timeout for {url}")
-                self._last_flaresolverr_call = asyncio.get_event_loop().time()
-                return None
-            except Exception as e:
-                logger.error(f"FlareSolverr error: {e}")
-                self._last_flaresolverr_call = asyncio.get_event_loop().time()
-                return None
+        except asyncio.TimeoutError:
+            logger.error(f"FlareSolverr timeout for {url}")
+            return None
+        except Exception as e:
+            logger.error(f"FlareSolverr error: {e}")
+            return None
 
     async def fetch_reddit_meme(self, subreddit: str, sort: str = "hot") -> dict:
         """
         Fetch a meme from Reddit using FlareSolverr (Reddit blocks direct API access)
+        Uses 5-minute cache to avoid repeated FlareSolverr calls
         sort: hot, top, new
         """
+        # Check cache first
+        cache_key = f"{subreddit}_{sort}"
+        if cache_key in self._reddit_cache:
+            cached = self._reddit_cache[cache_key]
+            cache_age = asyncio.get_event_loop().time() - cached["timestamp"]
+            if cache_age < self._cache_duration:
+                meme_count = len(cached["data"])
+                logger.info(
+                    f"⚡ Using cached data for r/{subreddit} (age: {int(cache_age)}s, {meme_count} memes)"
+                )
+                return cached["data"]
+            else:
+                logger.debug(f"⏰ Cache expired for r/{subreddit} (age: {cache_age:.1f}s)")
+
         url = f"https://www.reddit.com/r/{subreddit}/{sort}.json?limit=50&t=day"
 
         try:
@@ -889,39 +410,39 @@ class DailyMeme(commands.Cog):
             if not self.flaresolverr_url:
                 logger.error("FlareSolverr not configured, cannot fetch from Reddit")
                 return None
-            
-            logger.debug(f"Fetching r/{subreddit} via FlareSolverr...")
+
+            logger.debug(f"🌐 Fetching r/{subreddit} via FlareSolverr...")
             flare_response = await self._fetch_with_flaresolverr(url)
-            
+
             if not flare_response or flare_response.get("status") != "ok":
                 logger.error(f"FlareSolverr failed for r/{subreddit}")
                 return None
-            
+
             # Parse JSON from response
             response_text = flare_response.get("response", "")
-            
+
             # FlareSolverr might return HTML instead of JSON if Reddit blocks it
             # Try to extract JSON from the response
             if not response_text or not response_text.strip():
                 logger.error(f"Empty response from FlareSolverr for r/{subreddit}")
                 return None
-            
+
             # Check if response is HTML (starts with <!DOCTYPE or <html)
-            if response_text.strip().startswith(('<', '<!DOCTYPE', '<!doctype')):
+            if response_text.strip().startswith(("<", "<!DOCTYPE", "<!doctype")):
                 logger.debug(f"FlareSolverr returned HTML for r/{subreddit}, attempting to extract JSON from <pre> tag")
-                
+
                 # Parse HTML and extract JSON from <pre> tag (Reddit returns JSON in HTML)
                 soup = BeautifulSoup(response_text, "html.parser")
                 pre_tag = soup.find("pre")
-                
+
                 if not pre_tag or not pre_tag.text.strip():
                     logger.error(f"No <pre> tag found in HTML response for r/{subreddit}")
                     logger.debug(f"HTML preview: {response_text[:500]}...")
                     return None
-                
+
                 response_text = pre_tag.text.strip()
                 logger.debug(f"Extracted JSON from <pre> tag, length: {len(response_text)}")
-            
+
             try:
                 # FlareSolverr returns the JSON response as text
                 data = json.loads(response_text)
@@ -945,7 +466,9 @@ class DailyMeme(commands.Cog):
                 # Get image URL
                 post_url = post_data.get("url", "")
                 # Accept direct image links and imgur links
-                if any(ext in post_url.lower() for ext in [".jpg", ".jpeg", ".png", ".gif"]) or "i.imgur.com" in post_url:
+                image_extensions = [".jpg", ".jpeg", ".png", ".gif"]
+                has_image_ext = any(ext in post_url.lower() for ext in image_extensions)
+                if has_image_ext or "i.imgur.com" in post_url:
                     image_posts.append(
                         {
                             "title": post_data.get("title"),
@@ -959,7 +482,15 @@ class DailyMeme(commands.Cog):
                         }
                     )
 
-            logger.info(f"Fetched {len(image_posts)} memes from r/{subreddit}")
+            logger.info(f"✅ Fetched {len(image_posts)} memes from r/{subreddit}")
+
+            # Cache the result
+            if image_posts:
+                self._reddit_cache[cache_key] = {"timestamp": asyncio.get_event_loop().time(), "data": image_posts}
+                logger.debug(f"💾 Cached {len(image_posts)} memes for r/{subreddit}")
+                # Save cache to disk
+                self.save_reddit_cache()
+
             return image_posts if image_posts else None
 
         except asyncio.TimeoutError:
@@ -996,11 +527,16 @@ class DailyMeme(commands.Cog):
             }
             headers = {"User-Agent": "HazeBot/1.0"}
 
-            async with self.session.get(url, headers=headers, params=params) as response:
+            # Add timeout to prevent hanging on slow instances
+            # connect: time to establish connection, total: overall request time
+            timeout = aiohttp.ClientTimeout(total=15, connect=5)
+            logger.debug(f"🌐 Requesting Lemmy API: {url}")
+            async with self.session.get(url, headers=headers, params=params, timeout=timeout) as response:
                 if response.status != 200:
                     logger.warning(f"Lemmy API returned {response.status} for {instance}@{community_name}")
                     return None
 
+                logger.debug(f"✅ Lemmy API responded with status {response.status}")
                 data = await response.json()
                 posts = data.get("posts", [])
 
@@ -1036,19 +572,52 @@ class DailyMeme(commands.Cog):
                 logger.info(f"Fetched {len(image_posts)} memes from {instance}@{community_name}")
                 return image_posts if image_posts else None
 
+        except asyncio.TimeoutError:
+            logger.warning(f"⏱️ Timeout fetching from Lemmy {community} (>15s) - Instance may be slow or overloaded")
+            return None
+        except aiohttp.ClientError as e:
+            logger.warning(f"🌐 Network error fetching from Lemmy {community}: {e}")
+            return None
         except Exception as e:
-            logger.error(f"Error fetching meme from Lemmy {community}: {e}")
+            logger.error(f"❌ Error fetching meme from Lemmy {community}: {e}")
             return None
 
-    async def get_daily_meme(self, subreddit: str = None, allow_nsfw: bool = False, source: str = None):
+    async def get_daily_meme(
+        self,
+        subreddit: str = None,
+        allow_nsfw: bool = False,
+        source: str = None,
+        max_sources: int = None,
+        min_score: int = None,
+        pool_size: int = None,
+        use_config: bool = False,
+    ):
         """
         Get a high-quality meme from various sources
 
         Args:
-            subreddit: Optional specific subreddit to fetch from. If None, uses all configured subreddits.
+            subreddit: Optional specific subreddit to fetch from. If None, uses random subreddits.
             allow_nsfw: Whether to allow NSFW content. True for daily posts, False for user commands.
-            source: Optional specific source (e.g., "reddit"). If None, randomly selects from enabled sources.
+            source: Optional specific source (e.g., "reddit"). If None, uses all enabled sources.
+            max_sources: Maximum number of subreddits/communities to fetch from (for speed)
+            min_score: Minimum upvotes required
+            pool_size: Pick from top X memes
+            use_config: Whether to use daily_config preferences (for daily task)
         """
+        # Use config preferences if requested (daily task)
+        if use_config:
+            max_sources = self.daily_config.get("max_sources", 5)
+            min_score = self.daily_config.get("min_score", 100)
+            pool_size = self.daily_config.get("pool_size", 50)
+            configured_subreddits = self.daily_config.get("use_subreddits", [])
+            configured_lemmy = self.daily_config.get("use_lemmy", [])
+        else:
+            max_sources = max_sources or 3
+            min_score = min_score or 0
+            pool_size = pool_size or 50
+            configured_subreddits = []
+            configured_lemmy = []
+
         # Try to get hot memes from specified or all sources
         all_memes = []
 
@@ -1056,8 +625,8 @@ class DailyMeme(commands.Cog):
         if source:
             sources_to_use = [source] if source in self.meme_sources else self.meme_sources
         else:
-            # Randomly pick a source for variety
-            sources_to_use = [random.choice(self.meme_sources)]
+            # Use all sources for variety
+            sources_to_use = self.meme_sources
 
         for src in sources_to_use:
             if src == "reddit":
@@ -1067,17 +636,41 @@ class DailyMeme(commands.Cog):
                     if memes:
                         all_memes.extend(memes)
                 else:
-                    # Fetch from all configured subreddits
-                    for sub in self.meme_subreddits:
-                        memes = await self.fetch_reddit_meme(sub, sort="hot")
-                        if memes:
+                    # Use configured subreddits or all available
+                    subreddits_pool = configured_subreddits if configured_subreddits else self.meme_subreddits
+                    if not subreddits_pool:
+                        subreddits_pool = self.meme_subreddits
+
+                    # Fetch from random subset of subreddits for speed (use cache if available)
+                    selected_subs = random.sample(subreddits_pool, min(max_sources, len(subreddits_pool)))
+                    logger.debug(f"📊 Fetching from {len(selected_subs)} random subreddits: {selected_subs}")
+
+                    # Parallel fetching for speed
+                    fetch_tasks = [self.fetch_reddit_meme(sub, sort="hot") for sub in selected_subs]
+                    results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+                    for memes in results:
+                        if memes and not isinstance(memes, Exception):
                             all_memes.extend(memes)
 
             elif src == "lemmy":
-                # Fetch from all configured Lemmy communities
-                for community in self.meme_lemmy:
-                    memes = await self.fetch_lemmy_meme(community)
-                    if memes:
+                # Use configured Lemmy communities or all available
+                lemmy_pool = configured_lemmy if configured_lemmy else self.meme_lemmy
+                if not lemmy_pool:
+                    lemmy_pool = self.meme_lemmy
+
+                # Fetch from random subset of Lemmy communities for speed
+                selected_communities = random.sample(lemmy_pool, min(max_sources, len(lemmy_pool)))
+                logger.debug(
+                    f"📊 Fetching from {len(selected_communities)} random Lemmy communities: {selected_communities}"
+                )
+
+                # Parallel fetching for speed
+                fetch_tasks = [self.fetch_lemmy_meme(community) for community in selected_communities]
+                results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+                for memes in results:
+                    if memes and not isinstance(memes, Exception):
                         all_memes.extend(memes)
 
             # Add more source types here (e.g., elif src == "newsource":)
@@ -1085,6 +678,13 @@ class DailyMeme(commands.Cog):
         if not all_memes:
             logger.warning(f"No memes found from {source or 'any source'}")
             return None
+
+        # Filter by minimum score
+        if min_score > 0:
+            all_memes = [meme for meme in all_memes if meme.get("upvotes", 0) >= min_score]
+            if not all_memes:
+                logger.warning(f"No memes found with score >= {min_score}")
+                return None
 
         # Filter NSFW if not allowed
         if not allow_nsfw:
@@ -1106,12 +706,14 @@ class DailyMeme(commands.Cog):
         # Sort by upvotes to get quality memes
         fresh_memes.sort(key=lambda x: x["upvotes"], reverse=True)
 
-        # Pick from top 50 to balance quality and variety
-        # This prevents always showing the same top 10 memes
-        pool_size = min(50, len(fresh_memes))
-        top_memes = fresh_memes[:pool_size]
+        # Pick from top X to balance quality and variety
+        # This prevents always showing the same top memes
+        actual_pool_size = min(pool_size, len(fresh_memes))
+        top_memes = fresh_memes[:actual_pool_size]
 
-        logger.debug(f"Selecting from pool of {len(top_memes)} memes (out of {len(fresh_memes)} fresh)")
+        logger.debug(
+            f"Selecting from pool of {len(top_memes)} memes (out of {len(fresh_memes)} fresh, min_score: {min_score})"
+        )
 
         # Random pick from top memes pool for variety
         selected_meme = random.choice(top_memes)
@@ -1121,7 +723,7 @@ class DailyMeme(commands.Cog):
 
         return selected_meme
 
-    async def post_meme(self, meme: dict, channel: discord.TextChannel):
+    async def post_meme(self, meme: dict, channel: discord.TextChannel, mention: str = ""):
         """Post a meme to the channel"""
         embed = discord.Embed(
             title=meme["title"][:256],  # Discord title limit
@@ -1148,9 +750,9 @@ class DailyMeme(commands.Cog):
 
         set_pink_footer(embed, bot=self.bot.user)
 
-        # Mention the meme role
-        role_mention = f"<@&{MEME_ROLE_ID}>"
-        await channel.send(f"🎭 Daily Meme Alert! {role_mention}", embed=embed)
+        # Send with optional mention
+        message = f"🎭 Daily Meme Alert! {mention}" if mention else "🎭 Daily Meme Alert!"
+        await channel.send(message.strip(), embed=embed)
 
         # Format source for logging
         if meme["subreddit"].startswith("lemmy:"):
@@ -1205,32 +807,58 @@ class DailyMeme(commands.Cog):
 
         return meme, embed
 
-    @tasks.loop(time=time(hour=12, minute=0))  # Daily at 12:00 PM
+    @tasks.loop(time=time(hour=12, minute=0))  # Default time, will be updated dynamically
     async def daily_meme_task(self):
-        """Post a daily meme at 12 PM"""
+        """Post a daily meme at configured time"""
+        # Check if task is enabled
+        if not self.daily_config.get("enabled", True):
+            logger.debug("Daily meme task is disabled, skipping")
+            return
+
         try:
             guild = self.bot.get_guild(get_guild_id())
             if not guild:
                 logger.error("Guild not found")
                 return
 
-            channel = guild.get_channel(MEME_CHANNEL_ID)
+            channel_id = self.daily_config.get("channel_id", MEME_CHANNEL_ID)
+            channel = guild.get_channel(channel_id)
             if not channel:
-                logger.error(f"Meme channel {MEME_CHANNEL_ID} not found")
+                logger.error(f"Meme channel {channel_id} not found")
                 return
 
             logger.info("Fetching daily meme...")
-            # Allow NSFW for daily posts in the configured channel
-            meme = await self.get_daily_meme(allow_nsfw=True)
+            # Use configured NSFW setting and selection preferences
+            allow_nsfw = self.daily_config.get("allow_nsfw", True)
+            meme = await self.get_daily_meme(allow_nsfw=allow_nsfw, use_config=True)
 
             if meme:
-                await self.post_meme(meme, channel)
+                # Check if we should ping the role
+                ping_role_id = self.daily_config.get("ping_role_id")
+                mention = f"<@&{ping_role_id}>" if ping_role_id else ""
+                await self.post_meme(meme, channel, mention=mention)
             else:
                 logger.error("Failed to fetch daily meme")
                 await channel.send("❌ Sorry, couldn't fetch today's meme. Try again later!")
 
         except Exception as e:
             logger.error(f"Error in daily_meme_task: {e}")
+
+    def restart_daily_task(self):
+        """Restart the daily meme task with updated time"""
+        if self.daily_meme_task.is_running():
+            self.daily_meme_task.cancel()
+
+        # Update task time
+        hour = self.daily_config.get("hour", 12)
+        minute = self.daily_config.get("minute", 0)
+        self.daily_meme_task.change_interval(time=time(hour=hour, minute=minute))
+
+        if self.daily_config.get("enabled", True):
+            self.daily_meme_task.start()
+            logger.info(f"Daily meme task restarted for {hour:02d}:{minute:02d}")
+        else:
+            logger.info("Daily meme task stopped (disabled)")
 
     @daily_meme_task.before_loop
     async def before_daily_meme(self):
@@ -1251,7 +879,11 @@ class DailyMeme(commands.Cog):
         """
         is_admin_or_mod = is_mod_or_admin(ctx.author)
 
-        # If source is specified, fetch directly
+        # Clean and validate source argument
+        if source:
+            source = source.strip()
+
+        # If source is specified and not empty, fetch directly
         if source:
             # Check cooldown (skip for mods/admins)
             if not is_admin_or_mod:
@@ -1270,18 +902,24 @@ class DailyMeme(commands.Cog):
             # Determine if it's Lemmy or Reddit
             if "@" in source:
                 # Lemmy community
-                if source not in self.meme_lemmy:
+                lemmy_source = source.lower()
+                if lemmy_source not in self.meme_lemmy:
                     await ctx.send(
                         f"❌ `{source}` is not configured. Use `!lemmycommunities` to see available communities."
                     )
                     return
 
-                await ctx.send(f"🔍 Fetching meme from {source}...")
-                memes = await self.fetch_lemmy_meme(source)
-                source_display = source
+                await ctx.send(f"🔍 Fetching meme from {lemmy_source}...")
+                memes = await self.fetch_lemmy_meme(lemmy_source)
+                source_display = lemmy_source
             else:
-                # Reddit subreddit
-                subreddit = source.lower().replace("r/", "")
+                # Reddit subreddit - normalize the input
+                subreddit = source.lower().strip().replace("r/", "")
+
+                if not subreddit:  # Empty after stripping
+                    await ctx.send("❌ Please provide a valid subreddit name.")
+                    return
+
                 if subreddit not in self.meme_subreddits:
                     await ctx.send(
                         f"❌ r/{subreddit} is not configured. Use `!memesubreddits` to see available subreddits."
@@ -1389,7 +1027,11 @@ class DailyMeme(commands.Cog):
         """Slash command for Meme Hub with optional source"""
         is_admin_or_mod = is_mod_or_admin(interaction.user)
 
-        # If source is specified, fetch directly
+        # Clean and validate source argument
+        if source:
+            source = source.strip()
+
+        # If source is specified and not empty, fetch directly
         if source:
             # Check cooldown (skip for mods/admins)
             if not is_admin_or_mod:
@@ -1411,19 +1053,25 @@ class DailyMeme(commands.Cog):
             # Determine if it's Lemmy or Reddit
             if "@" in source:
                 # Lemmy community
-                if source not in self.meme_lemmy:
+                lemmy_source = source.lower()
+                if lemmy_source not in self.meme_lemmy:
                     await interaction.response.send_message(
                         f"❌ `{source}` is not in the configured Lemmy communities.",
                         ephemeral=True,
                     )
                     return
 
-                await interaction.response.send_message(f"🔍 Fetching meme from {source}...", ephemeral=True)
-                memes = await self.fetch_lemmy_meme(source)
-                source_display = source
+                await interaction.response.send_message(f"🔍 Fetching meme from {lemmy_source}...", ephemeral=True)
+                memes = await self.fetch_lemmy_meme(lemmy_source)
+                source_display = lemmy_source
             else:
-                # Reddit subreddit
-                subreddit = source.lower().replace("r/", "")
+                # Reddit subreddit - normalize the input
+                subreddit = source.lower().strip().replace("r/", "")
+
+                if not subreddit:  # Empty after stripping
+                    await interaction.response.send_message("❌ Please provide a valid subreddit name.", ephemeral=True)
+                    return
+
                 if subreddit not in self.meme_subreddits:
                     await interaction.response.send_message(
                         f"❌ r/{subreddit} is not in the configured subreddits.", ephemeral=True
@@ -1899,6 +1547,89 @@ class DailyMeme(commands.Cog):
         set_pink_footer(embed, bot=self.bot.user)
         await ctx.send(embed=embed)
         logger.info(f"Sources reset to defaults by {ctx.author}")
+
+    @commands.command(name="dailyconfig")
+    @commands.check(lambda ctx: is_mod_or_admin(ctx.author))
+    async def daily_config_command(self, ctx: commands.Context):
+        """
+        ⚙️ Configure daily meme task settings (Mod/Admin only)
+        Usage: !dailyconfig
+        """
+        from ._DailyMemeViews import DailyConfigView
+
+        embed = self.get_daily_config_embed()
+        view = DailyConfigView(self)
+        await ctx.send(embed=embed, view=view)
+        logger.info(f"Daily config opened by {ctx.author}")
+
+    def get_daily_config_embed(self) -> discord.Embed:
+        """Create embed showing current daily meme configuration"""
+        config = self.daily_config
+
+        embed = discord.Embed(
+            title="⚙️ Daily Meme Configuration",
+            description="Configure when and how the daily meme is posted.",
+            color=PINK,
+        )
+
+        # Status
+        status = "✅ Enabled" if config.get("enabled") else "❌ Disabled"
+        embed.add_field(name="📊 Status", value=status, inline=True)
+
+        # Time
+        hour = config.get("hour", 12)
+        minute = config.get("minute", 0)
+        embed.add_field(name="⏰ Time", value=f"{hour:02d}:{minute:02d}", inline=True)
+
+        # Channel
+        channel_id = config.get("channel_id", MEME_CHANNEL_ID)
+        embed.add_field(name="📺 Channel", value=f"<#{channel_id}>", inline=True)
+
+        # NSFW
+        nsfw_status = "✅ Allowed" if config.get("allow_nsfw") else "❌ Disabled"
+        embed.add_field(name="🔞 NSFW", value=nsfw_status, inline=True)
+
+        # Ping Role
+        role_id = config.get("ping_role_id")
+        role_display = f"<@&{role_id}>" if role_id else "None"
+        embed.add_field(name="🔔 Ping Role", value=role_display, inline=True)
+
+        # Empty field for spacing
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
+
+        # Selection Preferences
+        embed.add_field(
+            name="🎯 Selection Preferences",
+            value=(
+                f"**Min Score:** {config.get('min_score', 100):,} upvotes\n"
+                f"**Max Sources:** {config.get('max_sources', 5)} subreddits/communities\n"
+                f"**Pool Size:** Top {config.get('pool_size', 50)} memes"
+            ),
+            inline=False,
+        )
+
+        # Configured Subreddits
+        use_subs = config.get("use_subreddits", [])
+        if use_subs:
+            subs_display = ", ".join([f"r/{sub}" for sub in use_subs[:10]])
+            if len(use_subs) > 10:
+                subs_display += f" (+{len(use_subs) - 10} more)"
+            embed.add_field(name="📍 Reddit Sources", value=subs_display, inline=False)
+        else:
+            embed.add_field(name="📍 Reddit Sources", value="*All configured subreddits*", inline=False)
+
+        # Configured Lemmy
+        use_lemmy = config.get("use_lemmy", [])
+        if use_lemmy:
+            lemmy_display = ", ".join(use_lemmy[:10])
+            if len(use_lemmy) > 10:
+                lemmy_display += f" (+{len(use_lemmy) - 10} more)"
+            embed.add_field(name="🌐 Lemmy Sources", value=lemmy_display, inline=False)
+        else:
+            embed.add_field(name="🌐 Lemmy Sources", value="*All configured communities*", inline=False)
+
+        set_pink_footer(embed, bot=self.bot.user)
+        return embed
 
 
 async def setup(bot: commands.Bot) -> None:
