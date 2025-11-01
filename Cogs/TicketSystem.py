@@ -542,7 +542,8 @@ async def close_ticket_async(
     # Create transcript embed for transcript channel
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
-        description=f"**Type:** {ticket['type']}\n**Creator:** <@{ticket['user_id']}>\n**Status:** Closed",
+        description=f"**Type:** {ticket['type']}\n**Creator:** <@{ticket['user_id']}>\
+            \n**Status:** Closed",
         color=PINK,
     )
 
@@ -811,6 +812,7 @@ class TicketSystem(commands.Cog):
         """
         🎫 Create a new ticket.
         """
+        logger.info(f"Ticket creation initiated by {ctx.author}")
         embed = self.get_ticket_help_embed(ctx)
         await ctx.send(embed=embed, view=TicketView())
 
@@ -818,6 +820,7 @@ class TicketSystem(commands.Cog):
     @app_commands.command(name="ticket", description="🎫 Create a new ticket.")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def ticket_slash(self, interaction: discord.Interaction):
+        logger.info(f"Ticket creation slash initiated by {interaction.user}")
         embed = self.get_ticket_help_embed(interaction)
         await interaction.response.send_message(embed=embed, view=TicketView(), ephemeral=True)
 

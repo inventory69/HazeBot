@@ -74,6 +74,9 @@ class DailyMeme(commands.Cog):
         self.meme_cache_hours = 24  # Keep memes in cache for 24 hours
         self.shown_memes_file = os.path.join(get_data_dir(), "shown_memes.json")
         self.shown_memes = self.load_shown_memes()
+        # Cache for meme requests (user_id -> count)
+        self.meme_requests_file = os.path.join(get_data_dir(), "meme_requests.json")
+        self.meme_requests = self.load_meme_requests()
 
     def load_daily_config(self) -> dict:
         """Load daily meme configuration from file"""
@@ -212,6 +215,25 @@ class DailyMeme(commands.Cog):
                 json.dump(self.shown_memes, f, indent=4)
         except Exception as e:
             logger.error(f"Error saving shown memes cache: {e}")
+
+    def load_meme_requests(self) -> dict:
+        """Load meme requests cache from file"""
+        try:
+            if os.path.exists(self.meme_requests_file):
+                with open(self.meme_requests_file, "r") as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading meme requests: {e}")
+        return {}
+
+    def save_meme_requests(self) -> None:
+        """Save meme requests cache to file"""
+        try:
+            os.makedirs(os.path.dirname(self.meme_requests_file), exist_ok=True)
+            with open(self.meme_requests_file, "w") as f:
+                json.dump(self.meme_requests, f, indent=4)
+        except Exception as e:
+            logger.error(f"Error saving meme requests: {e}")
 
     def load_reddit_cache(self) -> dict:
         """Load Reddit API response cache from file"""
@@ -950,6 +972,9 @@ class DailyMeme(commands.Cog):
             set_pink_footer(embed, bot=self.bot.user)
 
             await ctx.send(embed=embed)
+            user_id = str(ctx.author.id)
+            self.meme_requests[user_id] = self.meme_requests.get(user_id, 0) + 1
+            self.save_meme_requests()
             logger.info(f"Meme fetched by {ctx.author} from {source_display} via command argument")
             return
 
@@ -1104,6 +1129,9 @@ class DailyMeme(commands.Cog):
             set_pink_footer(embed, bot=interaction.client.user)
 
             await interaction.followup.send(embed=embed)
+            user_id = str(interaction.user.id)
+            self.meme_requests[user_id] = self.meme_requests.get(user_id, 0) + 1
+            self.save_meme_requests()
             logger.info(f"Meme fetched by {interaction.user} from {source_display} via slash command")
             return
 

@@ -9,6 +9,11 @@ from Utils.EmbedUtils import set_pink_footer
 from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
 from Utils.CacheUtils import cache
 from Cogs.TicketSystem import load_tickets
+import logging
+
+# Configure logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # Helper to load activity data
@@ -144,6 +149,7 @@ class Leaderboard(commands.Cog):
         🏆 Shows a leaderboard for the given category.
         Categories: rl_overall, rl_1v1, rl_2v2, rl_3v3, rl_4v4, tickets, messages, images
         """
+        logger.info(f"Leaderboard requested for category '{category}' by {ctx.author}")
         await self.handle_leaderboard(ctx, category.lower())
 
     # /leaderboard (Slash)
@@ -163,6 +169,7 @@ class Leaderboard(commands.Cog):
         ]
     )
     async def leaderboard_slash(self, interaction: discord.Interaction, category: str) -> None:
+        logger.info(f"Leaderboard slash requested for category '{category}' by {interaction.user}")
         await self.handle_leaderboard(interaction, category)
 
 
