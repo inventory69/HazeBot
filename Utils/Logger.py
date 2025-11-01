@@ -14,6 +14,7 @@ from Config import (
     LogLevel,
     CommandPrefix,
     COG_PREFIXES,
+    COG_LOG_LEVELS,  # Import per-cog log levels
 )  # Assuming CommandPrefix is available in HazeWorldBot Config
 
 
@@ -143,6 +144,12 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
         discord_logger.handlers.clear()
         discord_logger.addHandler(ConsoleHandler)
         discord_logger.propagate = False
+
+    # Apply per-cog log levels
+    for cog_name, level in COG_LOG_LEVELS.items():
+        cog_logger = logging.getLogger(f"Cogs.{cog_name}")
+        cog_logger.setLevel(level)
+        Logger.info(f"🎯 Set log level for {cog_name} to {logging.getLevelName(level)}")
 
     return Console, Logger, ConsoleHandler
 
