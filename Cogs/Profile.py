@@ -50,6 +50,7 @@ def load_meme_requests() -> dict:
     from Config import get_data_dir
     import os
     import json
+
     file_path = os.path.join(get_data_dir(), "meme_requests.json")
     try:
         if os.path.exists(file_path):
@@ -127,7 +128,9 @@ class Profile(commands.Cog):
         meme_count = meme_requests.get(str(member.id), 0)
         embed.add_field(
             name="Activity",
-            value=f"💬 Messages: {activity['messages']}\n🖼️ Images: {activity['images']}\n🎭 Memes Requested: {meme_count}",
+            value=(
+                f"💬 Messages: {activity['messages']}\n🖼️ Images: {activity['images']}\n🎭 Memes Requested: {meme_count}"
+            ),
             inline=True,
         )
 

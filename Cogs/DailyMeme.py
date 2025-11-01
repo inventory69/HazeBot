@@ -420,9 +420,7 @@ class DailyMeme(commands.Cog):
             cache_age = asyncio.get_event_loop().time() - cached["timestamp"]
             if cache_age < self._cache_duration:
                 meme_count = len(cached["data"])
-                logger.info(
-                    f"⚡ Using cached data for r/{subreddit} (age: {int(cache_age)}s, {meme_count} memes)"
-                )
+                logger.info(f"⚡ Using cached data for r/{subreddit} (age: {int(cache_age)}s, {meme_count} memes)")
                 return cached["data"]
             else:
                 logger.debug(f"⏰ Cache expired for r/{subreddit} (age: {cache_age:.1f}s)")

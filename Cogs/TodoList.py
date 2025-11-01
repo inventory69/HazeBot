@@ -12,7 +12,6 @@ from Config import (
     MODERATOR_ROLE_ID,
     get_guild_id,
     get_data_dir,
-    TODO_CHANNEL_ID,
 )
 from Utils.EmbedUtils import set_pink_footer
 import logging
@@ -43,21 +42,18 @@ async def load_todo_data() -> Dict[str, Any]:
             old_channel_id = data.get("channel_id")
             old_items = data.get("items", [])
             old_message_ids = data.get("message_ids", [])
-            
+
             # Create new format
             new_data = {"channels": {}}
-            
+
             # If there was an old channel, migrate it
             if old_channel_id:
-                new_data["channels"][str(old_channel_id)] = {
-                    "message_ids": old_message_ids,
-                    "items": old_items
-                }
-            
+                new_data["channels"][str(old_channel_id)] = {"message_ids": old_message_ids, "items": old_items}
+
             # Save migrated data
             save_todo_data(new_data)
             data = new_data
-        
+
         # Ensure channels dict exists
         if "channels" not in data:
             data["channels"] = {}
@@ -89,10 +85,7 @@ async def get_channel_data(data: Dict[str, Any], channel_id: int) -> Dict[str, A
     """Get data for a specific channel, creating if doesn't exist."""
     channel_key = str(channel_id)
     if channel_key not in data["channels"]:
-        data["channels"][channel_key] = {
-            "message_ids": [],
-            "items": []
-        }
+        data["channels"][channel_key] = {"message_ids": [], "items": []}
     return data["channels"][channel_key]
 
 
@@ -116,6 +109,7 @@ class PrioritySelectView(discord.ui.View):
         item_index: Optional[int] = None,
         current_priority: Optional[str] = None,
         current_text: Optional[str] = None,
+        management_message=None,  # Add reference to management message
     ) -> None:
         super().__init__(timeout=60)
         self.bot = bot
@@ -124,6 +118,7 @@ class PrioritySelectView(discord.ui.View):
         self.item_index = item_index
         self.current_priority = current_priority or "low"
         self.current_text = current_text or ""
+        self.management_message = management_message
 
     @discord.ui.button(label="High", style=discord.ButtonStyle.danger, emoji="🔴")
     async def select_high(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -145,11 +140,11 @@ class PrioritySelectView(discord.ui.View):
             item_index=self.item_index,
             default_priority=priority,
             default_text=self.current_text,
+            management_message=self.management_message,  # Pass through
         )
         await interaction.response.send_modal(modal)
 
 
-# === View for confirming AI-formatted todo item ===
 class TodoConfirmView(discord.ui.View):
     def __init__(
         self,
@@ -161,6 +156,7 @@ class TodoConfirmView(discord.ui.View):
         item_index: Optional[int],
         interaction: discord.Interaction,
         view_message: Optional[discord.Message] = None,
+        management_message=None,  # Add reference to management message
     ) -> None:
         super().__init__(timeout=60)
         self.bot = bot
@@ -171,6 +167,7 @@ class TodoConfirmView(discord.ui.View):
         self.item_index = item_index
         self.original_interaction = interaction
         self.view_message = view_message
+        self.management_message = management_message
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="✅")
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -207,6 +204,12 @@ class TodoConfirmView(discord.ui.View):
         # Delete the view message (the original preview with buttons)
         if self.view_message:
             await self.view_message.delete()
+        # Delete the management message too
+        if self.management_message:
+            try:
+                await self.management_message.delete()
+            except Exception:
+                pass  # Ignore if already deleted
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -241,6 +244,7 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
         item_index: Optional[int] = None,
         default_priority: str = "low",
         default_text: str = "",
+        management_message=None,  # Add reference to management message
     ) -> None:
         super().__init__()
         self.bot = bot
@@ -249,6 +253,7 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
         self.item_index = item_index
         self.priority.default = default_priority
         self.raw_text.default = default_text
+        self.management_message = management_message
         openai.api_key = os.getenv("OPENAI_API_KEY")
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
@@ -292,13 +297,14 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
 
             # Create the view first, send with the view, then set the message reference
             view = TodoConfirmView(
-                self.bot, 
-                self.channel_id, 
-                formatted_task, 
-                priority, 
-                self.action, 
-                self.item_index, 
-                interaction
+                self.bot,
+                self.channel_id,
+                formatted_task,
+                priority,
+                self.action,
+                self.item_index,
+                interaction,
+                management_message=self.management_message,  # Pass through
             )
             if view is None:
                 logger.error("Attempted to send preview message with view=None. This should never happen!")
@@ -358,7 +364,9 @@ Rules:
         formatted = json.loads(result.strip())
         return formatted
 
-    async def update_todo_message(self, interaction: discord.Interaction, data: Dict[str, Any], channel_id: int) -> None:
+    async def update_todo_message(
+        self, interaction: discord.Interaction, data: Dict[str, Any], channel_id: int
+    ) -> None:
         """Update or create the to-do list message in the channel."""
         channel_data = await get_channel_data(data, channel_id)
         items = channel_data["items"]
@@ -483,10 +491,11 @@ Rules:
 
 # === View for managing to-do list ===
 class TodoManageView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, channel_id: int) -> None:
+    def __init__(self, bot: commands.Bot, channel_id: int, management_message=None) -> None:
         super().__init__(timeout=300)
         self.bot = bot
         self.channel_id = channel_id
+        self.management_message = management_message  # Store reference to management embed
 
     @discord.ui.button(label="Add Item", style=discord.ButtonStyle.green, emoji="➕")
     async def add_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -506,7 +515,7 @@ class TodoManageView(discord.ui.View):
             color=PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
-        view = PrioritySelectView(self.bot, self.channel_id, action="add")
+        view = PrioritySelectView(self.bot, self.channel_id, action="add", management_message=self.management_message)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
 
     @discord.ui.button(label="Edit Item", style=discord.ButtonStyle.primary, emoji="✏️")
@@ -736,7 +745,10 @@ class TodoRemoveSelectView(discord.ui.View):
 
         # Log removed items
         removed_titles = ", ".join([f"'{item['title']}'" for item in reversed(removed_items)])
-        logger.info(f"Removed {len(removed_items)} to-do item(s) from channel {self.channel_id}: {removed_titles} by {interaction.user}")
+        logger.info(
+            f"Removed {len(removed_items)} to-do item(s) from channel {self.channel_id}: "
+            f"{removed_titles} by {interaction.user}"
+        )
 
         # Send confirmation
         confirm_msg = await interaction.followup.send(f"✅ Removed {len(removed_items)} item(s)!", ephemeral=True)
@@ -781,7 +793,7 @@ class TodoList(commands.Cog):
         # Show management view
         data = await load_todo_data()
         channel_data = await get_channel_data(data, channel_id)
-        
+
         embed = discord.Embed(
             title="📋 To-Do List Management",
             description=f"Use the buttons below to manage the to-do list for <#{channel_id}>.\n\n"
@@ -792,9 +804,17 @@ class TodoList(commands.Cog):
 
         view = TodoManageView(self.bot, channel_id)
         if hasattr(ctx_or_interaction, "send"):
-            await ctx_or_interaction.send(embed=embed, view=view)
+            management_msg = await ctx_or_interaction.send(embed=embed, view=view)
         else:
-            await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
+            management_msg = await ctx_or_interaction.response.send_message(
+                embed=embed, view=view, ephemeral=True, delete_after=30
+            )
+            # For slash commands, get the message from the interaction
+            management_msg = await ctx_or_interaction.original_response()
+
+        # Update view with the management message reference
+        view.management_message = management_msg
+
         logger.info(f"todo-update used by {user} in channel {channel_id}")
 
     # 🧩 Shared handler for todo-show logic
@@ -803,7 +823,7 @@ class TodoList(commands.Cog):
         # Get current channel
         channel = ctx_or_interaction.channel
         channel_id = channel.id
-        
+
         data = await load_todo_data()
         channel_data = await get_channel_data(data, channel_id)
 
@@ -835,7 +855,9 @@ class TodoList(commands.Cog):
         await self.handle_todo_update(ctx)
 
     # /todo-update (Slash) - Mod/Admin only
-    @app_commands.command(name="todo-update", description="📋 Update the to-do list for this channel with interactive buttons.")
+    @app_commands.command(
+        name="todo-update", description="📋 Update the to-do list for this channel with interactive buttons."
+    )
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def todo_update_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_todo_update(interaction)

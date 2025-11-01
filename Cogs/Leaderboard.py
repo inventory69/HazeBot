@@ -139,41 +139,43 @@ class Leaderboard(commands.Cog):
 
     # Create overview embed with all leaderboards
     async def create_overview_embed(self) -> discord.Embed:
-        embed = discord.Embed(title="🏆 Leaderboard Overview", description="Top performers in various categories", color=PINK)
-        
+        embed = discord.Embed(
+            title="🏆 Leaderboard Overview", description="Top performers in various categories", color=PINK
+        )
+
         # Rocket League Rankings
         rl_text = ""
         rl_categories = [("rl_overall", "Overall"), ("rl_1v1", "1v1"), ("rl_2v2", "2v2"), ("rl_3v3", "3v3")]
         for cat_key, cat_name in rl_categories:
             top_entries = await self.get_top_entries(cat_key, limit=3)
             if top_entries:
-                entries_str = ", ".join([f"{i+1}. <@{uid}> ({val})" for i, (uid, val) in enumerate(top_entries)])
+                entries_str = ", ".join([f"{i + 1}. <@{uid}> ({val})" for i, (uid, val) in enumerate(top_entries)])
                 rl_text += f"**{cat_name}**: {entries_str}\n"
         if rl_text:
             embed.add_field(name="🚀 Rocket League Rankings", value=rl_text.strip(), inline=False)
-        
+
         # Activity
         activity_text = ""
         activity_categories = [("messages", "Messages"), ("images", "Images"), ("meme_requests", "Meme Requests")]
         for cat_key, cat_name in activity_categories:
             top_entries = await self.get_top_entries(cat_key, limit=3)
             if top_entries:
-                entries_str = ", ".join([f"{i+1}. <@{uid}> ({val})" for i, (uid, val) in enumerate(top_entries)])
+                entries_str = ", ".join([f"{i + 1}. <@{uid}> ({val})" for i, (uid, val) in enumerate(top_entries)])
                 activity_text += f"**{cat_name}**: {entries_str}\n"
         if activity_text:
             embed.add_field(name="📊 Activity", value=activity_text.strip(), inline=False)
-        
+
         # Contributions
         contrib_text = ""
         contrib_categories = [("tickets", "Resolved Tickets")]
         for cat_key, cat_name in contrib_categories:
             top_entries = await self.get_top_entries(cat_key, limit=3)
             if top_entries:
-                entries_str = ", ".join([f"{i+1}. <@{uid}> ({val})" for i, (uid, val) in enumerate(top_entries)])
+                entries_str = ", ".join([f"{i + 1}. <@{uid}> ({val})" for i, (uid, val) in enumerate(top_entries)])
                 contrib_text += f"**{cat_name}**: {entries_str}\n"
         if contrib_text:
             embed.add_field(name="🛠️ Contributions", value=contrib_text.strip(), inline=False)
-        
+
         embed.set_footer(text="Use /leaderboard <category> for full rankings")
         return embed
 
@@ -265,6 +267,7 @@ class Leaderboard(commands.Cog):
             await ctx.send(embed=embed)
 
         # /leaderboard (Slash)
+
     @app_commands.command(name="leaderboard", description="🏆 Shows leaderboard overview or specific category.")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(category="Choose the leaderboard category (optional for overview)")
