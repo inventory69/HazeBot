@@ -13,6 +13,11 @@ from Config import (
     get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 ROLE_DESCRIPTIONS: Dict[int, str] = {
     ADMIN_ROLE_ID: (
@@ -89,6 +94,7 @@ class RoleInfo(commands.Cog):
         Usage: !roleinfo [role name]
         If no role is given, shows your main group (Admin/Mod/Lootling).
         """
+        logger.info(f"Role info requested for role '{role_name}' by {ctx.author}")
         role = None
         if role_name:
             role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
@@ -112,6 +118,7 @@ class RoleInfo(commands.Cog):
         Slash command for role info. If no role is selected, shows your main group.
         Only the 3 main roles are selectable.
         """
+        logger.info(f"Role info slash requested for role_id '{role_id}' by {interaction.user}")
         guild = interaction.guild
         member = (
             interaction.user if isinstance(interaction.user, discord.Member) else guild.get_member(interaction.user.id)

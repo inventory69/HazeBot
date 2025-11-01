@@ -16,6 +16,11 @@ from Cogs.RocketLeague import get_highest_rl_rank, RANK_EMOJIS
 from Cogs.ModPerks import load_mod_data
 from Cogs.TicketSystem import load_tickets
 from Cogs.Leaderboard import get_user_activity
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # Helper to get warning count for a user
@@ -123,6 +128,7 @@ class Profile(commands.Cog):
         """
         👤 Shows your profile or another user's profile.
         """
+        logger.info(f"Profile requested for user {user.display_name if user else 'self'} by {ctx.author}")
         await self.handle_profile(ctx, user)
 
     # /profile (Slash)
@@ -130,6 +136,7 @@ class Profile(commands.Cog):
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     @app_commands.describe(user="Select a user (optional, defaults to yourself)")
     async def profile_slash(self, interaction: discord.Interaction, user: Optional[discord.Member] = None) -> None:
+        logger.info(f"Profile slash requested for user {user.display_name if user else 'self'} by {interaction.user}")
         await self.handle_profile(interaction, user)
 
 

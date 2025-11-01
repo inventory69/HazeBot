@@ -364,6 +364,7 @@ class Utility(commands.Cog):
         🧹 Deletes the last X messages in the channel (default: 10). Use 'all' to delete all messages.
         Only allowed for users with the Admin or Slot Keeper (Mod) role.
         """
+        logger.info(f"Clear command used by {ctx.author} to delete {amount} messages")
         if not any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in ctx.author.roles):
             embed = discord.Embed(
                 description="🚫 You do not have permission to use this command.",
