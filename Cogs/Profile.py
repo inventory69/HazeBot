@@ -9,6 +9,7 @@ from Config import (
     NORMAL_ROLE_ID,
     INTEREST_ROLE_IDS,
     CHANGELOG_ROLE_ID,
+    MEME_ROLE_ID,
     get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
@@ -41,6 +42,22 @@ async def get_resolved_ticket_count(user_id: int) -> int:
         ):
             resolved_count += 1
     return resolved_count
+
+
+# Helper to load meme requests
+def load_meme_requests() -> dict:
+    """Load meme requests from file"""
+    from Config import get_data_dir
+    import os
+    import json
+    file_path = os.path.join(get_data_dir(), "meme_requests.json")
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading meme requests: {e}")
+    return {}
 
 
 class Profile(commands.Cog):
@@ -90,20 +107,27 @@ class Profile(commands.Cog):
             rl_text = "🏆 No RL account linked"
 
         changelog_opt_in = "✅ Yes" if any(role.id == CHANGELOG_ROLE_ID for role in member.roles) else "❌ No"
+        meme_opt_in = "✅ Yes" if any(role.id == MEME_ROLE_ID for role in member.roles) else "❌ No"
         warning_count = await get_warning_count(member.id)
 
-        custom_stats = f"{rl_text}\n🔔 Changelog Opt-in: {changelog_opt_in}\n⚠️ Warnings: {warning_count}"
+        custom_stats = f"{rl_text}\n⚠️ Warnings: {warning_count}"
         if any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles):
             resolved_tickets = await get_resolved_ticket_count(member.id)
             custom_stats += f"\n🎫 Resolved Tickets: {resolved_tickets}"
 
         embed.add_field(name="Custom Stats", value=custom_stats, inline=False)
 
+        # Notifications
+        notifications = f"🔔 Changelog Opt-in: {changelog_opt_in}\n🎭 Meme Opt-in: {meme_opt_in}"
+        embed.add_field(name="Notifications", value=notifications, inline=True)
+
         # Activity stats
         activity = await get_user_activity(member.id)
+        meme_requests = load_meme_requests()
+        meme_count = meme_requests.get(str(member.id), 0)
         embed.add_field(
             name="Activity",
-            value=f"💬 Messages: {activity['messages']}\n🖼️ Images: {activity['images']}",
+            value=f"💬 Messages: {activity['messages']}\n🖼️ Images: {activity['images']}\n🎭 Memes Requested: {meme_count}",
             inline=True,
         )
 

@@ -103,6 +103,11 @@ class MemeHubView(discord.ui.View):
             if source_name not in ["9gag"]:
                 source_name = f"r/{source_name}"
             logger.info(f"🎭 [DailyMeme] Meme Hub: Meme requested by {interaction.user} from {source_name}")
+
+            # Increment meme request count
+            user_id = str(interaction.user.id)
+            self.cog.meme_requests[user_id] = self.cog.meme_requests.get(user_id, 0) + 1
+            self.cog.save_meme_requests()
         else:
             await interaction.followup.send("❌ Couldn't fetch a meme right now. Try again later!", ephemeral=True)
 
@@ -250,6 +255,11 @@ class SourceSelectionView(discord.ui.View):
                 await interaction.followup.send(embed=embed)
 
             logger.info(f"🎭 [DailyMeme] Specific meme fetched by {interaction.user} from {source_name}")
+
+            # Increment meme request count
+            user_id = str(interaction.user.id)
+            self.cog.meme_requests[user_id] = self.cog.meme_requests.get(user_id, 0) + 1
+            self.cog.save_meme_requests()
 
         return callback
 
