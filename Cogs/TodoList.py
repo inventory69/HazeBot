@@ -32,31 +32,47 @@ async def load_todo_data() -> Dict[str, Any]:
     """Load to-do list data from JSON file."""
     if not os.path.exists(TODO_DATA_FILE):
         logger.warning(f"To-do data file not found at {TODO_DATA_FILE}. Starting fresh.")
-        return {"channel_id": None, "message_ids": [], "items": []}
+        return {"channels": {}}
     try:
         with open(TODO_DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
 
+        # Migrate old single-channel format to multi-channel format
+        if "channel_id" in data or "items" in data:
+            logger.info("Migrating old single-channel format to multi-channel format")
+            old_channel_id = data.get("channel_id")
+            old_items = data.get("items", [])
+            old_message_ids = data.get("message_ids", [])
+            
+            # Create new format
+            new_data = {"channels": {}}
+            
+            # If there was an old channel, migrate it
+            if old_channel_id:
+                new_data["channels"][str(old_channel_id)] = {
+                    "message_ids": old_message_ids,
+                    "items": old_items
+                }
+            
+            # Save migrated data
+            save_todo_data(new_data)
+            data = new_data
+        
+        # Ensure channels dict exists
+        if "channels" not in data:
+            data["channels"] = {}
+
         # Migrate old items that don't have author info
-        for item in data.get("items", []):
-            if "author_id" not in item:
-                item["author_id"] = None
-                item["author_name"] = "Unknown"
-
-        # Migrate old single message_id to message_ids list
-        if "message_id" in data and data["message_id"] is not None:
-            if "message_ids" not in data or not data["message_ids"]:
-                data["message_ids"] = [data["message_id"]]
-            del data["message_id"]
-
-        # Ensure message_ids is a list
-        if "message_ids" not in data:
-            data["message_ids"] = []
+        for channel_id, channel_data in data["channels"].items():
+            for item in channel_data.get("items", []):
+                if "author_id" not in item:
+                    item["author_id"] = None
+                    item["author_name"] = "Unknown"
 
         return data
     except Exception as e:
         logger.error(f"Error loading to-do data: {e}")
-        return {"channel_id": None, "message_ids": [], "items": []}
+        return {"channels": {}}
 
 
 def save_todo_data(data: Dict[str, Any]) -> None:
@@ -67,6 +83,17 @@ def save_todo_data(data: Dict[str, Any]) -> None:
             json.dump(data, f, indent=4, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Error saving to-do data: {e}")
+
+
+async def get_channel_data(data: Dict[str, Any], channel_id: int) -> Dict[str, Any]:
+    """Get data for a specific channel, creating if doesn't exist."""
+    channel_key = str(channel_id)
+    if channel_key not in data["channels"]:
+        data["channels"][channel_key] = {
+            "message_ids": [],
+            "items": []
+        }
+    return data["channels"][channel_key]
 
 
 # === Priority emojis ===
@@ -84,6 +111,7 @@ class PrioritySelectView(discord.ui.View):
     def __init__(
         self,
         bot: commands.Bot,
+        channel_id: int,
         action: str = "add",
         item_index: Optional[int] = None,
         current_priority: Optional[str] = None,
@@ -91,6 +119,7 @@ class PrioritySelectView(discord.ui.View):
     ) -> None:
         super().__init__(timeout=60)
         self.bot = bot
+        self.channel_id = channel_id
         self.action = action
         self.item_index = item_index
         self.current_priority = current_priority or "low"
@@ -111,6 +140,7 @@ class PrioritySelectView(discord.ui.View):
     async def open_modal(self, interaction: discord.Interaction, priority: str) -> None:
         modal = TodoModal(
             self.bot,
+            channel_id=self.channel_id,
             action=self.action,
             item_index=self.item_index,
             default_priority=priority,
@@ -124,6 +154,7 @@ class TodoConfirmView(discord.ui.View):
     def __init__(
         self,
         bot: commands.Bot,
+        channel_id: int,
         formatted_task: Dict[str, str],
         priority: str,
         action: str,
@@ -133,6 +164,7 @@ class TodoConfirmView(discord.ui.View):
     ) -> None:
         super().__init__(timeout=60)
         self.bot = bot
+        self.channel_id = channel_id
         self.formatted_task = formatted_task
         self.priority = priority
         self.action = action
@@ -153,21 +185,22 @@ class TodoConfirmView(discord.ui.View):
 
         # Load current data
         data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
 
         if self.action == "add":
-            data["items"].append(new_item)
-            logger.info(f"To-do item added by {interaction.user}")
+            channel_data["items"].append(new_item)
+            logger.info(f"To-do item added to channel {self.channel_id} by {interaction.user}")
         elif self.action == "edit" and self.item_index is not None:
-            if 0 <= self.item_index < len(data["items"]):
-                data["items"][self.item_index] = new_item
-                logger.info(f"To-do item {self.item_index} edited by {interaction.user}")
+            if 0 <= self.item_index < len(channel_data["items"]):
+                channel_data["items"][self.item_index] = new_item
+                logger.info(f"To-do item {self.item_index} in channel {self.channel_id} edited by {interaction.user}")
 
         # Save data
         save_todo_data(data)
 
         # Update message
-        modal = TodoModal(self.bot)
-        await modal.update_todo_message(self.original_interaction, data)
+        modal = TodoModal(self.bot, channel_id=self.channel_id)
+        await modal.update_todo_message(self.original_interaction, data, self.channel_id)
 
         # Send confirmation
         await interaction.response.send_message("✅ To-do item added successfully!", ephemeral=True, delete_after=3)
@@ -203,6 +236,7 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
     def __init__(
         self,
         bot: commands.Bot,
+        channel_id: int = None,
         action: str = "add",
         item_index: Optional[int] = None,
         default_priority: str = "low",
@@ -210,6 +244,7 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
     ) -> None:
         super().__init__()
         self.bot = bot
+        self.channel_id = channel_id
         self.action = action
         self.item_index = item_index
         self.priority.default = default_priority
@@ -256,7 +291,15 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
             set_pink_footer(embed, bot=self.bot.user)
 
             # Create the view first, send with the view, then set the message reference
-            view = TodoConfirmView(self.bot, formatted_task, priority, self.action, self.item_index, interaction)
+            view = TodoConfirmView(
+                self.bot, 
+                self.channel_id, 
+                formatted_task, 
+                priority, 
+                self.action, 
+                self.item_index, 
+                interaction
+            )
             if view is None:
                 logger.error("Attempted to send preview message with view=None. This should never happen!")
                 await interaction.followup.send(
@@ -315,21 +358,22 @@ Rules:
         formatted = json.loads(result.strip())
         return formatted
 
-    async def update_todo_message(self, interaction: discord.Interaction, data: Dict[str, Any]) -> None:
+    async def update_todo_message(self, interaction: discord.Interaction, data: Dict[str, Any], channel_id: int) -> None:
         """Update or create the to-do list message in the channel."""
-        items = data["items"]
+        channel_data = await get_channel_data(data, channel_id)
+        items = channel_data["items"]
         total_items = len(items)
 
         # Delete old messages if exist
-        if data.get("message_ids") and data.get("channel_id"):
+        if channel_data.get("message_ids"):
             try:
-                old_channel = self.bot.get_channel(data["channel_id"])
-                if old_channel:
-                    for message_id in data["message_ids"]:
+                channel = self.bot.get_channel(channel_id)
+                if channel:
+                    for message_id in channel_data["message_ids"]:
                         try:
-                            old_message = await old_channel.fetch_message(message_id)
+                            old_message = await channel.fetch_message(message_id)
                             await old_message.delete()
-                            logger.info(f"Deleted old to-do message {message_id}")
+                            logger.info(f"Deleted old to-do message {message_id} in channel {channel_id}")
                         except Exception as e:
                             logger.warning(f"Could not delete old to-do message {message_id}: {e}")
             except Exception as e:
@@ -338,6 +382,7 @@ Rules:
         # Send messages with items, 12 per message
         max_per_embed = 12
         new_message_ids = []
+        channel = interaction.channel
         for i in range(0, total_items, max_per_embed):
             end = min(i + max_per_embed, total_items)
             embed_items = items[i:end]
@@ -349,15 +394,14 @@ Rules:
                 page_start=i + 1 if not is_first else None,
                 page_end=end if not is_first else None,
             )
-            new_message = await interaction.channel.send(embed=embed)
+            new_message = await channel.send(embed=embed)
             new_message_ids.append(new_message.id)
 
-        # Update data with new message info
-        data["channel_id"] = interaction.channel.id
-        data["message_ids"] = new_message_ids
+        # Update channel data with new message info
+        channel_data["message_ids"] = new_message_ids
         save_todo_data(data)
 
-        logger.info(f"Posted to-do messages in {interaction.channel}, messages {new_message_ids}")
+        logger.info(f"Posted to-do messages in channel {channel_id}, messages {new_message_ids}")
 
     def create_todo_embed(
         self,
@@ -439,9 +483,10 @@ Rules:
 
 # === View for managing to-do list ===
 class TodoManageView(discord.ui.View):
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot, channel_id: int) -> None:
         super().__init__(timeout=300)
         self.bot = bot
+        self.channel_id = channel_id
 
     @discord.ui.button(label="Add Item", style=discord.ButtonStyle.green, emoji="➕")
     async def add_item(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -461,7 +506,7 @@ class TodoManageView(discord.ui.View):
             color=PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
-        view = PrioritySelectView(self.bot, action="add")
+        view = PrioritySelectView(self.bot, self.channel_id, action="add")
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
 
     @discord.ui.button(label="Edit Item", style=discord.ButtonStyle.primary, emoji="✏️")
@@ -477,12 +522,13 @@ class TodoManageView(discord.ui.View):
 
         # Load data
         data = await load_todo_data()
-        if not data["items"]:
+        channel_data = await get_channel_data(data, self.channel_id)
+        if not channel_data["items"]:
             await interaction.response.send_message("❌ No items to edit!", ephemeral=True, delete_after=10)
             return
 
         # Create view with select
-        view = TodoEditSelectView(self.bot, data["items"])
+        view = TodoEditSelectView(self.bot, self.channel_id, channel_data["items"])
 
         embed = discord.Embed(title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK)
         set_pink_footer(embed, bot=self.bot.user)
@@ -502,12 +548,13 @@ class TodoManageView(discord.ui.View):
 
         # Load data
         data = await load_todo_data()
-        if not data["items"]:
+        channel_data = await get_channel_data(data, self.channel_id)
+        if not channel_data["items"]:
             await interaction.response.send_message("❌ No items to remove!", ephemeral=True, delete_after=10)
             return
 
         # Create view with select
-        view = TodoRemoveSelectView(self.bot, data["items"])
+        view = TodoRemoveSelectView(self.bot, self.channel_id, channel_data["items"])
 
         # Check if select was created
         if not view.select:
@@ -541,16 +588,17 @@ class TodoManageView(discord.ui.View):
         try:
             # Load data
             data = await load_todo_data()
+            channel_data = await get_channel_data(data, self.channel_id)
 
             # Clear all items
-            data["items"] = []
+            channel_data["items"] = []
             save_todo_data(data)
 
             # Update message
-            modal = TodoModal(self.bot)
-            await modal.update_todo_message(interaction, data)
+            modal = TodoModal(self.bot, channel_id=self.channel_id)
+            await modal.update_todo_message(interaction, data, self.channel_id)
 
-            logger.info(f"All to-do items cleared by {interaction.user}")
+            logger.info(f"All to-do items cleared in channel {self.channel_id} by {interaction.user}")
 
             # Send confirmation (stays for 3 seconds)
             confirm_msg = await interaction.followup.send("✅ All to-do items cleared!", ephemeral=True)
@@ -568,9 +616,10 @@ class TodoManageView(discord.ui.View):
 
 # === Select view for editing specific items ===
 class TodoEditSelectView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, items: List[Dict[str, Any]]) -> None:
+    def __init__(self, bot: commands.Bot, channel_id: int, items: List[Dict[str, Any]]) -> None:
         super().__init__(timeout=60)
         self.bot = bot
+        self.channel_id = channel_id
         self.items = items
 
         # Create select menu options
@@ -618,6 +667,7 @@ class TodoEditSelectView(discord.ui.View):
             set_pink_footer(embed, bot=self.bot.user)
             view = PrioritySelectView(
                 self.bot,
+                self.channel_id,
                 action="edit",
                 item_index=index,
                 current_priority=current_priority,
@@ -628,9 +678,10 @@ class TodoEditSelectView(discord.ui.View):
 
 # === Select view for removing specific items ===
 class TodoRemoveSelectView(discord.ui.View):
-    def __init__(self, bot: commands.Bot, items: List[Dict[str, Any]]) -> None:
+    def __init__(self, bot: commands.Bot, channel_id: int, items: List[Dict[str, Any]]) -> None:
         super().__init__(timeout=60)
         self.bot = bot
+        self.channel_id = channel_id
         self.items = items
 
         # Create select menu options
@@ -668,23 +719,24 @@ class TodoRemoveSelectView(discord.ui.View):
 
         # Load current data
         data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
         removed_items = []
 
         # Remove selected items (from end to start to avoid index issues)
         for index in indices:
-            if 0 <= index < len(data["items"]):
-                removed_items.append(data["items"].pop(index))
+            if 0 <= index < len(channel_data["items"]):
+                removed_items.append(channel_data["items"].pop(index))
 
         save_todo_data(data)
 
         # Update message
-        modal = TodoModal(self.bot)
+        modal = TodoModal(self.bot, channel_id=self.channel_id)
         await interaction.response.defer()
-        await modal.update_todo_message(interaction, data)
+        await modal.update_todo_message(interaction, data, self.channel_id)
 
         # Log removed items
         removed_titles = ", ".join([f"'{item['title']}'" for item in reversed(removed_items)])
-        logger.info(f"Removed {len(removed_items)} to-do item(s): {removed_titles} by {interaction.user}")
+        logger.info(f"Removed {len(removed_items)} to-do item(s) from channel {self.channel_id}: {removed_titles} by {interaction.user}")
 
         # Send confirmation
         confirm_msg = await interaction.followup.send(f"✅ Removed {len(removed_items)} item(s)!", ephemeral=True)
@@ -722,66 +774,68 @@ class TodoList(commands.Cog):
                 )
             return
 
-        # Check if command is used in the correct channel
+        # Get current channel
         channel = ctx_or_interaction.channel
-        if channel.id != TODO_CHANNEL_ID:
-            message = f"❌ This command can only be used in <#{TODO_CHANNEL_ID}>."
-            if hasattr(ctx_or_interaction, "send"):
-                await ctx_or_interaction.send(message, delete_after=5)
-            else:
-                await ctx_or_interaction.response.send_message(message, ephemeral=True, delete_after=10)
-            return
+        channel_id = channel.id
 
         # Show management view
         data = await load_todo_data()
+        channel_data = await get_channel_data(data, channel_id)
+        
         embed = discord.Embed(
             title="📋 To-Do List Management",
-            description="Use the buttons below to manage the server's to-do list.\n\n"
-            "**Current Items:** " + str(len(data["items"])),
+            description=f"Use the buttons below to manage the to-do list for <#{channel_id}>.\n\n"
+            "**Current Items:** " + str(len(channel_data["items"])),
             color=PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
 
-        view = TodoManageView(self.bot)
+        view = TodoManageView(self.bot, channel_id)
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed, view=view)
         else:
             await ctx_or_interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=30)
-        logger.info(f"todo-update used by {user} in {ctx_or_interaction.guild}")
+        logger.info(f"todo-update used by {user} in channel {channel_id}")
 
     # 🧩 Shared handler for todo-show logic
     async def handle_todo_show(self, ctx_or_interaction: Any) -> None:
         """Shared handler for todo-show command."""
+        # Get current channel
+        channel = ctx_or_interaction.channel
+        channel_id = channel.id
+        
         data = await load_todo_data()
+        channel_data = await get_channel_data(data, channel_id)
 
-        if not data["items"]:
-            message = "📋 The to-do list is currently empty!"
+        if not channel_data["items"]:
+            message = f"📋 The to-do list for <#{channel_id}> is currently empty!"
             if hasattr(ctx_or_interaction, "send"):
                 await ctx_or_interaction.send(message)
             else:
                 await ctx_or_interaction.response.send_message(message, ephemeral=True)
             return
 
-        modal = TodoModal(self.bot)
-        embed = modal.create_todo_embed(data["items"], is_first=True, total_items=len(data["items"]))
+        modal = TodoModal(self.bot, channel_id=channel_id)
+        embed = modal.create_todo_embed(channel_data["items"], is_first=True, total_items=len(channel_data["items"]))
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed)
         else:
             await ctx_or_interaction.response.send_message(embed=embed, ephemeral=False)
 
         user = ctx_or_interaction.author if hasattr(ctx_or_interaction, "author") else ctx_or_interaction.user
-        logger.info(f"todo-update used by {user} in {ctx_or_interaction.guild}")
+        logger.info(f"todo-show used by {user} in channel {channel_id}")
 
     # !todo-update (Prefix) - Mod/Admin only
     @commands.command(name="todo-update")
     async def todo_update_prefix(self, ctx: commands.Context) -> None:
         """
-        📋 Update the server's to-do list with interactive buttons. (Mod/Admin only)
+        📋 Update the to-do list for this channel with interactive buttons. (Mod/Admin only)
+        Each channel can have its own independent to-do list.
         """
         await self.handle_todo_update(ctx)
 
     # /todo-update (Slash) - Mod/Admin only
-    @app_commands.command(name="todo-update", description="📋 Update the server's to-do list with interactive buttons.")
+    @app_commands.command(name="todo-update", description="📋 Update the to-do list for this channel with interactive buttons.")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def todo_update_slash(self, interaction: discord.Interaction) -> None:
         await self.handle_todo_update(interaction)

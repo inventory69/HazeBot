@@ -11,6 +11,16 @@ load_dotenv()
 
 # === General Bot Settings ===
 LogLevel = logging.INFO  # Set the logging level (INFO, DEBUG, WARNING, ERROR, CRITICAL)
+
+# Per-Cog Log Levels: Override the global LogLevel for specific cogs
+# Leave a cog out of this dict to use the global LogLevel
+COG_LOG_LEVELS = {
+    "RocketLeague": logging.DEBUG,  # Set RocketLeague to DEBUG for detailed logging
+    # "DailyMeme": logging.WARNING,  # Example: Only show warnings and errors for DailyMeme
+    # "Welcome": logging.ERROR,  # Example: Only show errors for Welcome
+    # Add more cogs here as needed
+}
+
 CommandPrefix = "!"  # Prefix for text-based commands (e.g., !help)
 BotName = "Haze World Bot"  # Display name of the bot
 Intents = discord.Intents.default()  # Default intents
