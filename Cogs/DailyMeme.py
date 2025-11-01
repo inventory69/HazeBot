@@ -291,7 +291,9 @@ class DailyMeme(commands.Cog):
         # Configure and start the daily meme task with saved settings
         hour = self.daily_config.get("hour", 12)
         minute = self.daily_config.get("minute", 0)
-        self.daily_meme_task.change_interval(time=time(hour=hour, minute=minute))
+        # Assuming local time is CET (UTC+1), convert to UTC for server
+        adjusted_hour = (hour - 1) % 24
+        self.daily_meme_task.change_interval(time=time(hour=adjusted_hour, minute=minute))
 
         if self.daily_config.get("enabled", True) and not self.daily_meme_task.is_running():
             self.daily_meme_task.start()
@@ -868,17 +870,19 @@ class DailyMeme(commands.Cog):
 
     def restart_daily_task(self):
         """Restart the daily meme task with updated time"""
-        if self.daily_meme_task.is_running():
-            self.daily_meme_task.cancel()
-
         # Update task time
         hour = self.daily_config.get("hour", 12)
         minute = self.daily_config.get("minute", 0)
-        self.daily_meme_task.change_interval(time=time(hour=hour, minute=minute))
+        # Assuming local time is CET (UTC+1), convert to UTC for server
+        adjusted_hour = (hour - 1) % 24
+        self.daily_meme_task.change_interval(time=time(hour=adjusted_hour, minute=minute))
 
-        if self.daily_config.get("enabled", True):
+        if self.daily_meme_task.is_running():
+            # Task is already running, just update the interval
+            logger.info(f"Daily meme task interval updated for {hour:02d}:{minute:02d}")
+        elif self.daily_config.get("enabled", True):
             self.daily_meme_task.start()
-            logger.info(f"Daily meme task restarted for {hour:02d}:{minute:02d}")
+            logger.info(f"Daily meme task started for {hour:02d}:{minute:02d}")
         else:
             logger.info("Daily meme task stopped (disabled)")
 
