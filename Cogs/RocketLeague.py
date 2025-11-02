@@ -765,18 +765,15 @@ class RocketLeague(commands.Cog):
 
                             emoji = RANK_EMOJIS.get(new_tier, "<:unranked:1425389712276721725>")
                             icon_url = new_icon_urls.get(playlist)
-                            
+
                             # Send notification using config
                             config = RL_RANK_PROMOTION_CONFIG
                             notification_msg = config["notification_prefix"].format(user=user.mention)
                             await channel.send(notification_msg)
-                            
+
                             # Create embed using config
                             embed_description = config["embed_description"].format(
-                                user=user.mention,
-                                playlist=playlist,
-                                emoji=emoji,
-                                rank=new_tier
+                                user=user.mention, playlist=playlist, emoji=emoji, rank=new_tier
                             )
                             embed = discord.Embed(
                                 title=config["embed_title"],

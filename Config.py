@@ -89,6 +89,7 @@ COG_PREFIXES = {
     "DailyMeme": "🎭 [DailyMeme]",
     "DiscordLogging": "📡 [DiscordLogging]",
     "Leaderboard": "🏆 [Leaderboard]",
+    "MemeGenerator": "🎨 [MemeGenerator]",
     "ModPerks": "🛡️ [ModPerks]",
     "Preferences": "⚙️ [Preferences]",
     "Presence": "👤 [Presence]",
@@ -363,7 +364,8 @@ RULES_TEXT = (
     "🚫 **4. Illegal content and hate speech are strictly forbidden anywhere on the server.**\n"
     "🧑‍💼 **5. Follow the instructions of staff and moderators.**\n"
     "💖 **6. Keep the atmosphere calm, considerate, and positive.**\n\n"
-    "By clicking 'Accept Rules' you agree to these guidelines and unlock full access to the server. Welcome to the lounge — enjoy your stay!"
+    "By clicking 'Accept Rules' you agree to these guidelines and "
+    "unlock full access to the server. Welcome to the lounge — enjoy your stay!"
 )
 
 # Welcome Messages (use {name} for username placeholder)
@@ -406,7 +408,8 @@ RL_CONGRATS_VIEWS_FILE = f"{DATA_DIR}/rl_congrats_views.json"
 
 # Rank Check Configuration
 RL_RANK_CHECK_INTERVAL_HOURS = 3  # How often to check for rank changes
-RL_RANK_CACHE_TTL_SECONDS = 10500  # Cache duration (2h 55min) - slightly less than check interval to avoid race conditions
+# Cache duration (2h 55min) - slightly less than check interval to avoid race conditions
+RL_RANK_CACHE_TTL_SECONDS = 10500
 
 # Rank Tier Order (lowest to highest)
 RL_TIER_ORDER = [
@@ -523,6 +526,12 @@ MEME_SOURCES = [
     "lemmy",
 ]
 
+# Meme Generator Configuration (Imgflip API)
+IMGFLIP_USERNAME = os.getenv("IMGFLIP_USERNAME", "")
+IMGFLIP_PASSWORD = os.getenv("IMGFLIP_PASSWORD", "")
+MEME_TEMPLATES_CACHE_FILE = f"{DATA_DIR}/meme_templates.json"
+MEME_TEMPLATES_CACHE_DURATION = 86400  # 24 hours
+
 
 # ============================================================================
 # OTHER COG DATA FILES
@@ -530,4 +539,3 @@ MEME_SOURCES = [
 
 MOD_DATA_FILE = f"{DATA_DIR}/mod_data.json"
 ACTIVITY_FILE = f"{DATA_DIR}/activity.json"
-

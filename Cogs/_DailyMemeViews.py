@@ -49,6 +49,9 @@ class MemeHubView(discord.ui.View):
         # Add "Choose Source" button for all users
         self.add_item(ChooseSourceButton(post_to_channel_id=post_to_channel_id))
 
+        # Add "Meme Generator" button for all users
+        self.add_item(MemeGeneratorHubButton(post_to_channel_id=post_to_channel_id))
+
         # Add management buttons only for mods/admins
         if is_admin_or_mod:
             self.add_item(SubredditManagementButton())
@@ -137,6 +140,26 @@ class ChooseSourceButton(discord.ui.Button):
         set_pink_footer(embed, bot=interaction.client.user)
         view = SourceSelectionView(cog, post_to_channel_id=self.post_to_channel_id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+class MemeGeneratorHubButton(discord.ui.Button):
+    """Button to open the Meme Generator Hub"""
+
+    def __init__(self, post_to_channel_id: int = None):
+        super().__init__(label="🎨 Meme Generator", style=discord.ButtonStyle.success, row=0)
+        self.post_to_channel_id = post_to_channel_id
+
+    async def callback(self, interaction: discord.Interaction):
+        from .MemeGenerator import MemeGenerator
+
+        cog: MemeGenerator = interaction.client.get_cog("MemeGenerator")
+
+        if not cog:
+            await interaction.response.send_message("❌ Meme Generator is not loaded!", ephemeral=True)
+            return
+
+        # Open the Meme Generator Hub with channel context
+        await cog.show_meme_generator_hub(interaction, post_to_channel_id=self.post_to_channel_id)
 
 
 class SourceSelectionView(discord.ui.View):
