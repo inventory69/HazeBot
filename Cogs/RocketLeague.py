@@ -18,6 +18,10 @@ from Config import (
     get_guild_id,
     RL_CHANNEL_ID,
     RL_CONGRATS_VIEWS_FILE,
+    RL_RANK_PROMOTION_CONFIG,
+    RL_CONGRATS_REPLIES,
+    RL_RANK_CHECK_INTERVAL_HOURS,
+    RL_RANK_CACHE_TTL_SECONDS,
 )
 
 from Utils.EmbedUtils import set_pink_footer
@@ -232,19 +236,9 @@ class CongratsButton(discord.ui.Button):
         if user == self.parent_view.ranked_user:
             await interaction.followup.send("You can't congratulate yourself! 😄", ephemeral=True)
             return
-        congrats_replies = [
-            f"Inventory alert: {user.mention} congratulates {self.parent_view.ranked_user.mention} on the rank up! 📦",
-            f"{user.mention} throws confetti for {self.parent_view.ranked_user.mention}'s epic rank promotion! 🎊",
-            f"New achievement unlocked: {user.mention} cheers for {self.parent_view.ranked_user.mention}! 🏆",
-            f"{user.mention} adds extra vibes to {self.parent_view.ranked_user.mention}'s rank up celebration! ✨",
-            f"Chillventory update: {user.mention} says congrats to {self.parent_view.ranked_user.mention}! 😎",
-            f"{user.mention} shares positivity confetti for {self.parent_view.ranked_user.mention}'s promotion! 🎉",
-            f"Rank stash expanded: {user.mention} greets {self.parent_view.ranked_user.mention}'s new tier! 🌟",
-            f"{user.mention} discovers {self.parent_view.ranked_user.mention} in the champion inventory! 🏅",
-            f"Realm of ranks welcomes {self.parent_view.ranked_user.mention}'s upgrade via {user.mention}! 🚀",
-            f"{user.mention} throws a party for {self.parent_view.ranked_user.mention}'s rank advancement! 🎈",
-        ]
-        reply = random.choice(congrats_replies)
+        # Get random congrats reply from config
+        reply_template = random.choice(RL_CONGRATS_REPLIES)
+        reply = reply_template.format(user=user.mention, ranked_user=self.parent_view.ranked_user.mention)
         await interaction.followup.send(reply)
         logger.info(f"{user} congratulated {self.parent_view.ranked_user} on rank up")
 
@@ -617,8 +611,8 @@ class RocketLeague(commands.Cog):
                 await asyncio.sleep(30)
             return result
 
-        # Cache for 1 hour (3600 seconds) since RL ranks don't change that frequently
-        return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=3600)
+        # Cache using configured TTL
+        return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=RL_RANK_CACHE_TTL_SECONDS)
 
     async def _get_rl_account(self, user_id: int, platform: Optional[str], username: Optional[str]) -> Tuple[str, str]:
         """
@@ -704,11 +698,11 @@ class RocketLeague(commands.Cog):
                 if last_fetched_str:
                     last_fetched = datetime.fromisoformat(last_fetched_str)
                     time_since_last = now - last_fetched
-                    if time_since_last < timedelta(hours=1):
+                    if time_since_last < timedelta(hours=RL_RANK_CHECK_INTERVAL_HOURS):
                         logger.debug(
                             f"Skipping {data['username']} - last checked {time_since_last.total_seconds() / 60:.1f} minutes ago"
                         )
-                        continue  # Skip if less than 1 hour
+                        continue  # Skip if less than configured interval
                 else:
                     logger.info(f"No last_fetched timestamp for {data['username']}, will check ranks")
             platform = data["platform"]
@@ -771,11 +765,22 @@ class RocketLeague(commands.Cog):
 
                             emoji = RANK_EMOJIS.get(new_tier, "<:unranked:1425389712276721725>")
                             icon_url = new_icon_urls.get(playlist)
-                            # Sende die Notification als separate Nachricht vor dem Embed
-                            await channel.send(f"{user.mention} 🚀 Rank Promotion Notification!")
+                            
+                            # Send notification using config
+                            config = RL_RANK_PROMOTION_CONFIG
+                            notification_msg = config["notification_prefix"].format(user=user.mention)
+                            await channel.send(notification_msg)
+                            
+                            # Create embed using config
+                            embed_description = config["embed_description"].format(
+                                user=user.mention,
+                                playlist=playlist,
+                                emoji=emoji,
+                                rank=new_tier
+                            )
                             embed = discord.Embed(
-                                title="🎉 Rank Promotion! 🎉",
-                                description=f"Congratulations {user.mention}! Your {playlist} rank has improved to {emoji} {new_tier}!",
+                                title=config["embed_title"],
+                                description=embed_description,
                                 color=PINK,
                             )
                             if icon_url:
@@ -809,10 +814,10 @@ class RocketLeague(commands.Cog):
                 logger.warning(f"Failed to fetch stats for {username} ({platform})")
         logger.info("Rank check completed.")
 
-    @tasks.loop(hours=1)
+    @tasks.loop(hours=RL_RANK_CHECK_INTERVAL_HOURS)
     async def check_ranks(self) -> None:
         """
-        Check for rank promotions every hour.
+        Check for rank promotions at configured interval.
         """
         await self._check_and_update_ranks(force=False)
 

@@ -14,36 +14,15 @@ from Config import (
     MEMBER_ROLE_ID,
     PERSISTENT_VIEWS_FILE,
     ACTIVE_RULES_VIEWS_FILE,
+    SERVER_GUIDE_CHANNEL_ID,
+    RULES_TEXT,
+    WELCOME_MESSAGES,
+    WELCOME_BUTTON_REPLIES,
 )
 from Utils.EmbedUtils import set_pink_footer
 import logging
 
 logger = logging.getLogger(__name__)
-
-# Polished rules text shown to new members
-RULES_TEXT = (
-    "🌿 **1. Be kind and respectful to everyone.**\n"
-    "✨ **2. No spam, flooding, or excessive self-promotion.**\n"
-    "🔞 **3. NSFW content is permitted only inside a clearly labeled, age-verified channel.**\n"
-    "🚫 **4. Illegal content and hate speech are strictly forbidden anywhere on the server.**\n"
-    "🧑‍💼 **5. Follow the instructions of staff and moderators.**\n"
-    "💖 **6. Keep the atmosphere calm, considerate, and positive.**\n\n"
-    "By clicking 'Accept Rules' you agree to these guidelines and unlock full access to the server. Welcome to the lounge — enjoy your stay!"
-)
-
-# Funny welcome messages for public channel (use {name} for username)
-WELCOME_MESSAGES = [
-    "Welcome {name}! The chill inventory just gained a legendary item — you. 🌿",
-    "Hey {name}, you unlocked the secret stash of good vibes. Proceed to sofa extraction. ✨🛋️",
-    "{name} has joined the inventarium. Claim your complimentary imaginary hammock. 😎",
-    "Give it up for {name}, our newest collector of zen moments and midnight memes. 🧘‍♂️🔥",
-    "{name}, you found the legendary lounge zone — free snacks not included but vibes guaranteed. 🚀",
-    "Inventory update: {name} added. Please store your worries in the lost-and-found. 😁",
-    "Alert: {name} has entered the realm of ultimate relaxation. Please mind the plants. 🌱",
-    "Welcome {name}! May your inventory be full of chill, memes, and excellent tea. 🎉🍵",
-    "New item in stock: {name}, the ultimate chill curator. Limited edition energy. 📦✨",
-    "{name} discovered the hidden lounge of positivity — badge unlocked, mission: unwind. 🌟",
-]
 
 
 class InterestSelect(discord.ui.Select):
@@ -169,6 +148,12 @@ class AcceptRulesButton(discord.ui.Button):
                 name="📅 Joined At",
                 value=member.joined_at.strftime("%B %d, %Y"),
                 inline=True,
+            )
+            # Add Server Guide link
+            embed.add_field(
+                name="📖 Get Started",
+                value=f"Check out our <#{SERVER_GUIDE_CHANNEL_ID}> to explore all features!",
+                inline=False,
             )
             embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
             embed.set_footer(
@@ -351,22 +336,9 @@ class WelcomeButton(discord.ui.Button):
         if user == self.parent_view.new_member:
             await interaction.followup.send("You can't welcome yourself! 😄", ephemeral=True)
             return
-        # Epic welcome replies with maximum inventory vibes ✨
-        welcome_replies = [
-            f"🎊 **LEGENDARY DROP!** {user.mention} just summoned {self.parent_view.new_member.mention} into the chillventory vault! 📦",
-            f"✨ {user.mention} equipped {self.parent_view.new_member.mention} with *Infinite Good Vibes +99* — welcome buff activated! 💫",
-            f"📦 **New inventory slot unlocked!** {user.mention} warmly stores {self.parent_view.new_member.mention} in the premium lounge section! 🛋️",
-            f"🌟 Achievement unlocked: {user.mention} successfully welcomed {self.parent_view.new_member.mention}! Friendship XP +100 🎮",
-            f"🛋️ **Sofa reservation confirmed!** {user.mention} rolls out the red carpet for {self.parent_view.new_member.mention}! 🎭",
-            f"🎨 {user.mention} adds a splash of positivity paint to {self.parent_view.new_member.mention}'s welcome canvas! Masterpiece! 🖼️",
-            f"🌿 **Rare plant spotted!** {user.mention} places {self.parent_view.new_member.mention} in the zen garden of eternal chill! 🧘",
-            f"🎉 {user.mention} throws legendary confetti bombs for {self.parent_view.new_member.mention}! The lounge is now 200% more sparkly! ✨",
-            f"🔥 **Epic combo!** {user.mention} + {self.parent_view.new_member.mention} = Maximum vibes unlocked! The inventory is blessed! 🙏",
-            f"💎 {user.mention} just found a rare gem: {self.parent_view.new_member.mention}! Added to the collection of awesome people! 💖",
-            f"🚀 **Mission success!** Agent {user.mention} has secured {self.parent_view.new_member.mention} for the chill squad! Welcome aboard! 🎯",
-            f"🧘 {user.mention} transmits good energy waves to {self.parent_view.new_member.mention}! Harmony level: MAXIMUM! 🌊",
-        ]
-        reply = random.choice(welcome_replies)
+        # Get random welcome reply from config
+        reply_template = random.choice(WELCOME_BUTTON_REPLIES)
+        reply = reply_template.format(user=user.mention, new_member=self.parent_view.new_member.mention)
         reply_msg = await interaction.followup.send(reply)
         # Store the reply message for cleanup
         member_id = self.parent_view.new_member.id
@@ -421,6 +393,7 @@ class Welcome(commands.Cog):
                     "**Follow these steps to unlock the server:**\n"
                     "1. Select how you want to contribute (you can choose multiple).\n"
                     "2. Click 'Accept Rules' to agree and get access!\n\n"
+                    f"💡 **After unlocking:** Visit <#{SERVER_GUIDE_CHANNEL_ID}> to explore all features and commands!\n\n"
                     "⏰ **Note:** You have **15 minutes** to complete this. If not, you'll be kicked from the server.\n"
                     "📝 **Privacy:** This message is public, but your selections and responses are only visible to you."
                 ),
