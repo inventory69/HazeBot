@@ -1,5 +1,9 @@
-# Configuration file for HazeWorldBot
-# This file contains all global constants and settings used across the bot's cogs and modules.
+# ============================================================================
+# Configuration file for HazeBot
+# ============================================================================
+# This file contains all global constants and settings used across the bot's
+# cogs and modules. Settings are organized by category for easy maintenance.
+# ============================================================================
 
 import discord
 import logging
@@ -9,36 +13,12 @@ import os
 # Load environment variables from .env file
 load_dotenv()
 
-# === General Bot Settings ===
-LogLevel = logging.INFO  # Set the logging level (INFO, DEBUG, WARNING, ERROR, CRITICAL)
 
-# Per-Cog Log Levels: Override the global LogLevel for specific cogs
-# Leave a cog out of this dict to use the global LogLevel
-COG_LOG_LEVELS = {
-    "RocketLeague": logging.DEBUG,  # Set RocketLeague to DEBUG for detailed logging
-    # "DailyMeme": logging.WARNING,  # Example: Only show warnings and errors for DailyMeme
-    # "Welcome": logging.ERROR,  # Example: Only show errors for Welcome
-    # Add more cogs here as needed
-}
+# ============================================================================
+# ENVIRONMENT & MODE CONFIGURATION
+# ============================================================================
 
-CommandPrefix = "!"  # Prefix for text-based commands (e.g., !help)
-BotName = "Haze World Bot"  # Display name of the bot
-Intents = discord.Intents.default()  # Default intents
-Intents.members = True  # Enable access to member information (e.g., for role checks)
-Intents.message_content = True  # Enable access to message content (required for command parsing)
-PresenceUpdateInterval = 3600  # Time in seconds between bot presence updates (e.g., status changes)
-PINK = discord.Color(0xAD1457)  # Hot Pink color used for embeds and UI elements
-FuzzyMatchingThreshold = 0.6  # Similarity threshold for fuzzy command matching (0.0 to 1.0, higher = stricter)
-MessageCooldown = 5  # Cooldown in seconds between user messages to prevent spam
-
-# === Role Display Names ===
-ROLE_NAMES = {
-    "user": "🎒 Lootling",
-    "mod": "📦 Slot Keeper",
-    "admin": "🧊 Inventory Master",
-}
-
-# === Environment-based Configuration ===
+# Production mode switch (set via .env file)
 PROD_MODE = os.getenv("PROD_MODE", "false").lower() == "true"
 
 # Bot token selection based on PROD_MODE
@@ -51,108 +31,56 @@ GUILD_ID = int(os.getenv("DISCORD_GUILD_ID" if PROD_MODE else "DISCORD_TEST_GUIL
 DATA_DIR = "Data" if PROD_MODE else "TestData"
 
 
-# Helper function to get current guild ID (for use in other files)
+# Helper functions
 def get_guild_id():
     """Returns the current guild ID based on PROD_MODE"""
     return GUILD_ID
 
 
-# Helper function to get current data directory (for use in other files)
 def get_data_dir():
     """Returns the current data directory based on PROD_MODE"""
     return DATA_DIR
 
 
-# Production IDs (Main Discord Server)
-PROD_IDS = {
-    "ADMIN_ROLE_ID": 1424466881862959294,
-    "MODERATOR_ROLE_ID": 1427219729960931449,
-    "NORMAL_ROLE_ID": 1424161475718807562,
-    "MEMBER_ROLE_ID": 1424161475718807562,
-    "CHANGELOG_ROLE_ID": 1426314743278473307,
-    "CHANGELOG_CHANNEL_ID": 1424859282284871752,
-    "INTEREST_ROLE_IDS": [
-        1424465865297887345,  # Chat & Memes
-        1424465951792828477,  # Creative Vibes
-        1424466003102007359,  # Gaming & Chill
-        1424466081547817183,  # Ideas & Projects
-        1424466456866852956,  # Development
-        1424466150330466434,  # Tech & Support
-        1424466239618810019,  # Just Browsing
-    ],
-    "INTEREST_ROLES": {
-        "Chat & Memes": 1424465865297887345,
-        "Creative Vibes": 1424465951792828477,
-        "Gaming & Chill": 1424466003102007359,
-        "Ideas & Projects": 1424466081547817183,
-        "Development": 1424466456866852956,
-        "Tech & Support": 1424466150330466434,
-        "Just Browsing": 1424466239618810019,
-    },
-    "TICKETS_CATEGORY_ID": 1426113555974979625,
-    "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
-    "WELCOME_RULES_CHANNEL_ID": 1424724535923703968,
-    "WELCOME_PUBLIC_CHANNEL_ID": 1424164269775392858,
-    "TODO_CHANNEL_ID": 1424862421650247730,
-    "RL_CHANNEL_ID": 1425472657293443236,
-    "MEME_CHANNEL_ID": 1433414228840284252,
-    "MEME_ROLE_ID": 1433415594463596567,
-    "LOG_CHANNEL_ID": 1433187806347526244,  # Discord logging channel (PROD)
+# ============================================================================
+# GENERAL BOT SETTINGS
+# ============================================================================
+
+BotName = "Haze World Bot"
+CommandPrefix = "!"
+PresenceUpdateInterval = 3600  # seconds between presence updates
+MessageCooldown = 5  # seconds between user messages
+FuzzyMatchingThreshold = 0.6  # similarity threshold (0.0-1.0)
+
+# Discord Intents
+Intents = discord.Intents.default()
+Intents.members = True
+Intents.message_content = True
+
+# Color Scheme
+PINK = discord.Color(0xAD1457)
+
+# Role Display Names
+ROLE_NAMES = {
+    "user": "🎒 Lootling",
+    "mod": "📦 Slot Keeper",
+    "admin": "🧊 Inventory Master",
 }
 
-# Test IDs (Test Discord Server)
-TEST_IDS = {
-    "ADMIN_ROLE_ID": 1429722580608225340,
-    "MODERATOR_ROLE_ID": 1429724374746923061,
-    "NORMAL_ROLE_ID": 1429722417428692992,
-    "MEMBER_ROLE_ID": 1429722417428692992,
-    "CHANGELOG_ROLE_ID": 1429726011771060344,
-    "CHANGELOG_CHANNEL_ID": 1429724050305056819,
-    "INTEREST_ROLE_IDS": [
-        1429725562074566656,
-        1429725652667596840,
-        1429725708003049543,
-        1429725752047173745,
-        1429725801443758131,
-        1429725837078560859,
-        1429725869743538237,
-    ],
-    "INTEREST_ROLES": {
-        "Chat & Memes": 1429725562074566656,
-        "Creative Vibes": 1429725652667596840,
-        "Gaming & Chill": 1429725708003049543,
-        "Ideas & Projects": 1429725752047173745,
-        "Development": 1429725801443758131,
-        "Tech & Support": 1429725837078560859,
-        "Just Browsing": 1429725869743538237,
-    },
-    "TICKETS_CATEGORY_ID": 1429723767445389352,
-    "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
-    "WELCOME_RULES_CHANNEL_ID": 1429722359534718976,
-    "WELCOME_PUBLIC_CHANNEL_ID": 1429722992857976854,
-    "TODO_CHANNEL_ID": 1429724097570541618,
-    "RL_CHANNEL_ID": 1429804818481938463,
-    "MEME_CHANNEL_ID": 1433416191204003960,
-    "MEME_ROLE_ID": 1433416262062702686,
-    "LOG_CHANNEL_ID": 1433187651191701688,  # Discord logging channel (TEST)
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+# Global log level
+LogLevel = logging.INFO
+
+# Per-Cog Log Levels (override global level for specific cogs)
+COG_LOG_LEVELS = {
+    "RocketLeague": logging.DEBUG,
+    # "DailyMeme": logging.WARNING,
+    # "Welcome": logging.ERROR,
 }
-
-# Select IDs based on PROD_MODE
-CURRENT_IDS = PROD_IDS if PROD_MODE else TEST_IDS
-
-# === Roles and Permissions ===
-ADMIN_ROLE_ID = CURRENT_IDS["ADMIN_ROLE_ID"]
-MODERATOR_ROLE_ID = CURRENT_IDS["MODERATOR_ROLE_ID"]
-NORMAL_ROLE_ID = CURRENT_IDS["NORMAL_ROLE_ID"]
-MEMBER_ROLE_ID = CURRENT_IDS["MEMBER_ROLE_ID"]
-CHANGELOG_ROLE_ID = CURRENT_IDS["CHANGELOG_ROLE_ID"]
-CHANGELOG_CHANNEL_ID = CURRENT_IDS["CHANGELOG_CHANNEL_ID"]
-
-INTEREST_ROLE_IDS = CURRENT_IDS["INTEREST_ROLE_IDS"]
-INTEREST_ROLES = CURRENT_IDS["INTEREST_ROLES"]
-
-# === Logging ===
-LOG_CHANNEL_ID = CURRENT_IDS["LOG_CHANNEL_ID"]
 
 # Cog prefixes for logging (emoji + label)
 COG_PREFIXES = {
@@ -176,7 +104,142 @@ COG_PREFIXES = {
     "Welcome": "👋 [Welcome]",
 }
 
-# === Commands ===
+
+# ============================================================================
+# DISCORD SERVER IDS (Production & Test)
+# ============================================================================
+
+# Production IDs (Main Discord Server)
+PROD_IDS = {
+    # Roles
+    "ADMIN_ROLE_ID": 1424466881862959294,
+    "MODERATOR_ROLE_ID": 1427219729960931449,
+    "NORMAL_ROLE_ID": 1424161475718807562,
+    "MEMBER_ROLE_ID": 1424161475718807562,
+    "CHANGELOG_ROLE_ID": 1426314743278473307,
+    "MEME_ROLE_ID": 1433415594463596567,
+    # Interest Roles
+    "INTEREST_ROLE_IDS": [
+        1424465865297887345,  # Chat & Memes
+        1424465951792828477,  # Creative Vibes
+        1424466003102007359,  # Gaming & Chill
+        1424466081547817183,  # Ideas & Projects
+        1424466456866852956,  # Development
+        1424466150330466434,  # Tech & Support
+        1424466239618810019,  # Just Browsing
+    ],
+    "INTEREST_ROLES": {
+        "Chat & Memes": 1424465865297887345,
+        "Creative Vibes": 1424465951792828477,
+        "Gaming & Chill": 1424466003102007359,
+        "Ideas & Projects": 1424466081547817183,
+        "Development": 1424466456866852956,
+        "Tech & Support": 1424466150330466434,
+        "Just Browsing": 1424466239618810019,
+    },
+    # Channels
+    "CHANGELOG_CHANNEL_ID": 1424859282284871752,
+    "LOG_CHANNEL_ID": 1433187806347526244,
+    "WELCOME_RULES_CHANNEL_ID": 1424724535923703968,
+    "WELCOME_PUBLIC_CHANNEL_ID": 1424164269775392858,
+    "TODO_CHANNEL_ID": 1424862421650247730,
+    "RL_CHANNEL_ID": 1425472657293443236,
+    "MEME_CHANNEL_ID": 1433414228840284252,
+    "SERVER_GUIDE_CHANNEL_ID": 1428693601268928582,
+    "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
+    # Categories
+    "TICKETS_CATEGORY_ID": 1426113555974979625,
+}
+
+# Test IDs (Test Discord Server)
+TEST_IDS = {
+    # Roles
+    "ADMIN_ROLE_ID": 1429722580608225340,
+    "MODERATOR_ROLE_ID": 1429724374746923061,
+    "NORMAL_ROLE_ID": 1429722417428692992,
+    "MEMBER_ROLE_ID": 1429722417428692992,
+    "CHANGELOG_ROLE_ID": 1429726011771060344,
+    "MEME_ROLE_ID": 1433416262062702686,
+    # Interest Roles
+    "INTEREST_ROLE_IDS": [
+        1429725562074566656,
+        1429725652667596840,
+        1429725708003049543,
+        1429725752047173745,
+        1429725801443758131,
+        1429725837078560859,
+        1429725869743538237,
+    ],
+    "INTEREST_ROLES": {
+        "Chat & Memes": 1429725562074566656,
+        "Creative Vibes": 1429725652667596840,
+        "Gaming & Chill": 1429725708003049543,
+        "Ideas & Projects": 1429725752047173745,
+        "Development": 1429725801443758131,
+        "Tech & Support": 1429725837078560859,
+        "Just Browsing": 1429725869743538237,
+    },
+    # Channels
+    "CHANGELOG_CHANNEL_ID": 1429724050305056819,
+    "LOG_CHANNEL_ID": 1433187651191701688,
+    "WELCOME_RULES_CHANNEL_ID": 1429722359534718976,
+    "WELCOME_PUBLIC_CHANNEL_ID": 1429722992857976854,
+    "TODO_CHANNEL_ID": 1429724097570541618,
+    "RL_CHANNEL_ID": 1429804818481938463,
+    "MEME_CHANNEL_ID": 1433416191204003960,
+    "SERVER_GUIDE_CHANNEL_ID": 1429723224320770078,
+    "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
+    # Categories
+    "TICKETS_CATEGORY_ID": 1429723767445389352,
+}
+
+# Select active IDs based on PROD_MODE
+CURRENT_IDS = PROD_IDS if PROD_MODE else TEST_IDS
+
+
+# ============================================================================
+# ROLES & PERMISSIONS
+# ============================================================================
+
+ADMIN_ROLE_ID = CURRENT_IDS["ADMIN_ROLE_ID"]
+MODERATOR_ROLE_ID = CURRENT_IDS["MODERATOR_ROLE_ID"]
+NORMAL_ROLE_ID = CURRENT_IDS["NORMAL_ROLE_ID"]
+MEMBER_ROLE_ID = CURRENT_IDS["MEMBER_ROLE_ID"]
+CHANGELOG_ROLE_ID = CURRENT_IDS["CHANGELOG_ROLE_ID"]
+
+INTEREST_ROLE_IDS = CURRENT_IDS["INTEREST_ROLE_IDS"]
+INTEREST_ROLES = CURRENT_IDS["INTEREST_ROLES"]
+
+
+# ============================================================================
+# CHANNELS & CATEGORIES
+# ============================================================================
+
+# General Channels
+LOG_CHANNEL_ID = CURRENT_IDS["LOG_CHANNEL_ID"]
+CHANGELOG_CHANNEL_ID = CURRENT_IDS["CHANGELOG_CHANNEL_ID"]
+
+# Feature Channels
+TODO_CHANNEL_ID = CURRENT_IDS["TODO_CHANNEL_ID"]
+RL_CHANNEL_ID = CURRENT_IDS["RL_CHANNEL_ID"]
+MEME_CHANNEL_ID = CURRENT_IDS.get("MEME_CHANNEL_ID")
+MEME_ROLE_ID = CURRENT_IDS.get("MEME_ROLE_ID")
+SERVER_GUIDE_CHANNEL_ID = CURRENT_IDS.get("SERVER_GUIDE_CHANNEL_ID")
+
+# Welcome System
+WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
+WELCOME_PUBLIC_CHANNEL_ID = CURRENT_IDS["WELCOME_PUBLIC_CHANNEL_ID"]
+
+# Ticket System
+TICKETS_CATEGORY_ID = CURRENT_IDS["TICKETS_CATEGORY_ID"]
+TRANSCRIPT_CHANNEL_ID = CURRENT_IDS["TRANSCRIPT_CHANNEL_ID"]
+
+
+# ============================================================================
+# COMMANDS CONFIGURATION
+# ============================================================================
+
+# Slash Commands (available as /command)
 SLASH_COMMANDS = [
     "help",
     "status",
@@ -198,7 +261,9 @@ SLASH_COMMANDS = [
     "todo-update",
     "warframe",
     "warframemarket",
-]  # Commands that have slash (/) versions
+]
+
+# Admin-only Commands
 ADMIN_COMMANDS = [
     "clear",
     "mod",
@@ -224,7 +289,9 @@ ADMIN_COMMANDS = [
     "addsubreddit",
     "removesubreddit",
     "resetsubreddits",
-]  # Commands restricted to Admins only
+]
+
+# Moderator Commands
 MOD_COMMANDS = [
     "clear",
     "mod",
@@ -243,9 +310,105 @@ MOD_COMMANDS = [
     "enablesource",
     "disablesource",
     "resetsources",
-]  # Commands restricted to Moderators (Slot Keepers) only
+]
 
-# === Rocket League ===
+
+# ============================================================================
+# SERVER GUIDE CONFIGURATION
+# ============================================================================
+
+SERVER_GUIDE_CONFIG = {
+    "title": "Welcome to the Chillventory! 🌟",
+    "banner_url": "https://cdn.discordapp.com/attachments/1424848960333414581/1433070391051550871/welcometochillventory.png?ex=69035a4e&is=690208ce&hm=5d57c1ca0b18e9bc3c839530d0211ca3da952e3af0fb4b4d45712d2d20dddfdd",
+    "fields": [
+        {
+            "name": "🎯 Get Started",
+            "value": (
+                "Click the buttons below to access our most important features!\n\n"
+                "• **Help** – View all available commands\n"
+                "• **Ticket** – Create a support ticket\n"
+                "• **Profile** – Check your server profile\n"
+                "• **Rocket League** – Track your RL ranks\n"
+                "• **Warframe** – Market & game status (Beta)\n"
+                "• **Preferences** – Configure your opt-ins & settings\n"
+                "• **Meme** – Get memes posted to the meme channel"
+            ),
+            "inline": False,
+        },
+        {
+            "name": "💡 Quick Tips",
+            "value": (
+                "Use `/help` anytime to discover more commands.\n"
+                "Need assistance? Create a ticket and our team will help you!"
+            ),
+            "inline": False,
+        },
+    ],
+    "footer_template": "Powered by {guild_name} 💖",
+}
+
+
+# ============================================================================
+# WELCOME SYSTEM
+# ============================================================================
+
+PERSISTENT_VIEWS_FILE = f"{DATA_DIR}/persistent_views.json"
+ACTIVE_RULES_VIEWS_FILE = f"{DATA_DIR}/active_rules_views.json"
+
+# Server Rules Text
+RULES_TEXT = (
+    "🌿 **1. Be kind and respectful to everyone.**\n"
+    "✨ **2. No spam, flooding, or excessive self-promotion.**\n"
+    "🔞 **3. NSFW content is permitted only inside a clearly labeled, age-verified channel.**\n"
+    "🚫 **4. Illegal content and hate speech are strictly forbidden anywhere on the server.**\n"
+    "🧑‍💼 **5. Follow the instructions of staff and moderators.**\n"
+    "💖 **6. Keep the atmosphere calm, considerate, and positive.**\n\n"
+    "By clicking 'Accept Rules' you agree to these guidelines and unlock full access to the server. Welcome to the lounge — enjoy your stay!"
+)
+
+# Welcome Messages (use {name} for username placeholder)
+WELCOME_MESSAGES = [
+    "Welcome {name}! The chill inventory just gained a legendary item — you. 🌿",
+    "Hey {name}, you unlocked the secret stash of good vibes. Proceed to sofa extraction. ✨🛋️",
+    "{name} has joined the inventarium. Claim your complimentary imaginary hammock. 😎",
+    "Give it up for {name}, our newest collector of zen moments and midnight memes. 🧘‍♂️🔥",
+    "{name}, you found the legendary lounge zone — free snacks not included but vibes guaranteed. 🚀",
+    "Inventory update: {name} added. Please store your worries in the lost-and-found. 😁",
+    "Alert: {name} has entered the realm of ultimate relaxation. Please mind the plants. 🌱",
+    "Welcome {name}! May your inventory be full of chill, memes, and excellent tea. 🎉🍵",
+    "New item in stock: {name}, the ultimate chill curator. Limited edition energy. 📦✨",
+    "{name} discovered the hidden lounge of positivity — badge unlocked, mission: unwind. 🌟",
+]
+
+# Welcome Button Reply Messages (use {user} and {new_member} for mentions)
+WELCOME_BUTTON_REPLIES = [
+    "🎊 **LEGENDARY DROP!** {user} just summoned {new_member} into the chillventory vault! 📦",
+    "✨ {user} equipped {new_member} with *Infinite Good Vibes +99* — welcome buff activated! 💫",
+    "📦 **New inventory slot unlocked!** {user} warmly stores {new_member} in the premium lounge section! 🛋️",
+    "🌟 Achievement unlocked: {user} successfully welcomed {new_member}! Friendship XP +100 🎮",
+    "🛋️ **Sofa reservation confirmed!** {user} rolls out the red carpet for {new_member}! 🎭",
+    "🎨 {user} adds a splash of positivity paint to {new_member}'s welcome canvas! Masterpiece! 🖼️",
+    "🌿 **Rare plant spotted!** {user} places {new_member} in the zen garden of eternal chill! 🧘",
+    "🎉 {user} throws legendary confetti bombs for {new_member}! The lounge is now 200% more sparkly! ✨",
+    "🔥 **Epic combo!** {user} + {new_member} = Maximum vibes unlocked! The inventory is blessed! 🙏",
+    "💎 {user} just found a rare gem: {new_member}! Added to the collection of awesome people! 💖",
+    "🚀 **Mission success!** Agent {user} has secured {new_member} for the chill squad! Welcome aboard! 🎯",
+    "🧘 {user} transmits good energy waves to {new_member}! Harmony level: MAXIMUM! 🌊",
+]
+
+
+# ============================================================================
+# ROCKET LEAGUE CONFIGURATION
+# ============================================================================
+
+RL_ACCOUNTS_FILE = f"{DATA_DIR}/rl_accounts.json"
+RL_CONGRATS_VIEWS_FILE = f"{DATA_DIR}/rl_congrats_views.json"
+
+# Rank Check Configuration
+RL_RANK_CHECK_INTERVAL_HOURS = 3  # How often to check for rank changes
+RL_RANK_CACHE_TTL_SECONDS = 10500  # Cache duration (2h 55min) - slightly less than check interval to avoid race conditions
+
+# Rank Tier Order (lowest to highest)
 RL_TIER_ORDER = [
     "Unranked",
     "Bronze I",
@@ -271,7 +434,8 @@ RL_TIER_ORDER = [
     "Grand Champion III",
     "Supersonic Legend",
 ]
-RL_ACCOUNTS_FILE = f"{DATA_DIR}/rl_accounts.json"
+
+# Rank Emojis
 RANK_EMOJIS = {
     "Supersonic Legend": "<:ssl:1425389967030489139>",
     "Grand Champion III": "<:gc3:1425389956796518420>",
@@ -298,35 +462,36 @@ RANK_EMOJIS = {
     "Unranked": "<:unranked:1425389712276721725>",
 }
 
-# === Mod Perks ===
-MOD_DATA_FILE = f"{DATA_DIR}/mod_data.json"
+# Rank Promotion Message Configuration
+RL_RANK_PROMOTION_CONFIG = {
+    "notification_prefix": "{user} 🚀 Rank Promotion Notification!",
+    "embed_title": "🎉 Rank Promotion! 🎉",
+    "embed_description": "Congratulations {user}! Your {playlist} rank has improved to {emoji} {rank}!",
+}
 
-# === Leaderboard ===
-ACTIVITY_FILE = f"{DATA_DIR}/activity.json"
+# Congrats Button Reply Messages (use {user} and {ranked_user} for mentions)
+RL_CONGRATS_REPLIES = [
+    "Inventory alert: {user} congratulates {ranked_user} on the rank up! 📦",
+    "{user} throws confetti for {ranked_user}'s epic rank promotion! 🎊",
+    "New achievement unlocked: {user} cheers for {ranked_user}! 🏆",
+    "{user} adds extra vibes to {ranked_user}'s rank up celebration! ✨",
+    "Chillventory update: {user} says congrats to {ranked_user}! 😎",
+    "{user} shares positivity confetti for {ranked_user}'s promotion! 🎉",
+    "Rank stash expanded: {user} greets {ranked_user}'s new tier! 🌟",
+    "{user} discovers {ranked_user} in the champion inventory! 🏅",
+    "Realm of ranks welcomes {ranked_user}'s upgrade via {user}! 🚀",
+    "{user} throws a party for {ranked_user}'s rank advancement! 🎈",
+]
 
-# === Ticket System ===
-TICKETS_CATEGORY_ID = CURRENT_IDS["TICKETS_CATEGORY_ID"]
-TRANSCRIPT_CHANNEL_ID = CURRENT_IDS["TRANSCRIPT_CHANNEL_ID"]
 
-# === Welcome ===
-WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
-WELCOME_PUBLIC_CHANNEL_ID = CURRENT_IDS["WELCOME_PUBLIC_CHANNEL_ID"]
-PERSISTENT_VIEWS_FILE = f"{DATA_DIR}/persistent_views.json"  # File for persistent welcome card views
-ACTIVE_RULES_VIEWS_FILE = f"{DATA_DIR}/active_rules_views.json"  # File for active rules acceptance views
-RL_CONGRATS_VIEWS_FILE = f"{DATA_DIR}/rl_congrats_views.json"  # File for persistent congrats views
+# ============================================================================
+# DAILY MEME CONFIGURATION
+# ============================================================================
 
-# === Todo List ===
-TODO_CHANNEL_ID = CURRENT_IDS["TODO_CHANNEL_ID"]
-
-# === Rocket League ===
-RL_CHANNEL_ID = CURRENT_IDS["RL_CHANNEL_ID"]
-
-# === Daily Meme ===
-MEME_CHANNEL_ID = CURRENT_IDS.get("MEME_CHANNEL_ID")
-MEME_ROLE_ID = CURRENT_IDS.get("MEME_ROLE_ID")
-
-# Reddit Subreddits
 MEME_SUBREDDITS_FILE = f"{DATA_DIR}/meme_subreddits.json"
+MEME_LEMMY_FILE = f"{DATA_DIR}/meme_lemmy_communities.json"
+
+# Default Reddit Subreddits
 DEFAULT_MEME_SUBREDDITS = [
     "memes",
     "dankmemes",
@@ -340,8 +505,7 @@ DEFAULT_MEME_SUBREDDITS = [
     "okbuddyretard",
 ]
 
-# Lemmy Communities (instance@community format)
-MEME_LEMMY_FILE = f"{DATA_DIR}/meme_lemmy_communities.json"
+# Default Lemmy Communities (instance@community format)
 DEFAULT_MEME_LEMMY = [
     "lemmy.world@memes",
     "lemmy.world@meirl",
@@ -351,12 +515,19 @@ DEFAULT_MEME_LEMMY = [
     "lemmy.ml@memes",
 ]
 
-# Meme sources - can be disabled by removing from list
-# Available sources: "reddit", "lemmy" (more sources can be added in the future)
-# 4chan removed: unstable image URLs (404s), wallpaper-focused boards, requires FlareSolverr
-# 9gag removed: unreliable author information and low-quality content
-# imgur removed: low quality memes, inconsistent content
+# Active Meme Sources
+# Available: "reddit", "lemmy"
+# Removed: "4chan" (unstable URLs), "9gag" (low quality), "imgur" (inconsistent)
 MEME_SOURCES = [
     "reddit",
     "lemmy",
 ]
+
+
+# ============================================================================
+# OTHER COG DATA FILES
+# ============================================================================
+
+MOD_DATA_FILE = f"{DATA_DIR}/mod_data.json"
+ACTIVITY_FILE = f"{DATA_DIR}/activity.json"
+

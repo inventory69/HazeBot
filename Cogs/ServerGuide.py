@@ -1,8 +1,18 @@
 import discord
 from discord.ext import commands
-from Config import ADMIN_ROLE_ID, PINK, MEME_CHANNEL_ID
+from Config import (
+    ADMIN_ROLE_ID,
+    PINK,
+    MEME_CHANNEL_ID,
+    SERVER_GUIDE_CHANNEL_ID,
+    SERVER_GUIDE_CONFIG,
+    DATA_DIR,
+)
 from Utils.EmbedUtils import set_pink_footer
 import logging
+import json
+import hashlib
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -180,12 +190,130 @@ class ServerGuide(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.server_guide_file = os.path.join(DATA_DIR, "server_guide_message.json")
+
+    def _load_server_guide_data(self):
+        """Load server guide message data from JSON file"""
+        if not os.path.exists(self.server_guide_file):
+            return {}
+        try:
+            with open(self.server_guide_file, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load server guide data: {e}")
+            return {}
+
+    def _save_server_guide_data(self, data):
+        """Save server guide message data to JSON file"""
+        try:
+            dirname = os.path.dirname(self.server_guide_file)
+            if dirname and not os.path.exists(dirname):
+                os.makedirs(dirname, exist_ok=True)
+            with open(self.server_guide_file, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save server guide data: {e}")
+
+    def _get_embed_hash(self, embed: discord.Embed) -> str:
+        """Generate a hash of the embed content to detect changes"""
+        # Combine all embed content into a single string
+        content = f"{embed.title}|{embed.description}|{embed.image.url if embed.image else ''}"
+        for field in embed.fields:
+            content += f"|{field.name}|{field.value}"
+        if embed.footer:
+            content += f"|{embed.footer.text}"
+        # Generate SHA256 hash
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    async def _create_server_guide_embed(self, guild: discord.Guild) -> discord.Embed:
+        """Create the server guide embed from configuration"""
+        config = SERVER_GUIDE_CONFIG
+
+        embed = discord.Embed(
+            title=config["title"],
+            color=PINK,
+        )
+
+        # Add banner image
+        if config.get("banner_url"):
+            embed.set_image(url=config["banner_url"])
+
+        # Add fields from configuration
+        for field in config.get("fields", []):
+            embed.add_field(
+                name=field["name"],
+                value=field["value"],
+                inline=field.get("inline", False),
+            )
+
+        # Add footer with guild name replacement
+        footer_text = config.get("footer_template", "Powered by {guild_name} �")
+        footer_text = footer_text.replace("{guild_name}", guild.name)
+        set_pink_footer(embed, bot=self.bot.user, text=footer_text)
+
+        return embed
+
+    async def _update_server_guide_message(self):
+        """Update or create the server guide message automatically"""
+        try:
+            # Get the server guide channel
+            guide_channel = self.bot.get_channel(SERVER_GUIDE_CHANNEL_ID)
+            if not guide_channel:
+                logger.error(f"Server guide channel {SERVER_GUIDE_CHANNEL_ID} not found")
+                return
+
+            # Get guild
+            guild = guide_channel.guild
+
+            # Create the embed
+            embed = await self._create_server_guide_embed(guild)
+            view = CommandButtonView()
+
+            # Calculate hash of the new embed
+            new_hash = self._get_embed_hash(embed)
+
+            # Load existing message data
+            data = self._load_server_guide_data()
+            old_message_id = data.get("message_id")
+            old_hash = data.get("content_hash")
+
+            # Check if we need to update
+            if old_message_id and old_hash == new_hash:
+                # Content hasn't changed, no update needed
+                logger.info("Server guide content unchanged, skipping auto-update")
+                return
+
+            # Delete old message if it exists and content changed
+            if old_message_id:
+                try:
+                    old_message = await guide_channel.fetch_message(old_message_id)
+                    await old_message.delete()
+                    logger.info(f"Deleted old server guide message {old_message_id}")
+                except discord.NotFound:
+                    logger.warning(f"Old server guide message {old_message_id} not found")
+                except Exception as e:
+                    logger.error(f"Failed to delete old server guide message: {e}")
+
+            # Send new message
+            new_message = await guide_channel.send(embed=embed, view=view)
+
+            # Save new message data
+            data = {"message_id": new_message.id, "content_hash": new_hash, "channel_id": SERVER_GUIDE_CHANNEL_ID}
+            self._save_server_guide_data(data)
+
+            logger.info(
+                f"Server guide {'updated' if old_message_id else 'created'} automatically (Message ID: {new_message.id})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to auto-update server guide: {e}")
 
     @commands.command(name="server-guide")
     async def server_guide(self, ctx: commands.Context):
         """
         📨 Send the server guide embed with command buttons.
         Only admins can use this command.
+        Automatically updates existing message if content changes.
         """
         # Check admin permission
         if not any(role.id == ADMIN_ROLE_ID for role in ctx.author.roles):
@@ -200,55 +328,66 @@ class ServerGuide(commands.Cog):
         # Delete command message
         await ctx.message.delete()
 
-        # Create welcome embed
-        embed = discord.Embed(
-            title="Welcome to the Chillventory! 🌟",
-            color=PINK,
-        )
+        # Get the server guide channel
+        guide_channel = self.bot.get_channel(SERVER_GUIDE_CHANNEL_ID)
+        if not guide_channel:
+            logger.error(f"Server guide channel {SERVER_GUIDE_CHANNEL_ID} not found")
+            return
 
-        # Add banner image
-        embed.set_image(
-            url="https://cdn.discordapp.com/attachments/1424848960333414581/1433070391051550871/welcometochillventory.png?ex=69035a4e&is=690208ce&hm=5d57c1ca0b18e9bc3c839530d0211ca3da952e3af0fb4b4d45712d2d20dddfdd"
-        )
-
-        # Add sections
-        embed.add_field(
-            name="🎯 Get Started",
-            value=(
-                "Click the buttons below to access our most important features!\n\n"
-                "• **Help** – View all available commands\n"
-                "• **Ticket** – Create a support ticket\n"
-                "• **Profile** – Check your server profile\n"
-                "• **Rocket League** – Track your RL ranks\n"
-                "• **Warframe** – Market & game status (Beta)\n"
-                "• **Preferences** – Configure your opt-ins & settings\n"
-                "• **Meme** – Get memes posted to the meme channel"
-            ),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="💡 Quick Tips",
-            value=(
-                "Use `/help` anytime to discover more commands.\n"
-                "Need assistance? Create a ticket and our team will help you!"
-            ),
-            inline=False,
-        )
-
-        # Add footer
-        set_pink_footer(embed, bot=self.bot.user, text=f"Powered by {ctx.guild.name} 💖")
-
-        # Send with command buttons
+        # Create the embed
+        embed = await self._create_server_guide_embed(ctx.guild)
         view = CommandButtonView()
-        await ctx.send(embed=embed, view=view)
 
-        logger.info(f"Server guide sent by {ctx.author} in {ctx.channel}")
+        # Calculate hash of the new embed
+        new_hash = self._get_embed_hash(embed)
+
+        # Load existing message data
+        data = self._load_server_guide_data()
+        old_message_id = data.get("message_id")
+        old_hash = data.get("content_hash")
+
+        # Check if we need to update
+        if old_message_id and old_hash == new_hash:
+            # Content hasn't changed, no update needed
+            logger.info("Server guide content unchanged, skipping update")
+            await ctx.send("✅ Server guide is already up to date!", delete_after=5)
+            return
+
+        # Delete old message if it exists and content changed
+        if old_message_id:
+            try:
+                old_message = await guide_channel.fetch_message(old_message_id)
+                await old_message.delete()
+                logger.info(f"Deleted old server guide message {old_message_id}")
+            except discord.NotFound:
+                logger.warning(f"Old server guide message {old_message_id} not found")
+            except Exception as e:
+                logger.error(f"Failed to delete old server guide message: {e}")
+
+        # Send new message
+        new_message = await guide_channel.send(embed=embed, view=view)
+
+        # Save new message data
+        data = {"message_id": new_message.id, "content_hash": new_hash, "channel_id": SERVER_GUIDE_CHANNEL_ID}
+        self._save_server_guide_data(data)
+
+        logger.info(
+            f"Server guide {'updated' if old_message_id else 'created'} by {ctx.author} (Message ID: {new_message.id})"
+        )
+
+        # Send confirmation
+        await ctx.send(
+            f"✅ Server guide {'updated' if old_message_id else 'posted'} in <#{SERVER_GUIDE_CHANNEL_ID}>!",
+            delete_after=5,
+        )
 
     async def _setup_persistent_views(self):
-        """Setup persistent views - called on ready and after reload"""
+        """Setup persistent views and auto-update server guide - called on ready and after reload"""
         self.bot.add_view(CommandButtonView())
         logger.info("ServerGuide cog ready. Persistent command buttons restored.")
+
+        # Auto-update server guide message
+        await self._update_server_guide_message()
 
     @commands.Cog.listener()
     async def on_ready(self):
