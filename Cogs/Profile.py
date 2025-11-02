@@ -61,6 +61,23 @@ def load_meme_requests() -> dict:
     return {}
 
 
+# Helper to load memes generated
+def load_memes_generated() -> dict:
+    """Load memes generated from file"""
+    from Config import get_data_dir
+    import os
+    import json
+
+    file_path = os.path.join(get_data_dir(), "memes_generated.json")
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading memes generated: {e}")
+    return {}
+
+
 class Profile(commands.Cog):
     """
     👤 Profile Cog: Shows user profile with avatar, join date, roles, and custom stats.
@@ -125,11 +142,16 @@ class Profile(commands.Cog):
         # Activity stats
         activity = await get_user_activity(member.id)
         meme_requests = load_meme_requests()
-        meme_count = meme_requests.get(str(member.id), 0)
+        memes_generated = load_memes_generated()
+        meme_request_count = meme_requests.get(str(member.id), 0)
+        meme_generated_count = memes_generated.get(str(member.id), 0)
         embed.add_field(
             name="Activity",
             value=(
-                f"💬 Messages: {activity['messages']}\n🖼️ Images: {activity['images']}\n🎭 Memes Requested: {meme_count}"
+                f"💬 Messages: {activity['messages']}\n"
+                f"🖼️ Images: {activity['images']}\n"
+                f"🎭 Memes Requested: {meme_request_count}\n"
+                f"🎨 Memes Generated: {meme_generated_count}"
             ),
             inline=True,
         )

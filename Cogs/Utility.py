@@ -647,6 +647,24 @@ class Utility(commands.Cog):
 
         logger.info(f"Prefix command !say used by {ctx.author}")
 
+    @commands.command(name="sync")
+    @commands.has_permissions(administrator=True)
+    async def sync_commands(self, ctx: commands.Context):
+        """
+        🔄 Sync all slash commands to the guild (Admin only)
+        Usage: !sync
+        """
+        await ctx.send("🔄 Syncing slash commands...")
+
+        try:
+            guild = discord.Object(id=get_guild_id())
+            synced = await self.bot.tree.sync(guild=guild)
+            await ctx.send(f"✅ Successfully synced {len(synced)} slash commands!")
+            logger.info(f"Slash commands synced by {ctx.author}: {[cmd.name for cmd in synced]}")
+        except Exception as e:
+            await ctx.send(f"❌ Failed to sync commands: {e}")
+            logger.error(f"Failed to sync slash commands: {e}")
+
 
 async def setup(bot: commands.Bot) -> None:
     """

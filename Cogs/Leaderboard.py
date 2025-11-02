@@ -35,6 +35,16 @@ async def load_meme_requests() -> Dict[str, int]:
         return json.load(f)
 
 
+# Helper to load memes generated data
+@cache(ttl_seconds=30)  # Cache for 30 seconds
+async def load_memes_generated() -> Dict[str, int]:
+    file_path = os.path.join(get_data_dir(), "memes_generated.json")
+    if not os.path.exists(file_path):
+        return {}
+    with open(file_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def save_activity(data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(ACTIVITY_FILE), exist_ok=True)
     with open(ACTIVITY_FILE, "w", encoding="utf-8") as f:
@@ -135,6 +145,10 @@ class Leaderboard(commands.Cog):
             meme_requests = await load_meme_requests()
             sorted_data = sorted(meme_requests.items(), key=lambda x: x[1], reverse=True)
             return sorted_data[:limit]
+        elif category == "memes_generated":
+            memes_generated = await load_memes_generated()
+            sorted_data = sorted(memes_generated.items(), key=lambda x: x[1], reverse=True)
+            return sorted_data[:limit]
         return []
 
     # Create overview embed with all leaderboards
@@ -156,7 +170,12 @@ class Leaderboard(commands.Cog):
 
         # Activity
         activity_text = ""
-        activity_categories = [("messages", "Messages"), ("images", "Images"), ("meme_requests", "Meme Requests")]
+        activity_categories = [
+            ("messages", "Messages"),
+            ("images", "Images"),
+            ("meme_requests", "Meme Requests"),
+            ("memes_generated", "Memes Generated"),
+        ]
         for cat_key, cat_name in activity_categories:
             top_entries = await self.get_top_entries(cat_key, limit=3)
             if top_entries:
@@ -238,10 +257,14 @@ class Leaderboard(commands.Cog):
             meme_requests = await load_meme_requests()
             sorted_data = sorted(meme_requests.items(), key=lambda x: x[1], reverse=True)
             embed = self.create_leaderboard_embed("Most Meme Requests", sorted_data)
+        elif category == "memes_generated":
+            memes_generated = await load_memes_generated()
+            sorted_data = sorted(memes_generated.items(), key=lambda x: x[1], reverse=True)
+            embed = self.create_leaderboard_embed("Most Memes Generated", sorted_data)
         else:
             embed = discord.Embed(
                 title="❌ Invalid Category",
-                description="Use: rl_overall, rl_1v1, rl_2v2, rl_3v3, rl_4v4, tickets, messages, images, meme_requests",
+                description="Use: rl_overall, rl_1v1, rl_2v2, rl_3v3, rl_4v4, tickets, messages, images, meme_requests, memes_generated",
                 color=PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
@@ -256,7 +279,7 @@ class Leaderboard(commands.Cog):
     async def leaderboard_command(self, ctx: commands.Context, category: str = None) -> None:
         """
         🏆 Shows leaderboard overview or specific category.
-        Categories: rl_overall, rl_1v1, rl_2v2, rl_3v3, rl_4v4, tickets, messages, images, meme_requests
+        Categories: rl_overall, rl_1v1, rl_2v2, rl_3v3, rl_4v4, tickets, messages, images, meme_requests, memes_generated
         """
         if category:
             logger.info(f"Leaderboard requested for category '{category}' by {ctx.author}")
@@ -282,6 +305,7 @@ class Leaderboard(commands.Cog):
             app_commands.Choice(name="Most Messages", value="messages"),
             app_commands.Choice(name="Most Images", value="images"),
             app_commands.Choice(name="Most Meme Requests", value="meme_requests"),
+            app_commands.Choice(name="Most Memes Generated", value="memes_generated"),
         ]
     )
     async def leaderboard_slash(self, interaction: discord.Interaction, category: str = None) -> None:

@@ -302,7 +302,8 @@ class ServerGuide(commands.Cog):
             self._save_server_guide_data(data)
 
             logger.info(
-                f"Server guide {'updated' if old_message_id else 'created'} automatically (Message ID: {new_message.id})"
+                f"Server guide {'updated' if old_message_id else 'created'} automatically "
+                f"(Message ID: {new_message.id})"
             )
 
         except Exception as e:

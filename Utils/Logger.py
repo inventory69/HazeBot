@@ -131,11 +131,23 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
 
     ConsoleHandler.setFormatter(EmojiRichFormatter())  # Use custom formatter with emojis
 
-    logging.basicConfig(level=LogLevel, handlers=[ConsoleHandler], force=True)
+    # 📝 Add file handler for persistent logs
+    import os
+
+    log_dir = "Logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "HazeBot.log")
+
+    FileHandler = logging.FileHandler(log_file, encoding="utf-8")
+    FileHandler.setFormatter(EmojiRichFormatter())
+    FileHandler.setLevel(LogLevel)
+
+    logging.basicConfig(level=LogLevel, handlers=[ConsoleHandler, FileHandler], force=True)
 
     Logger = logging.getLogger("rich")
     Logger.handlers.clear()
     Logger.addHandler(ConsoleHandler)
+    Logger.addHandler(FileHandler)  # Add file handler to logger
     Logger.propagate = False
 
     # Set up Discord loggers with Rich (adapted)
@@ -143,6 +155,7 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
         discord_logger = logging.getLogger(logger_name)
         discord_logger.handlers.clear()
         discord_logger.addHandler(ConsoleHandler)
+        discord_logger.addHandler(FileHandler)  # Add file handler to Discord loggers
         discord_logger.propagate = False
 
     # Apply per-cog log levels
