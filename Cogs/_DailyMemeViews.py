@@ -90,7 +90,8 @@ class MemeHubView(discord.ui.View):
             if self.post_to_channel_id:
                 channel = interaction.guild.get_channel(self.post_to_channel_id)
                 if channel:
-                    await channel.send(embed=embed)
+                    # Post with requester information
+                    await self.cog.post_meme(meme, channel, requested_by=interaction.user)
                     await interaction.followup.send(f"✅ Meme posted to {channel.mention}!", ephemeral=True)
                 else:
                     await interaction.followup.send("❌ Target channel not found.", ephemeral=True)
@@ -245,7 +246,8 @@ class SourceSelectionView(discord.ui.View):
             if self.post_to_channel_id:
                 channel = interaction.guild.get_channel(self.post_to_channel_id)
                 if channel:
-                    await channel.send(embed=embed)
+                    # Post with requester information
+                    await self.cog.post_meme(meme, channel, requested_by=interaction.user)
                     await interaction.followup.send(f"✅ Meme posted to {channel.mention}!", ephemeral=True)
                 else:
                     await interaction.followup.send("❌ Target channel not found.", ephemeral=True)
@@ -665,7 +667,7 @@ class TestMemeButton(discord.ui.Button):
         meme = await cog.get_daily_meme(allow_nsfw=True)
 
         if meme:
-            await cog.post_meme(meme, channel)
+            await cog.post_meme(meme, channel, requested_by=interaction.user)
             await interaction.followup.send("✅ Test meme posted successfully!", ephemeral=True)
             logger.info(f"🎭 [DailyMeme] Test meme posted by {interaction.user}")
         else:

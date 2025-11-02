@@ -745,7 +745,9 @@ class DailyMeme(commands.Cog):
 
         return selected_meme
 
-    async def post_meme(self, meme: dict, channel: discord.TextChannel, mention: str = ""):
+    async def post_meme(
+        self, meme: dict, channel: discord.TextChannel, mention: str = "", requested_by: discord.Member = None
+    ):
         """Post a meme to the channel"""
         embed = discord.Embed(
             title=meme["title"][:256],  # Discord title limit
@@ -772,8 +774,16 @@ class DailyMeme(commands.Cog):
 
         set_pink_footer(embed, bot=self.bot.user)
 
-        # Send with optional mention
-        message = f"🎭 Daily Meme Alert! {mention}" if mention else "🎭 Daily Meme Alert!"
+        # Send with optional mention and requester
+        if requested_by:
+            message = f"🎭 Meme requested by {requested_by.mention}"
+            if mention:
+                message += f" {mention}"
+        elif mention:
+            message = f"🎭 Daily Meme Alert! {mention}"
+        else:
+            message = "🎭 Daily Meme Alert!"
+
         await channel.send(message.strip(), embed=embed)
 
         # Format source for logging
@@ -1021,7 +1031,7 @@ class DailyMeme(commands.Cog):
 
         set_pink_footer(embed, bot=self.bot.user)
 
-        view = MemeHubView(self, is_admin_or_mod)
+        view = MemeHubView(self, is_admin_or_mod, post_to_channel_id=ctx.channel.id)
         await ctx.send(embed=embed, view=view)
         logger.info(f"Meme Hub opened by {ctx.author} (Mod: {is_admin_or_mod})")
 
@@ -1178,7 +1188,7 @@ class DailyMeme(commands.Cog):
 
         set_pink_footer(embed, bot=interaction.client.user)
 
-        view = MemeHubView(self, is_admin_or_mod)
+        view = MemeHubView(self, is_admin_or_mod, post_to_channel_id=interaction.channel.id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         logger.info(f"Meme Hub opened by {interaction.user} (slash) (Mod: {is_admin_or_mod})")
 
