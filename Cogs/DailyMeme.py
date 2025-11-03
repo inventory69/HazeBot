@@ -968,22 +968,22 @@ class DailyMeme(commands.Cog):
                 await ctx.send(f"❌ No memes found from {source_display}. Try another source!")
                 return
 
-            # Pick random meme and create embed
+            # Pick random meme and post it with requester mention
             meme = random.choice(memes)
-            embed = discord.Embed(
-                title=meme.get("title", "Meme"),
-                url=meme.get("url"),
-                color=PINK,
-            )
-            embed.set_image(url=meme.get("url"))
 
-            embed.add_field(name="📍 Source", value=source_display, inline=True)
-            embed.add_field(name="👤 Author", value=meme.get("author", "Unknown"), inline=True)
-            embed.add_field(name="⬆️ Score", value=f"{meme.get('score', 0):,}", inline=True)
+            # Convert to the format expected by post_meme
+            meme_data = {
+                "title": meme.get("title", "Meme"),
+                "permalink": meme.get("url"),
+                "url": meme.get("url"),
+                "upvotes": meme.get("score", 0),
+                "subreddit": source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{source}",
+                "author": meme.get("author", "Unknown"),
+                "nsfw": meme.get("nsfw", False),
+            }
 
-            set_pink_footer(embed, bot=self.bot.user)
+            await self.post_meme(meme_data, ctx.channel, requested_by=ctx.author)
 
-            await ctx.send(embed=embed)
             user_id = str(ctx.author.id)
             self.meme_requests[user_id] = self.meme_requests.get(user_id, 0) + 1
             self.save_meme_requests()
@@ -1125,22 +1125,25 @@ class DailyMeme(commands.Cog):
                 )
                 return
 
-            # Pick random meme and create embed
+            # Pick random meme and post it with requester mention
             meme = random.choice(memes)
-            embed = discord.Embed(
-                title=meme.get("title", "Meme"),
-                url=meme.get("url"),
-                color=PINK,
-            )
-            embed.set_image(url=meme.get("url"))
 
-            embed.add_field(name="📍 Source", value=source_display, inline=True)
-            embed.add_field(name="👤 Author", value=meme.get("author", "Unknown"), inline=True)
-            embed.add_field(name="⬆️ Score", value=f"{meme.get('score', 0):,}", inline=True)
+            # Convert to the format expected by post_meme
+            meme_data = {
+                "title": meme.get("title", "Meme"),
+                "permalink": meme.get("url"),
+                "url": meme.get("url"),
+                "upvotes": meme.get("score", 0),
+                "subreddit": source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{source}",
+                "author": meme.get("author", "Unknown"),
+                "nsfw": meme.get("nsfw", False),
+            }
 
-            set_pink_footer(embed, bot=interaction.client.user)
+            await self.post_meme(meme_data, interaction.channel, requested_by=interaction.user)
 
-            await interaction.followup.send(embed=embed)
+            # Send confirmation to user
+            await interaction.followup.send("✅ Meme posted!", ephemeral=True)
+
             user_id = str(interaction.user.id)
             self.meme_requests[user_id] = self.meme_requests.get(user_id, 0) + 1
             self.save_meme_requests()

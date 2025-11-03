@@ -64,11 +64,12 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Changelog Notification Opt-In:** `/preferences` and `!preferences` let users toggle the changelog notification role.
 
 ### 👤 Profile System
-- **User Profiles:** `/profile` and `!profile` display user avatar, join date, roles, highest RL rank, warnings, resolved tickets, changelog opt-in, and activity stats (messages/images).
+- **User Profiles:** `/profile` and `!profile` display user avatar, join date, roles, highest RL rank, warnings, resolved tickets, changelog opt-in, and activity stats (messages/images/memes requested/memes generated).
 - **Activity Tracking:** Automatically tracks message and image posting activity.
+- **Meme Statistics:** Shows both memes requested and custom memes generated.
 
 ### 🏆 Leaderboard System
-- **Various Leaderboards:** `/leaderboard` and `!leaderboard` with categories for RL ranks (overall/1v1/2v2/3v3/4v4), resolved tickets, most messages, and most images posted.
+- **Various Leaderboards:** `/leaderboard` and `!leaderboard` with categories for RL ranks (overall/1v1/2v2/3v3/4v4), resolved tickets, most messages, most images posted, memes requested, and memes generated.
 - **Real-time Updates:** Activity data is cached for 30 seconds for optimal performance.
 
 ### 🎮 Warframe Integration (Beta)
@@ -106,16 +107,56 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Quality Curation:** Sources from configurable source list (default: 10 curated sources).
 - **Smart Selection:** Picks from top upvoted/scored memes for quality content.
 - **NSFW Support:** Includes NSFW memes with proper warnings if funny.
-- **Manual Command:** `/meme` and `!meme` to get a random meme anytime.
+- **Interactive Meme Hub:** `/meme` opens interactive hub with buttons for Reddit, Lemmy, or random memes.
+- **Direct Source Selection:** `/meme memes` or `!meme memes` to get memes from specific sources.
+- **Autocomplete:** Slash command includes autocomplete for all configured sources.
+- **Requester Attribution:** All meme requests show who requested the meme (for all users).
 - **Score Display:** Shows upvotes/score, source, and author for both platforms.
 - **Role Notification:** Mentions meme notification role for daily posts.
+- **Cooldown System:** 10-second cooldown between requests for non-admin/mod users.
 - **Admin Management:** Full source list management commands.
   - `!memesubreddits` - List current meme sources (Reddit & Lemmy)
   - `!addsubreddit <name>` - Add a Reddit subreddit or Lemmy community
   - `!removesubreddit <name>` - Remove a source
   - `!resetsubreddits` - Reset to defaults
-- **Test Commands:** `!testmeme` (Reddit) and `!testlemmymeme <instance@community>` (Lemmy) for testing.
+  - `!lemmycommunities` - List Lemmy communities
+  - `!addlemmy <instance@community>` - Add Lemmy community
+  - `!removelemmy <instance@community>` - Remove Lemmy community
+  - `!resetlemmy` - Reset Lemmy communities
+  - `!memesources` - List enabled/disabled sources
+  - `!enablesource <reddit|lemmy>` - Enable a source
+  - `!disablesource <reddit|lemmy>` - Disable a source
+  - `!resetsources` - Reset source settings
+  - `!dailyconfig` - Configure daily meme posting
+- **Test Commands:** `!testmeme` (Reddit) for testing.
 - **Persistent Configuration:** Source list saved to file across restarts.
+
+### 🎨 Custom Meme Generator (Imgflip Integration)
+- **100+ Templates:** Access to 100+ popular meme templates from Imgflip.
+- **Interactive Template Browser:** Browse templates with live preview and button selection.
+- **Dynamic Text Fields:** Automatically adapts to template requirements (2-5 text boxes).
+- **Template Caching:** 24-hour cache with automatic refresh for optimal performance.
+- **Smart Preview System:** Generate and preview memes before posting.
+- **Channel Routing:** Post memes to specific channels (integrated with Server Guide).
+- **Usage Tracking:** Track generated memes in user profiles and leaderboards.
+- **Multi-Box Support:** Full support for templates with 3+ text boxes using Imgflip's boxes[] API.
+- **Commands:**
+  - `/creatememe` - Interactive meme generator with template selection
+  - `!refreshtemplates` (admin) - Refresh template cache from Imgflip API
+
+### 🛠️ Enhanced Bot Management
+- **Interactive Cog Management:** `!load`, `!unload`, and `!reload` without arguments open interactive dropdowns.
+  - `!load` - Shows all unloaded cogs with file name → class name mapping
+  - `!unload` - Shows all loaded cogs (except CogManager)
+  - `!reload` - Shows all loaded cogs (except CogManager)
+- **Smart Name Resolution:** Automatically converts between file names and class names (e.g., `Changelog.py` ↔ `ChangelogCog`).
+- **Cog-Specific Logs:** `!logs` / `!viewlogs` / `!coglogs` view logs for specific cogs with statistics.
+- **URL Censoring:** Automatic redaction of sensitive URLs and credentials in log viewer.
+- **Extension Validation:** Proper error handling for unloaded or invalid cogs.
+- **Persistent Views:** Interactive dropdowns remain functional for 5 minutes.
+- **File Logging:** All logs saved to `Logs/HazeBot.log` with UTF-8 encoding.
+- **Log Statistics:** View INFO, WARNING, ERROR, and DEBUG counts per cog.
+- **Slash Command Sync:** `!sync` (admin) to manually sync slash commands to guild.
 
 ### ⚡ Performance & Caching
 - **Advanced Caching System:** Custom-built caching utilities with in-memory and file-based caching for optimal performance.
@@ -179,6 +220,10 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
      ROCKET_API_KEY=your_rocket_api_key
      FLARESOLVERR_URL=http://localhost:8191  # For bypassing anti-bot measures
 
+     # Imgflip API (Required for meme generator)
+     IMGFLIP_USERNAME=your_imgflip_username
+     IMGFLIP_PASSWORD=your_imgflip_password
+
      # Email Configuration (Required for ticket transcripts)
      SMTP_SERVER=smtp.gmail.com
      SMTP_PORT=587
@@ -222,34 +267,37 @@ For contributors and developers:
    ```
    HazeBot/
    ├── Cogs/                 # Discord bot cogs (features)
-   │   ├── Changelog.py      # Changelog generation
-   │   ├── CogManager.py     # Dynamic cog loading/unloading
-   │   ├── DailyMeme.py      # Daily meme system with Reddit integration
+   │   ├── Changelog.py      # Changelog generation with AI
+   │   ├── CogManager.py     # Dynamic cog loading/unloading with interactive views
+   │   ├── DailyMeme.py      # Daily meme system with Reddit/Lemmy integration
    │   ├── DiscordLogging.py # Real-time log streaming to Discord
    │   ├── Leaderboard.py    # Leaderboards and activity tracking
-   │   ├── ModPerks.py       # Moderation tools
+   │   ├── MemeGenerator.py  # Custom meme generator with Imgflip API (100+ templates)
+   │   ├── ModPerks.py       # Moderation tools and panels
    │   ├── Preferences.py    # User preferences
    │   ├── Presence.py       # Dynamic presence updates
-   │   ├── Profile.py        # User profiles
+   │   ├── Profile.py        # User profiles with activity stats
    │   ├── RocketLeague.py   # RL stats integration with persistent congrats views
    │   ├── RoleInfo.py       # Role information
-   │   ├── ServerGuide.py    # Server guide and info
+   │   ├── ServerGuide.py    # Interactive server guide
    │   ├── SupportButtons.py # Persistent support buttons
    │   ├── TicketSystem.py   # Support ticket system
-   │   ├── TodoList.py       # To-do list management
-   │   ├── Utility.py        # Utility commands
+   │   ├── TodoList.py       # To-do list management with AI
+   │   ├── Utility.py        # Utility commands and help system
    │   ├── Warframe.py       # Warframe market and status integration (Beta)
-   │   ├── Welcome.py        # Welcome system
+   │   ├── Welcome.py        # Welcome system with interactive rules
+   │   ├── _DailyMemeViews.py # Meme hub views and buttons
    │   └── __init__.py       # Cog initialization
    ├── Utils/                # Utility modules
-   │   ├── CacheUtils.py     # Caching system
-   │   ├── EmbedUtils.py     # Embed formatting
-   │   ├── Env.py           # Environment validation
-   │   └── Logger.py        # Logging utilities
-   ├── TestData/             # Test data storage (for PROD_MODE=false)
-   ├── Cache/                # Cache files
-   ├── Logs/                 # Log files
-   ├── Config.py             # Bot configuration
+   │   ├── CacheUtils.py     # Advanced caching system
+   │   ├── EmbedUtils.py     # Embed formatting utilities
+   │   ├── Env.py            # Environment validation
+   │   └── Logger.py         # Rich logging with file output
+   ├── Data/                 # Data storage directory
+   │   └── TestData/         # Test data (for PROD_MODE=false)
+   ├── Cache/                # Cache files for API responses
+   ├── Logs/                 # Log files (HazeBot.log)
+   ├── Config.py             # Bot configuration and constants
    ├── Main.py               # Bot entry point
    ├── pyproject.toml        # Project configuration
    ├── requirements.txt      # Python dependencies
@@ -273,7 +321,12 @@ For contributors and developers:
 /profile @username  # View another user's profile
 
 # Get memes
-/meme  # Get a random trending meme from Reddit
+/meme  # Open interactive Meme Hub
+/meme memes  # Get meme from r/memes directly
+/meme lemmy.world@memes  # Get meme from Lemmy
+
+# Create custom memes
+/creatememe  # Open interactive meme generator with 100+ templates
 
 # Preferences and settings
 /preferences  # Toggle changelog notifications
@@ -347,8 +400,10 @@ For contributors and developers:
 # Cog management
 !load CogName  # Load a cog
 !unload CogName  # Unload a cog
-!reload CogName  # Reload a cog
+!reload  # Interactive cog selector (or !reload CogName for direct reload)
 !listcogs  # List all cogs and their status
+!logs  # Interactive log viewer (or !logs CogName for specific cog)
+!sync  # Sync slash commands to guild
 
 # Meme management
 !memesubreddits  # List current meme sources (Reddit & Lemmy)
@@ -356,8 +411,17 @@ For contributors and developers:
 !addsubreddit lemmy.world@memes  # Add a Lemmy community
 !removesubreddit funny  # Remove a source
 !resetsubreddits  # Reset to default sources
+!lemmycommunities  # List Lemmy communities
+!addlemmy lemmy.world@memes  # Add Lemmy community
+!removelemmy lemmy.world@memes  # Remove Lemmy community
+!resetlemmy  # Reset Lemmy communities
+!memesources  # List enabled/disabled sources
+!enablesource reddit  # Enable a source
+!disablesource lemmy  # Disable a source
+!resetsources  # Reset source settings
+!dailyconfig  # Configure daily meme posting
 !testmeme  # Test Reddit meme fetching
-!testlemmymeme lemmy.world@memes  # Test Lemmy meme fetching
+!refreshtemplates  # Refresh meme templates from Imgflip API
 ```
 
 ### Command Reference
@@ -373,7 +437,8 @@ For contributors and developers:
 | `/roleinfo [role]` | `!roleinfo` | Role information and permissions |
 | `/leaderboard [category]` | `!leaderboard` | View leaderboards by category |
 | `/ticket` | `!ticket` | Create support ticket |
-| `/meme` | `!meme` | Get a random trending meme from Reddit |
+| `/meme [source]` | `!meme` | Get memes from specific source or open interactive hub |
+| `/creatememe` | - | Create custom memes with Imgflip templates (slash only) |
 | `/rlstats [platform] [username]` | `!rlstats` | Rocket League statistics |
 | `/setrlaccount [platform] [username]` | `!setrlaccount` | Link RL account |
 | `/unlinkrlaccount` | `!unlinkrlaccount` | Unlink RL account |
@@ -401,18 +466,29 @@ For contributors and developers:
 | `!changelog [--text]` | - | Generate and post bot changelogs with AI (prefix only) |
 | `!say [message]` | - | Send message as bot (prefix only) |
 | `!testmeme` | - | Test daily meme function with Reddit (prefix only) |
-| `!testlemmymeme [instance@community]` | - | Test Lemmy meme fetching (prefix only) |
 | `!memesubreddits` | - | List current meme sources (Reddit & Lemmy) (prefix only) |
 | `!addsubreddit [name]` | - | Add a Reddit subreddit or Lemmy community (format: instance@community) (prefix only) |
 | `!removesubreddit [name]` | - | Remove a meme source (prefix only) |
 | `!resetsubreddits` | - | Reset meme sources to defaults (prefix only) |
+| `!lemmycommunities` | - | List Lemmy communities (prefix only) |
+| `!addlemmy [instance@community]` | - | Add Lemmy community (prefix only) |
+| `!removelemmy [instance@community]` | - | Remove Lemmy community (prefix only) |
+| `!resetlemmy` | - | Reset Lemmy communities (prefix only) |
+| `!memesources` | - | List enabled/disabled sources (prefix only) |
+| `!enablesource [source]` | - | Enable a meme source (reddit/lemmy) (prefix only) |
+| `!disablesource [source]` | - | Disable a meme source (prefix only) |
+| `!resetsources` | - | Reset source settings (prefix only) |
+| `!dailyconfig` | - | Configure daily meme posting (prefix only) |
+| `!refreshtemplates` | - | Refresh meme templates from Imgflip API (prefix only) |
 | `!restorecongratsview [message_id] [user_id]` | - | Restore persistent congrats button (prefix only) |
 | `!create-button` | - | Create persistent buttons for any command type (prefix only) |
 | `!server-guide` | - | Send interactive server guide with command buttons (prefix only) |
-| `!load [cog_name]` | - | Load a cog dynamically (prefix only) |
-| `!unload [cog_name]` | - | Unload a cog dynamically (prefix only) |
-| `!reload [cog_name]` | - | Reload a cog dynamically (prefix only) |
+| `!load [cog_name]` | - | Load a cog (interactive if no name) (prefix only) |
+| `!unload [cog_name]` | - | Unload a cog (interactive if no name) (prefix only) |
+| `!reload [cog_name]` | - | Reload a cog (interactive if no name) (prefix only) |
 | `!listcogs` | - | List all available cogs and their status (prefix only) |
+| `!logs [cog_name]` | - | View cog-specific logs with statistics (prefix only) |
+| `!sync` | - | Sync slash commands to guild (prefix only) |
 | `!togglediscordlogs` | - | Toggle Discord logging on/off (prefix only) |
 | `!testdiscordlog` | - | Test Discord logging with sample messages (prefix only) |
 
