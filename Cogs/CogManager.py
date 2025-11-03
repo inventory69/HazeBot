@@ -131,6 +131,138 @@ class CogLogsView(discord.ui.View):
             item.disabled = True
 
 
+class CogLoadView(discord.ui.View):
+    """Interactive view for selecting and loading cogs"""
+
+    def __init__(
+        self,
+        cog_manager,
+        ctx: commands.Context,
+        available_cogs: dict,  # Now a dict mapping file_name -> class_name
+        original_message: discord.Message = None,
+    ):
+        super().__init__(timeout=300)  # 5 minutes timeout for multiple loads
+        self.cog_manager = cog_manager
+        self.ctx = ctx
+        self.original_message = original_message
+        self.cog_mapping = available_cogs  # Store the mapping
+
+        # Add dropdown with all unloaded cogs (show class names)
+        options = [
+            discord.SelectOption(label=class_name, description=f"Load from {file_name}.py", emoji="📥", value=file_name)
+            for file_name, class_name in sorted(available_cogs.items(), key=lambda x: x[1])
+        ]
+
+        select = discord.ui.Select(
+            placeholder="📦 Select a cog to load...", options=options, min_values=1, max_values=1
+        )
+        select.callback = self.cog_selected
+        self.add_item(select)
+
+    async def cog_selected(self, interaction: discord.Interaction):
+        """Handle cog selection"""
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("❌ Only the command author can load cogs!", ephemeral=True)
+            return
+
+        selected_file_name = interaction.data["values"][0]  # This is the file name
+        success = await self.cog_manager._perform_load(self.ctx, selected_file_name, interaction)
+
+        # Refresh the view with updated cog list after successful load
+        if success and self.original_message:
+            # Get updated list of unloaded cogs
+            cog_mapping = self.cog_manager.get_all_cog_files()
+            loaded_cogs = list(self.cog_manager.bot.cogs.keys())
+            unloaded_cogs = {
+                file_name: class_name for file_name, class_name in cog_mapping.items() if class_name not in loaded_cogs
+            }
+
+            if unloaded_cogs:
+                # Create new view with updated list
+                new_view = CogLoadView(self.cog_manager, self.ctx, unloaded_cogs, self.original_message)
+
+                # Update the original message with new view
+                try:
+                    await self.original_message.edit(view=new_view)
+                except Exception:
+                    pass  # Message might be deleted or we don't have permissions
+            else:
+                # No more cogs to load
+                try:
+                    await self.original_message.edit(content="✅ All cogs are now loaded!", view=None)
+                except Exception:
+                    pass
+
+    async def on_timeout(self):
+        """Disable view on timeout"""
+        for item in self.children:
+            item.disabled = True
+
+
+class CogUnloadView(discord.ui.View):
+    """Interactive view for selecting and unloading cogs"""
+
+    def __init__(
+        self,
+        cog_manager,
+        ctx: commands.Context,
+        available_cogs: list,
+        original_message: discord.Message = None,
+    ):
+        super().__init__(timeout=300)  # 5 minutes timeout for multiple unloads
+        self.cog_manager = cog_manager
+        self.ctx = ctx
+        self.original_message = original_message
+
+        # Add dropdown with all loaded cogs (except CogManager)
+        options = [
+            discord.SelectOption(label=cog, description=f"Unload {cog}", emoji="📤") for cog in sorted(available_cogs)
+        ]
+
+        select = discord.ui.Select(
+            placeholder="📦 Select a cog to unload...", options=options, min_values=1, max_values=1
+        )
+        select.callback = self.cog_selected
+        self.add_item(select)
+
+    async def cog_selected(self, interaction: discord.Interaction):
+        """Handle cog selection"""
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message("❌ Only the command author can unload cogs!", ephemeral=True)
+            return
+
+        selected_cog = interaction.data["values"][0]
+        success = await self.cog_manager._perform_unload(self.ctx, selected_cog, interaction)
+
+        # Refresh the view with updated cog list after successful unload
+        if success and self.original_message:
+            # Get updated list of loaded cogs
+            loaded_cogs = [cog for cog in self.cog_manager.bot.cogs.keys() if cog != "CogManager"]
+
+            if loaded_cogs:
+                # Create new view with updated list
+                new_view = CogUnloadView(self.cog_manager, self.ctx, loaded_cogs, self.original_message)
+
+                # Update the original message with new view
+                try:
+                    await self.original_message.edit(view=new_view)
+                except Exception:
+                    pass  # Message might be deleted or we don't have permissions
+            else:
+                # No more cogs to unload
+                try:
+                    await self.original_message.edit(
+                        content="✅ All cogs (except CogManager) are now unloaded!", view=None
+                    )
+                except Exception:
+                    pass
+
+    async def on_timeout(self):
+        """Disable view on timeout"""
+        for item in self.children:
+            item.disabled = True
+
+
 class CogManager(commands.Cog):
     """Cog Manager: Load, unload, and reload cogs with persistent states"""
 
@@ -182,6 +314,32 @@ class CogManager(commands.Cog):
             disabled.remove(cog_name)
             self.save_disabled_cogs(disabled)
 
+    def get_all_cog_files(self) -> dict:
+        """Get dictionary mapping file names to their cog class names"""
+        import importlib
+        import inspect
+
+        cogs_dir = "Cogs"
+        cog_mapping = {}
+
+        for file in os.listdir(cogs_dir):
+            if file.endswith(".py") and not file.startswith("_") and file != "__init__.py":
+                file_name = file[:-3]  # Remove .py extension
+
+                # Try to import the module and get the actual cog class name
+                try:
+                    module = importlib.import_module(f"Cogs.{file_name}")
+                    # Find the cog class in the module
+                    for name, obj in inspect.getmembers(module, inspect.isclass):
+                        if issubclass(obj, commands.Cog) and obj is not commands.Cog:
+                            cog_mapping[file_name] = name
+                            break
+                except Exception:
+                    # If we can't import it, assume the class name is the same as the file name
+                    cog_mapping[file_name] = file_name
+
+        return cog_mapping
+
     def _censor_sensitive_data(self, message: str) -> str:
         """Censor sensitive information like URLs, tokens, and passwords in log messages"""
         import re
@@ -200,57 +358,276 @@ class CogManager(commands.Cog):
 
     @commands.command(name="load")
     @commands.has_permissions(administrator=True)
-    async def load_cog(self, ctx: commands.Context, cog_name: str):
-        """Load a cog"""
+    async def load_cog(self, ctx: commands.Context, cog_name: str = None):
+        """Load a cog - interactive if no cog specified"""
+
+        # If no cog specified, show interactive selector
+        if cog_name is None:
+            # Get mapping of file names to class names
+            cog_mapping = self.get_all_cog_files()
+            loaded_cogs = list(self.bot.cogs.keys())
+
+            # Find unloaded cogs by checking class names
+            unloaded_cogs = {
+                file_name: class_name for file_name, class_name in cog_mapping.items() if class_name not in loaded_cogs
+            }
+
+            if not unloaded_cogs:
+                await ctx.send("✅ All cogs are already loaded!")
+                return
+
+            embed = discord.Embed(
+                title="📥 Load Cog", description="Select a cog to load from the dropdown below:", color=PINK
+            )
+
+            # Show list of all unloaded cogs (show class names)
+            sorted_cogs = sorted(unloaded_cogs.items(), key=lambda x: x[1])  # Sort by class name
+            cog_list = "\n".join([f"• `{class_name}` (from `{file_name}.py`)" for file_name, class_name in sorted_cogs])
+
+            # Discord embed field has a 1024 character limit, so split if needed
+            if len(cog_list) > 1024:
+                chunks = []
+                current_chunk = []
+                current_length = 0
+
+                for file_name, class_name in sorted_cogs:
+                    line = f"• `{class_name}` (from `{file_name}.py`)\n"
+                    if current_length + len(line) > 1024:
+                        chunks.append("\n".join(current_chunk))
+                        current_chunk = [f"• `{class_name}` (from `{file_name}.py`)"]
+                        current_length = len(line)
+                    else:
+                        current_chunk.append(f"• `{class_name}` (from `{file_name}.py`)")
+                        current_length += len(line)
+
+                if current_chunk:
+                    chunks.append("\n".join(current_chunk))
+
+                embed.add_field(name="📋 Available Cogs", value=chunks[0], inline=False)
+
+                for i, chunk in enumerate(chunks[1:], 1):
+                    embed.add_field(name=f"📋 Available Cogs (continued {i})", value=chunk, inline=False)
+            else:
+                embed.add_field(name="📋 Available Cogs", value=cog_list, inline=False)
+
+            set_pink_footer(embed, bot=self.bot.user)
+
+            # Send message first, then create view with message reference
+            message = await ctx.send(embed=embed)
+
+            # Create interactive view with dropdown and pass the message
+            view = CogLoadView(self, ctx, unloaded_cogs, message)
+
+            # Edit message to add the view
+            await message.edit(view=view)
+            return
+
+        # Direct load if cog name provided
+        await self._perform_load(ctx, cog_name)
+
+    async def _perform_load(self, ctx: commands.Context, cog_name: str, interaction: discord.Interaction = None):
+        """Perform the actual load operation. cog_name is the file name. Returns True on success, False on failure."""
         try:
+            # Show loading message
+            if interaction:
+                await interaction.response.defer()
+
+            # Load the extension using the file name
             await self.bot.load_extension(f"Cogs.{cog_name}")
             self.enable_cog(cog_name)
+
+            # Get the actual class name that was loaded
+            cog_mapping = self.get_all_cog_files()
+            class_name = cog_mapping.get(cog_name, cog_name)
+
             embed = discord.Embed(
-                title="✅ Cog Loaded", description=f"Successfully loaded cog `{cog_name}`", color=PINK
+                title="✅ Cog Loaded Successfully!",
+                description=f"**{class_name}** has been loaded and is ready to use.",
+                color=discord.Color.green(),
             )
+            embed.add_field(name="📦 Cog Class", value=f"`{class_name}`", inline=True)
+            embed.add_field(name="📄 From File", value=f"`{cog_name}.py`", inline=True)
+            embed.add_field(name="👤 Loaded by", value=ctx.author.mention, inline=True)
+            embed.add_field(name="⏰ Time", value=f"<t:{int(discord.utils.utcnow().timestamp())}:R>", inline=True)
+
             set_pink_footer(embed, bot=self.bot.user)
-            await ctx.send(embed=embed)
-            logger.info(f"Cog {cog_name} loaded by {ctx.author}")
+
+            if interaction:
+                await interaction.followup.send(embed=embed)
+            else:
+                await ctx.send(embed=embed)
+
+            logger.info(f"🔧 [CogManager] Cog {class_name} (from {cog_name}.py) loaded by {ctx.author}")
+            return True
+
         except Exception as e:
-            embed = discord.Embed(
-                title="❌ Load Failed", description=f"Failed to load cog `{cog_name}`: {e}", color=discord.Color.red()
+            error_embed = discord.Embed(
+                title="❌ Load Failed",
+                description=f"Failed to load **{cog_name}**",
+                color=discord.Color.red(),
             )
-            set_pink_footer(embed, bot=self.bot.user)
-            await ctx.send(embed=embed)
-            logger.error(f"Failed to load cog {cog_name}: {e}")
+            error_embed.add_field(name="🐛 Error", value=f"```{str(e)[:200]}```", inline=False)
+            error_embed.add_field(name="💡 Tip", value="Check the console logs for more details", inline=False)
+
+            set_pink_footer(error_embed, bot=self.bot.user)
+
+            if interaction:
+                await interaction.followup.send(embed=error_embed, ephemeral=True)
+            else:
+                await ctx.send(embed=error_embed)
+
+            logger.error(f"❌ [CogManager] Failed to load cog {cog_name}: {e}")
+            return False
 
     @commands.command(name="unload")
     @commands.has_permissions(administrator=True)
-    async def unload_cog(self, ctx: commands.Context, cog_name: str):
-        """Unload a cog"""
-        if cog_name.lower() == "cogmanager":
+    async def unload_cog(self, ctx: commands.Context, cog_name: str = None):
+        """Unload a cog - interactive if no cog specified"""
+
+        # If no cog specified, show interactive selector
+        if cog_name is None:
+            loaded_cogs = [cog for cog in self.bot.cogs.keys() if cog != "CogManager"]
+
+            if not loaded_cogs:
+                await ctx.send("❌ No cogs available to unload (except CogManager which cannot be unloaded)!")
+                return
+
             embed = discord.Embed(
-                title="❌ Cannot Unload",
-                description="CogManager cannot be unloaded - it's required for cog management!",
-                color=discord.Color.red(),
+                title="📤 Unload Cog", description="Select a cog to unload from the dropdown below:", color=PINK
             )
+
+            # Show list of all loaded cogs
+            sorted_cogs = sorted(loaded_cogs)
+            cog_list = "\n".join([f"• `{cog}`" for cog in sorted_cogs])
+
+            # Discord embed field has a 1024 character limit, so split if needed
+            if len(cog_list) > 1024:
+                chunks = []
+                current_chunk = []
+                current_length = 0
+
+                for cog in sorted_cogs:
+                    line = f"• `{cog}`\n"
+                    if current_length + len(line) > 1024:
+                        chunks.append("\n".join(current_chunk))
+                        current_chunk = [f"• `{cog}`"]
+                        current_length = len(line)
+                    else:
+                        current_chunk.append(f"• `{cog}`")
+                        current_length += len(line)
+
+                if current_chunk:
+                    chunks.append("\n".join(current_chunk))
+
+                embed.add_field(name="📋 Loaded Cogs", value=chunks[0], inline=False)
+
+                for i, chunk in enumerate(chunks[1:], 1):
+                    embed.add_field(name=f"📋 Loaded Cogs (continued {i})", value=chunk, inline=False)
+            else:
+                embed.add_field(name="📋 Loaded Cogs", value=cog_list, inline=False)
+
+            embed.add_field(
+                name="ℹ️ Note",
+                value="CogManager cannot be unloaded as it's required for cog management.",
+                inline=False,
+            )
+
             set_pink_footer(embed, bot=self.bot.user)
-            await ctx.send(embed=embed)
+
+            # Send message first, then create view with message reference
+            message = await ctx.send(embed=embed)
+
+            # Create interactive view with dropdown and pass the message
+            view = CogUnloadView(self, ctx, loaded_cogs, message)
+
+            # Edit message to add the view
+            await message.edit(view=view)
             return
 
-        try:
-            await self.bot.unload_extension(f"Cogs.{cog_name}")
-            self.disable_cog(cog_name)
-            embed = discord.Embed(
-                title="✅ Cog Unloaded", description=f"Successfully unloaded cog `{cog_name}`", color=PINK
-            )
-            set_pink_footer(embed, bot=self.bot.user)
-            await ctx.send(embed=embed)
-            logger.info(f"Cog {cog_name} unloaded by {ctx.author}")
-        except Exception as e:
-            embed = discord.Embed(
-                title="❌ Unload Failed",
-                description=f"Failed to unload cog `{cog_name}`: {e}",
+        # Direct unload if cog name provided
+        await self._perform_unload(ctx, cog_name)
+
+    async def _perform_unload(self, ctx: commands.Context, cog_name: str, interaction: discord.Interaction = None):
+        """Perform the actual unload operation. cog_name can be either class name or file name.
+        Returns True on success, False on failure."""
+        # Check if trying to unload CogManager
+        if cog_name.lower() == "cogmanager":
+            error_embed = discord.Embed(
+                title="❌ Cannot Unload",
+                description="**CogManager** cannot be unloaded - it's required for cog management!",
                 color=discord.Color.red(),
             )
+            set_pink_footer(error_embed, bot=self.bot.user)
+
+            if interaction:
+                await interaction.response.send_message(embed=error_embed, ephemeral=True)
+            else:
+                await ctx.send(embed=error_embed)
+            return False
+
+        try:
+            # Show loading message
+            if interaction:
+                await interaction.response.defer()
+
+            # Get the mapping to find the file name
+            cog_mapping = self.get_all_cog_files()
+
+            # If cog_name is a class name, find the corresponding file name
+            file_name = cog_name
+            class_name = cog_name
+            for fname, cname in cog_mapping.items():
+                if cname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+                elif fname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+
+            # Unload using the file name
+            await self.bot.unload_extension(f"Cogs.{file_name}")
+            self.disable_cog(file_name)
+
+            embed = discord.Embed(
+                title="✅ Cog Unloaded Successfully!",
+                description=f"**{class_name}** has been unloaded.",
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="📦 Cog Class", value=f"`{class_name}`", inline=True)
+            embed.add_field(name="📄 From File", value=f"`{file_name}.py`", inline=True)
+            embed.add_field(name="👤 Unloaded by", value=ctx.author.mention, inline=True)
+            embed.add_field(name="⏰ Time", value=f"<t:{int(discord.utils.utcnow().timestamp())}:R>", inline=True)
+
             set_pink_footer(embed, bot=self.bot.user)
-            await ctx.send(embed=embed)
-            logger.error(f"Failed to unload cog {cog_name}: {e}")
+
+            if interaction:
+                await interaction.followup.send(embed=embed)
+            else:
+                await ctx.send(embed=embed)
+
+            logger.info(f"🔧 [CogManager] Cog {class_name} (from {file_name}.py) unloaded by {ctx.author}")
+            return True
+
+        except Exception as e:
+            error_embed = discord.Embed(
+                title="❌ Unload Failed",
+                description=f"Failed to unload **{cog_name}**",
+                color=discord.Color.red(),
+            )
+            error_embed.add_field(name="🐛 Error", value=f"```{str(e)[:200]}```", inline=False)
+            error_embed.add_field(name="💡 Tip", value="Check the console logs for more details", inline=False)
+
+            set_pink_footer(error_embed, bot=self.bot.user)
+
+            if interaction:
+                await interaction.followup.send(embed=error_embed, ephemeral=True)
+            else:
+                await ctx.send(embed=error_embed)
+
+            logger.error(f"❌ [CogManager] Failed to unload cog {cog_name}: {e}")
+            return False
 
     @commands.command(name="reload")
     @commands.has_permissions(administrator=True)
@@ -319,56 +696,53 @@ class CogManager(commands.Cog):
 
     async def _perform_reload(self, ctx: commands.Context, cog_name: str, interaction: discord.Interaction = None):
         """Perform the actual reload operation. Returns True on success, False on failure."""
+        if cog_name.lower() == "cogmanager":
+            error_embed = discord.Embed(
+                title="❌ Cannot Reload",
+                description="**CogManager** cannot be reloaded while it's running!",
+                color=discord.Color.red(),
+            )
+            set_pink_footer(error_embed, bot=self.bot.user)
+
+            if interaction:
+                await interaction.response.send_message(embed=error_embed, ephemeral=True)
+            else:
+                await ctx.send(embed=error_embed)
+            return False
+
         try:
             # Show loading message
             if interaction:
                 await interaction.response.defer()
 
-            # Find the actual extension name from the cog name
-            # Cog names can differ from file names (e.g., ChangelogCog -> Changelog.py)
-            extension_name = None
-            for ext_name, ext in self.bot.extensions.items():
-                if ext_name.startswith("Cogs."):
-                    # Get the cog classes from this extension
-                    for item in dir(ext):
-                        obj = getattr(ext, item, None)
-                        if isinstance(obj, type) and issubclass(obj, commands.Cog):
-                            # Check if any cog in this extension matches the requested name
-                            if obj.__name__ == cog_name:
-                                extension_name = ext_name
-                                break
-                    if extension_name:
-                        break
+            # Get the mapping to find the file name
+            cog_mapping = self.get_all_cog_files()
 
-            # If no extension found, the cog might not be loaded
-            if not extension_name:
-                error_embed = discord.Embed(
-                    title="❌ Cog Not Loaded",
-                    description=f"**{cog_name}** is not currently loaded.",
-                    color=discord.Color.red(),
-                )
-                error_embed.add_field(
-                    name="💡 Tip",
-                    value=f"Use `!load {cog_name}` to load it first, or use `!listcogs` to see loaded cogs.",
-                    inline=False,
-                )
-                set_pink_footer(error_embed, bot=self.bot.user)
+            # If cog_name is a class name, find the corresponding file name
+            file_name = cog_name
+            class_name = cog_name
+            for fname, cname in cog_mapping.items():
+                if cname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+                elif fname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
 
-                if interaction:
-                    await interaction.followup.send(embed=error_embed, ephemeral=True)
-                else:
-                    await ctx.send(embed=error_embed)
-                return False
-
+            # Reload using the file name
+            extension_name = f"Cogs.{file_name}"
             await self.bot.unload_extension(extension_name)
             await self.bot.load_extension(extension_name)
 
             embed = discord.Embed(
                 title="✅ Cog Reloaded Successfully!",
-                description=f"**{cog_name}** has been reloaded and is ready to use.",
+                description=f"**{class_name}** has been reloaded and is ready to use.",
                 color=discord.Color.green(),
             )
-            embed.add_field(name="📦 Cog", value=f"`{cog_name}`", inline=True)
+            embed.add_field(name="📦 Cog Class", value=f"`{class_name}`", inline=True)
+            embed.add_field(name="📄 From File", value=f"`{file_name}.py`", inline=True)
             embed.add_field(name="👤 Reloaded by", value=ctx.author.mention, inline=True)
             embed.add_field(name="⏰ Time", value=f"<t:{int(discord.utils.utcnow().timestamp())}:R>", inline=True)
 
@@ -379,7 +753,7 @@ class CogManager(commands.Cog):
             else:
                 await ctx.send(embed=embed)
 
-            logger.info(f"🔧 [CogManager] Cog {cog_name} reloaded by {ctx.author}")
+            logger.info(f"🔧 [CogManager] Cog {class_name} (from {file_name}.py) reloaded by {ctx.author}")
             return True
 
         except Exception as e:
@@ -391,7 +765,7 @@ class CogManager(commands.Cog):
             error_embed.add_field(name="🐛 Error", value=f"```{str(e)[:200]}```", inline=False)
             error_embed.add_field(name="💡 Tip", value="Check the console logs for more details", inline=False)
 
-            set_pink_footer(error_embed, bot=self.bot.user)  # Fixed: was 'embed' instead of 'error_embed'
+            set_pink_footer(error_embed, bot=self.bot.user)
 
             if interaction:
                 await interaction.followup.send(embed=error_embed, ephemeral=True)

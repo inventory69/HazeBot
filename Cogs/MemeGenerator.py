@@ -784,39 +784,39 @@ class MemeGenerator(commands.Cog):
         modal = MemeTextModal(self, template_info)
         await interaction.response.send_modal(modal)
 
-    @app_commands.command(name="memetemplates", description="🎨 Browse popular meme templates")
-    @app_commands.guilds(discord.Object(id=get_guild_id()))
-    async def meme_templates_slash(self, interaction: discord.Interaction):
-        """Show popular meme templates"""
-        await interaction.response.defer(ephemeral=True)
-
-        # Ensure templates are loaded
-        if not self.templates:
-            await self.fetch_templates()
-
-        if not self.templates:
-            await interaction.followup.send("❌ No templates available. Please try again later.", ephemeral=True)
-            return
-
-        # Show top 10 templates
-        popular = self.get_popular_templates(10)
-
-        embed = discord.Embed(
-            title="🎨 Popular Meme Templates",
-            description="Use `/creatememe` to create a custom meme with these templates!",
-            color=PINK,
-        )
-
-        for i, template in enumerate(popular, 1):
-            name = template.get("name", "Unknown")
-            template_id = template.get("id", "")
-            box_count = template.get("box_count", 0)
-
-            embed.add_field(name=f"{i}. {name}", value=f"ID: `{template_id}` • Text boxes: {box_count}", inline=False)
-
-        embed.set_footer(text=f"Total templates available: {len(self.templates)}")
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
+    # @app_commands.command(name="memetemplates", description="🎨 Browse popular meme templates")
+    # @app_commands.guilds(discord.Object(id=get_guild_id()))
+    # async def meme_templates_slash(self, interaction: discord.Interaction):
+    #     """Show popular meme templates"""
+    #     await interaction.response.defer(ephemeral=True)
+    #
+    #     # Ensure templates are loaded
+    #     if not self.templates:
+    #         await self.fetch_templates()
+    #
+    #     if not self.templates:
+    #         await interaction.followup.send("❌ No templates available. Please try again later.", ephemeral=True)
+    #         return
+    #
+    #     # Show top 10 templates
+    #     popular = self.get_popular_templates(10)
+    #
+    #     embed = discord.Embed(
+    #         title="🎨 Popular Meme Templates",
+    #         description="Use `/creatememe` to create a custom meme with these templates!",
+    #         color=PINK,
+    #     )
+    #
+    #     for i, template in enumerate(popular, 1):
+    #         name = template.get("name", "Unknown")
+    #         template_id = template.get("id", "")
+    #         box_count = template.get("box_count", 0)
+    #
+    #         embed.add_field(name=f"{i}. {name}", value=f"ID: `{template_id}` • Text boxes: {box_count}", inline=False)
+    #
+    #     embed.set_footer(text=f"Total templates available: {len(self.templates)}")
+    #
+    #     await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def show_meme_generator_hub(self, interaction: discord.Interaction, post_to_channel_id: int = None):
         """
