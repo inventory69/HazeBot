@@ -120,7 +120,7 @@ PRIORITY_EMOJIS = {"high": "🔴", "medium": "🟡", "low": "🟢"}
 
 
 # === Permission helper ===
-def is_mod_or_admin(user: discord.User) -> bool:
+def is_mod_or_admin(user: discord.Member) -> bool:
     """Check if user is moderator or admin."""
     return any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
 
@@ -535,22 +535,41 @@ class TodoConfirmView(discord.ui.View):
         current_page_idx = channel_data.get("current_page", 0)
         pages = channel_data.get("pages", [])
         
-        if 0 <= current_page_idx < len(pages):
-            current_page = pages[current_page_idx]
-            
-            if self.action == "add":
-                current_page["items"].append(new_item)
+        # Validate and auto-correct if needed
+        if not pages:
+            logger.error(f"No pages found in channel {self.channel_id}, creating default page")
+            pages = [{"title": "📋 To-Do List", "items": []}]
+            channel_data["pages"] = pages
+            current_page_idx = 0
+            channel_data["current_page"] = 0
+        elif current_page_idx >= len(pages):
+            logger.warning(
+                f"Invalid current_page index {current_page_idx} in channel {self.channel_id}, "
+                f"resetting to 0"
+            )
+            current_page_idx = 0
+            channel_data["current_page"] = 0
+        
+        current_page = pages[current_page_idx]
+        
+        if self.action == "add":
+            current_page["items"].append(new_item)
+            logger.info(
+                f"To-do item added to page {current_page_idx} in channel {self.channel_id} "
+                f"by {interaction.user}"
+            )
+        elif self.action == "edit" and self.item_index is not None:
+            if 0 <= self.item_index < len(current_page["items"]):
+                current_page["items"][self.item_index] = new_item
                 logger.info(
-                    f"To-do item added to page {current_page_idx} in channel {self.channel_id} "
-                    f"by {interaction.user}"
+                    f"To-do item {self.item_index} on page {current_page_idx} in channel "
+                    f"{self.channel_id} edited by {interaction.user}"
                 )
-            elif self.action == "edit" and self.item_index is not None:
-                if 0 <= self.item_index < len(current_page["items"]):
-                    current_page["items"][self.item_index] = new_item
-                    logger.info(
-                        f"To-do item {self.item_index} on page {current_page_idx} in channel "
-                        f"{self.channel_id} edited by {interaction.user}"
-                    )
+            else:
+                logger.error(
+                    f"Invalid item index {self.item_index} for page {current_page_idx} "
+                    f"in channel {self.channel_id}"
+                )
 
         # Save data
         save_todo_data(data)
@@ -732,14 +751,27 @@ Rules:
         current_page_idx = channel_data.get("current_page", 0)
         pages = channel_data.get("pages", [])
         
+        # Validate and auto-correct current_page if out of bounds
+        if not pages:
+            logger.error(f"No pages found in channel {channel_id}, creating default page")
+            pages = [{"title": "📋 To-Do List", "items": []}]
+            channel_data["pages"] = pages
+            current_page_idx = 0
+            channel_data["current_page"] = 0
+            save_todo_data(data)
+        elif current_page_idx >= len(pages):
+            logger.warning(
+                f"Invalid current_page index {current_page_idx} in channel {channel_id}, "
+                f"resetting to 0"
+            )
+            current_page_idx = 0
+            channel_data["current_page"] = 0
+            save_todo_data(data)
+        
         # Get current page items
-        if 0 <= current_page_idx < len(pages):
-            current_page = pages[current_page_idx]
-            items = current_page.get("items", [])
-            page_title = current_page.get("title", "📋 To-Do List")
-        else:
-            items = []
-            page_title = "📋 To-Do List"
+        current_page = pages[current_page_idx]
+        items = current_page.get("items", [])
+        page_title = current_page.get("title", "📋 To-Do List")
 
         # Delete old messages if exist
         if channel_data.get("message_ids"):
