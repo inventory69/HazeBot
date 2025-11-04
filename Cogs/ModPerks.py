@@ -12,6 +12,7 @@ from Config import (
     MODERATOR_ROLE_ID,
     MOD_DATA_FILE,
     CHANGELOG_ROLE_ID,
+    MEME_ROLE_ID,
     get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
@@ -706,21 +707,40 @@ class ModPanel(commands.Cog):
             else:
                 await ctx_or_interaction.response.send_message(message, ephemeral=True)
             return
+        
         guild = ctx_or_interaction.guild if hasattr(ctx_or_interaction, "guild") else ctx_or_interaction.guild
+        
+        # Get both roles
         changelog_role = guild.get_role(CHANGELOG_ROLE_ID)
-        if not changelog_role:
-            message = "❌ Changelog role not found."
-            if hasattr(ctx_or_interaction, "send"):
-                await ctx_or_interaction.send(message, delete_after=5)
+        meme_role = guild.get_role(MEME_ROLE_ID)
+        
+        # Build description with both opt-in types
+        description_parts = []
+        
+        # Changelog opt-ins
+        if changelog_role:
+            users_with_changelog = [member for member in guild.members if changelog_role in member.roles]
+            if users_with_changelog:
+                user_list = "\n".join([f"<@{member.id}> ({member.display_name})" for member in users_with_changelog])
+                description_parts.append(f"**📢 Changelog Notifications ({len(users_with_changelog)} users):**\n{user_list}")
             else:
-                await ctx_or_interaction.response.send_message(message, ephemeral=True)
-            return
-        users_with_role = [member for member in guild.members if changelog_role in member.roles]
-        if not users_with_role:
-            description = "No users have opted into changelog notifications."
+                description_parts.append("**📢 Changelog Notifications:**\nNo users opted in.")
         else:
-            user_list = "\n".join([f"<@{member.id}> ({member.display_name})" for member in users_with_role])
-            description = f"Users opted into changelog notifications:\n{user_list}"
+            description_parts.append("**📢 Changelog Notifications:**\n❌ Role not found.")
+        
+        # Daily Meme opt-ins
+        if meme_role:
+            users_with_meme = [member for member in guild.members if meme_role in member.roles]
+            if users_with_meme:
+                user_list = "\n".join([f"<@{member.id}> ({member.display_name})" for member in users_with_meme])
+                description_parts.append(f"**🎭 Daily Memes ({len(users_with_meme)} users):**\n{user_list}")
+            else:
+                description_parts.append("**🎭 Daily Memes:**\nNo users opted in.")
+        else:
+            description_parts.append("**🎭 Daily Memes:**\n❌ Role not found.")
+        
+        description = "\n\n".join(description_parts)
+        
         embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=PINK)
         set_pink_footer(embed, bot=self.bot.user)
         if hasattr(ctx_or_interaction, "send"):
