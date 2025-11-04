@@ -286,11 +286,22 @@ class TodoPageNavigationView(discord.ui.View):
             return
 
         # Show page management menu
-        await load_todo_data()  # Ensure data is loaded for consistency
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        current_page_idx = channel_data.get("current_page", 0)
+        pages = channel_data.get("pages", [])
+
+        # Build description with page list
+        description = "Manage your todo list pages:\n\n**Available Pages:**\n"
+        for idx, page in enumerate(pages):
+            page_title = page.get("title", "Untitled")
+            item_count = len(page.get("items", []))
+            current_marker = "📍 " if idx == current_page_idx else "   "
+            description += f"{current_marker}**{idx + 1}.** {page_title} ({item_count} items)\n"
 
         embed = discord.Embed(
             title="⚙️ Page Management",
-            description="Manage your todo list pages:",
+            description=description,
             color=PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
@@ -310,27 +321,83 @@ class TodoPageNavigationView(discord.ui.View):
             items = current_page.get("items", [])
             page_title = current_page.get("title", "📋 To-Do List")
 
-            # Create embed
-            modal = TodoModal(self.bot, channel_id=self.channel_id)
-            embed = modal.create_todo_embed(
-                items,
-                is_first=True,
-                total_items=len(items),
-                page_title=page_title,
-                page_number=current_page_idx + 1,
-                total_pages=len(pages),
-            )
+            # Get cog reference
+            cog = self.bot.get_cog("TodoList")
 
-            # Update navigation buttons
-            await self.update_buttons()
+            # Delete old messages if exist
+            if channel_data.get("message_ids"):
+                try:
+                    channel = self.bot.get_channel(self.channel_id)
+                    if channel:
+                        for message_id in channel_data["message_ids"]:
+                            try:
+                                old_message = await channel.fetch_message(message_id)
+                                await old_message.delete()
+                                
+                                # Remove from persistent views
+                                if cog:
+                                    cog._remove_persistent_view(self.channel_id, message_id)
+                            except Exception as e:
+                                logger.warning(f"Could not delete old to-do message {message_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Could not delete old to-do messages: {e}")
 
-            # Edit the message
-            if self.message:
-                await self.message.edit(embed=embed, view=self)
-            else:
-                # If message not set, edit through interaction
-                await interaction.message.edit(embed=embed, view=self)
-                self.message = interaction.message
+            # Split items into multiple embeds if needed (12 items per embed)
+            max_per_embed = 12
+            new_message_ids = []
+            total_items = len(items)
+
+            # Create navigation view (only for last message)
+            nav_view = TodoPageNavigationView(self.bot, self.channel_id)
+            await nav_view.update_buttons()
+
+            channel = interaction.channel
+
+            # Calculate total number of embeds needed
+            num_embeds = max(1, (total_items + max_per_embed - 1) // max_per_embed) if total_items > 0 else 1
+
+            # Send messages, splitting items across multiple embeds if needed
+            for embed_idx, i in enumerate(range(0, max(1, total_items), max_per_embed)):
+                end = min(i + max_per_embed, total_items)
+                embed_items = items[i:end] if total_items > 0 else []
+                is_first_embed = embed_idx == 0
+                is_last_embed = embed_idx == num_embeds - 1
+
+                modal = TodoModal(self.bot, channel_id=self.channel_id)
+                embed = modal.create_todo_embed(
+                    embed_items,
+                    is_first=is_first_embed,
+                    total_items=total_items if is_first_embed else None,
+                    page_start=i + 1 if not is_first_embed and total_items > 0 else None,
+                    page_end=end if not is_first_embed and total_items > 0 else None,
+                    page_title=page_title if is_first_embed else None,
+                    page_number=current_page_idx + 1 if is_first_embed else None,
+                    total_pages=len(pages) if is_first_embed else None,
+                )
+
+                # Only attach navigation view to the last embed
+                if is_last_embed:
+                    new_message = await channel.send(embed=embed, view=nav_view)
+                    nav_view.message = new_message
+
+                    # Save persistent view for last message only
+                    if cog:
+                        cog._save_persistent_view(self.channel_id, new_message.id)
+                else:
+                    new_message = await channel.send(embed=embed)
+
+                new_message_ids.append(new_message.id)
+
+                # Break if no items (empty page)
+                if total_items == 0:
+                    break
+
+            # Update channel data with new message info
+            channel_data["message_ids"] = new_message_ids
+            save_todo_data(data)
+
+            # Update self.message to point to the last message
+            self.message = nav_view.message
 
 
 # === Page Management View ===
@@ -645,15 +712,22 @@ class TodoConfirmView(discord.ui.View):
         # Save data
         save_todo_data(data)
 
+        # Defer the response first since update_todo_message takes time
+        await interaction.response.defer(ephemeral=True)
+
         # Update message
         modal = TodoModal(self.bot, channel_id=self.channel_id)
         await modal.update_todo_message(self.original_interaction, data, self.channel_id)
 
-        # Send confirmation
-        await interaction.response.send_message("✅ To-do item added successfully!", ephemeral=True, delete_after=3)
+        # Send confirmation via followup
+        await interaction.followup.send("✅ To-do item added successfully!", ephemeral=True)
+        
         # Delete the view message (the original preview with buttons)
         if self.view_message:
-            await self.view_message.delete()
+            try:
+                await self.view_message.delete()
+            except Exception:
+                pass
         # Delete the management message too
         if self.management_message:
             try:
@@ -663,10 +737,14 @@ class TodoConfirmView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await interaction.response.send_message("❌ Cancelled. Item was not added.", ephemeral=True, delete_after=3)
+        await interaction.response.send_message("❌ Cancelled. Item was not added.", ephemeral=True)
+        
         # Delete the view message (the original preview with buttons)
         if self.view_message:
-            await self.view_message.delete()
+            try:
+                await self.view_message.delete()
+            except Exception:
+                pass
         # Delete the management message too
         if self.management_message:
             try:
@@ -869,34 +947,60 @@ Rules:
             except Exception as e:
                 logger.warning(f"Could not delete old to-do messages: {e}")
 
-        # Create embed for current page
-        embed = self.create_todo_embed(
-            items,
-            is_first=True,
-            total_items=len(items),
-            page_title=page_title,
-            page_number=current_page_idx + 1,
-            total_pages=len(pages),
-        )
+        # Split items into multiple embeds if needed (12 items per embed)
+        max_per_embed = 12
+        new_message_ids = []
+        total_items = len(items)
 
-        # Create navigation view
+        # Create navigation view (only for last message)
         nav_view = TodoPageNavigationView(self.bot, channel_id)
         await nav_view.update_buttons()
 
-        # Send new message with navigation
         channel = interaction.channel
-        new_message = await channel.send(embed=embed, view=nav_view)
-        nav_view.message = new_message
 
-        # Save persistent view
-        if cog:
-            cog._save_persistent_view(channel_id, new_message.id)
+        # Calculate total number of embeds needed
+        num_embeds = max(1, (total_items + max_per_embed - 1) // max_per_embed) if total_items > 0 else 1
+
+        # Send messages, splitting items across multiple embeds if needed
+        for embed_idx, i in enumerate(range(0, max(1, total_items), max_per_embed)):
+            end = min(i + max_per_embed, total_items)
+            embed_items = items[i:end] if total_items > 0 else []
+            is_first_embed = embed_idx == 0
+            is_last_embed = embed_idx == num_embeds - 1
+
+            embed = self.create_todo_embed(
+                embed_items,
+                is_first=is_first_embed,
+                total_items=total_items if is_first_embed else None,
+                page_start=i + 1 if not is_first_embed and total_items > 0 else None,
+                page_end=end if not is_first_embed and total_items > 0 else None,
+                page_title=page_title if is_first_embed else None,
+                page_number=current_page_idx + 1 if is_first_embed else None,
+                total_pages=len(pages) if is_first_embed else None,
+            )
+
+            # Only attach navigation view to the last embed
+            if is_last_embed:
+                new_message = await channel.send(embed=embed, view=nav_view)
+                nav_view.message = new_message
+
+                # Save persistent view for last message only
+                if cog:
+                    cog._save_persistent_view(channel_id, new_message.id)
+            else:
+                new_message = await channel.send(embed=embed)
+
+            new_message_ids.append(new_message.id)
+
+            # Break if no items (empty page)
+            if total_items == 0:
+                break
 
         # Update channel data with new message info
-        channel_data["message_ids"] = [new_message.id]
+        channel_data["message_ids"] = new_message_ids
         save_todo_data(data)
 
-        logger.info(f"Posted to-do message in channel {channel_id}, message {new_message.id}")
+        logger.info(f"Posted {len(new_message_ids)} to-do message(s) in channel {channel_id}")
 
     def create_todo_embed(
         self,
