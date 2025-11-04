@@ -100,36 +100,30 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 - **Channel Restriction:** Management commands restricted to designated todo channel.
 
 ### 🎭 Daily Meme System
-- **Daily Memes:** Automatically posts a trending meme every day at 12:00 PM.
+- **Daily Memes:** Automatically posts a trending meme every day at a configurable time.
+- **🎛️ Fully GUI-Configurable:** **Mods and Admins can configure EVERY aspect through an interactive GUI** accessible via `/meme` or `!meme` - no command line needed!
+  - **⚙️ Daily Meme Settings:** Enable/disable, schedule time, target channel, NSFW toggle, role mentions
+  - **🎯 Selection Preferences:** Minimum score threshold, max sources to fetch from, pool size for variety
+  - **📍 Source Management:** Add/remove Reddit subreddits and Lemmy communities via interactive buttons and modals
+  - **🌐 Platform Toggle:** Enable/disable Reddit and Lemmy sources with a single click
+  - **🧪 Testing:** Test the daily meme function instantly from the GUI
 - **Multi-Platform Sources:** Supports both Reddit and Lemmy for meme fetching.
   - **Reddit:** Standard subreddit format (e.g., `memes`, `dankmemes`)
   - **Lemmy:** Instance@community format (e.g., `lemmy.world@memes`)
 - **Quality Curation:** Sources from configurable source list (default: 10 curated sources).
 - **Smart Selection:** Picks from top upvoted/scored memes for quality content.
-- **NSFW Support:** Includes NSFW memes with proper warnings if funny.
-- **Interactive Meme Hub:** `/meme` opens interactive hub with buttons for Reddit, Lemmy, or random memes.
+- **NSFW Support:** Includes NSFW memes with proper warnings (configurable via GUI).
+- **Interactive Meme Hub:** `/meme` opens the comprehensive interactive hub:
+  - **For All Users:** Get random memes, choose specific sources, create custom memes
+  - **For Mods/Admins:** Full management interface with all configuration options
 - **Direct Source Selection:** `/meme memes` or `!meme memes` to get memes from specific sources.
 - **Autocomplete:** Slash command includes autocomplete for all configured sources.
 - **Requester Attribution:** All meme requests show who requested the meme (for all users).
 - **Score Display:** Shows upvotes/score, source, and author for both platforms.
-- **Role Notification:** Mentions meme notification role for daily posts.
+- **Role Notification:** Mentions meme notification role for daily posts (configurable).
 - **Cooldown System:** 10-second cooldown between requests for non-admin/mod users.
-- **Admin Management:** Full source list management commands.
-  - `!memesubreddits` - List current meme sources (Reddit & Lemmy)
-  - `!addsubreddit <name>` - Add a Reddit subreddit or Lemmy community
-  - `!removesubreddit <name>` - Remove a source
-  - `!resetsubreddits` - Reset to defaults
-  - `!lemmycommunities` - List Lemmy communities
-  - `!addlemmy <instance@community>` - Add Lemmy community
-  - `!removelemmy <instance@community>` - Remove Lemmy community
-  - `!resetlemmy` - Reset Lemmy communities
-  - `!memesources` - List enabled/disabled sources
-  - `!enablesource <reddit|lemmy>` - Enable a source
-  - `!disablesource <reddit|lemmy>` - Disable a source
-  - `!resetsources` - Reset source settings
-  - `!dailyconfig` - Configure daily meme posting
-- **Test Commands:** `!testmeme` (Reddit) for testing.
-- **Persistent Configuration:** Source list saved to file across restarts.
+- **Command Line Option:** Traditional command line management also available (see Administrator Commands section).
+- **Persistent Configuration:** All settings saved to file and persist across bot restarts.
 
 ### 🎨 Custom Meme Generator (Imgflip Integration)
 - **100+ Templates:** Access to 100+ popular meme templates from Imgflip.
@@ -320,8 +314,8 @@ For contributors and developers:
 /profile
 /profile @username  # View another user's profile
 
-# Get memes
-/meme  # Open interactive Meme Hub
+# 🎭 Get memes - Interactive Meme Hub
+/meme  # Open interactive Meme Hub (users: get memes | mods/admins: full configuration)
 /meme memes  # Get meme from r/memes directly
 /meme lemmy.world@memes  # Get meme from Lemmy
 
@@ -365,6 +359,12 @@ For contributors and developers:
 /optins  # View changelog opt-in statistics
 !adminrlstats platform username  # Admin RL stats - bypass cache (prefix only)
 
+# 🎭 Meme Management - FULL GUI Configuration
+/meme  # Open Meme Hub with complete configuration interface
+       # Configure EVERYTHING: daily schedule, sources, filters, channels, etc.
+       # Manage Reddit subreddits, Lemmy communities, test function
+       # No command line needed - all settings accessible via buttons!
+
 # To-Do management
 /todo-update  # Manage server to-do list with AI formatting
 
@@ -405,7 +405,20 @@ For contributors and developers:
 !logs  # Interactive log viewer (or !logs CogName for specific cog)
 !sync  # Sync slash commands to guild
 
-# Meme management
+# 🎭 Meme Management - FULL GUI Configuration
+/meme  # Open Meme Hub with complete admin interface
+       # ⚙️ Configure ALL daily meme settings via interactive GUI:
+       #    • Schedule (time, enabled/disabled)
+       #    • Target channel and role mentions
+       #    • NSFW content toggle
+       #    • Selection preferences (min score, max sources, pool size)
+       #    • Manage Reddit subreddits (add/remove/reset)
+       #    • Manage Lemmy communities (add/remove/reset)
+       #    • Enable/disable platforms (Reddit/Lemmy)
+       #    • Test daily meme function instantly
+       # ALL configuration through buttons and modals - no typing needed!
+
+# Optional: Command-line meme management (GUI is recommended)
 !memesubreddits  # List current meme sources (Reddit & Lemmy)
 !addsubreddit funny  # Add a Reddit subreddit
 !addsubreddit lemmy.world@memes  # Add a Lemmy community
@@ -419,7 +432,7 @@ For contributors and developers:
 !enablesource reddit  # Enable a source
 !disablesource lemmy  # Disable a source
 !resetsources  # Reset source settings
-!dailyconfig  # Configure daily meme posting
+!dailyconfig  # Configure daily meme posting (opens GUI)
 !testmeme  # Test Reddit meme fetching
 !refreshtemplates  # Refresh meme templates from Imgflip API
 ```
@@ -458,6 +471,7 @@ For contributors and developers:
 | `/optins` | `!optins` | View changelog opt-in statistics |
 | `/todo-update` | `!todo-update` | Create/update to-do items with AI formatting |
 | `!adminrlstats [platform] [username]` | - | Admin RL stats - bypass cache (prefix only) |
+| **`/meme`** | **`!meme`** | **🎛️ Meme Hub with FULL GUI configuration - manage ALL daily meme settings** |
 
 #### Administrator Commands (Admins Only)
 
@@ -465,20 +479,21 @@ For contributors and developers:
 |---------|--------|-------------|
 | `!changelog [--text]` | - | Generate and post bot changelogs with AI (prefix only) |
 | `!say [message]` | - | Send message as bot (prefix only) |
-| `!testmeme` | - | Test daily meme function with Reddit (prefix only) |
-| `!memesubreddits` | - | List current meme sources (Reddit & Lemmy) (prefix only) |
-| `!addsubreddit [name]` | - | Add a Reddit subreddit or Lemmy community (format: instance@community) (prefix only) |
-| `!removesubreddit [name]` | - | Remove a meme source (prefix only) |
-| `!resetsubreddits` | - | Reset meme sources to defaults (prefix only) |
-| `!lemmycommunities` | - | List Lemmy communities (prefix only) |
-| `!addlemmy [instance@community]` | - | Add Lemmy community (prefix only) |
-| `!removelemmy [instance@community]` | - | Remove Lemmy community (prefix only) |
-| `!resetlemmy` | - | Reset Lemmy communities (prefix only) |
-| `!memesources` | - | List enabled/disabled sources (prefix only) |
-| `!enablesource [source]` | - | Enable a meme source (reddit/lemmy) (prefix only) |
-| `!disablesource [source]` | - | Disable a meme source (prefix only) |
-| `!resetsources` | - | Reset source settings (prefix only) |
-| `!dailyconfig` | - | Configure daily meme posting (prefix only) |
+| **`/meme`** | **`!meme`** | **🎛️ Meme Hub - Complete GUI for ALL daily meme configuration** |
+| `!testmeme` | - | Test daily meme function (prefix only) |
+| `!memesubreddits` | - | List current meme sources (Reddit & Lemmy) (prefix only) - *Use GUI instead* |
+| `!addsubreddit [name]` | - | Add a Reddit subreddit or Lemmy community (prefix only) - *Use GUI instead* |
+| `!removesubreddit [name]` | - | Remove a meme source (prefix only) - *Use GUI instead* |
+| `!resetsubreddits` | - | Reset meme sources to defaults (prefix only) - *Use GUI instead* |
+| `!lemmycommunities` | - | List Lemmy communities (prefix only) - *Use GUI instead* |
+| `!addlemmy [instance@community]` | - | Add Lemmy community (prefix only) - *Use GUI instead* |
+| `!removelemmy [instance@community]` | - | Remove Lemmy community (prefix only) - *Use GUI instead* |
+| `!resetlemmy` | - | Reset Lemmy communities (prefix only) - *Use GUI instead* |
+| `!memesources` | - | List enabled/disabled sources (prefix only) - *Use GUI instead* |
+| `!enablesource [source]` | - | Enable a meme source (reddit/lemmy) (prefix only) - *Use GUI instead* |
+| `!disablesource [source]` | - | Disable a meme source (prefix only) - *Use GUI instead* |
+| `!resetsources` | - | Reset source settings (prefix only) - *Use GUI instead* |
+| `!dailyconfig` | - | Configure daily meme posting (opens GUI) (prefix only) |
 | `!refreshtemplates` | - | Refresh meme templates from Imgflip API (prefix only) |
 | `!restorecongratsview [message_id] [user_id]` | - | Restore persistent congrats button (prefix only) |
 | `!create-button` | - | Create persistent buttons for any command type (prefix only) |
