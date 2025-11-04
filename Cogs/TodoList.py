@@ -120,8 +120,11 @@ PRIORITY_EMOJIS = {"high": "🔴", "medium": "🟡", "low": "🟢"}
 
 
 # === Permission helper ===
-def is_mod_or_admin(user: discord.Member) -> bool:
+def is_mod_or_admin(user) -> bool:
     """Check if user is moderator or admin."""
+    # Handle both discord.Member and discord.User
+    if not hasattr(user, 'roles'):
+        return False
     return any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
 
 
@@ -165,7 +168,7 @@ class TodoPageNavigationView(discord.ui.View):
             # Update the message
             await self.refresh_display(interaction, data, channel_data)
     
-    @discord.ui.button(label="Page 1/1", style=discord.ButtonStyle.primary, custom_id="todo_nav_info", disabled=True)
+    @discord.ui.button(label="📄 Page", style=discord.ButtonStyle.primary, custom_id="todo_nav_info", disabled=True)
     async def page_info(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         # This button is just for display, not clickable
         pass
@@ -291,8 +294,8 @@ class TodoPageManagementView(discord.ui.View):
         
         # Show confirmation view
         view = DeletePageConfirmView(self.bot, self.channel_id, current_page)
-        page_title = pages[current_page]['title']
-        page_items = len(pages[current_page]['items'])
+        page_title = pages[current_page].get('title', 'Untitled')
+        page_items = len(pages[current_page].get('items', []))
         embed = discord.Embed(
             title="⚠️ Confirm Page Deletion",
             description=f"Are you sure you want to delete page {current_page + 1}: **{page_title}**?\n\n"
@@ -433,13 +436,15 @@ class DeletePageConfirmView(discord.ui.View):
             await modal.update_todo_message(interaction, data, self.channel_id)
             
             # Send confirmation
+            deleted_title = deleted_page.get('title', 'Untitled')
+            deleted_items = len(deleted_page.get('items', []))
             await interaction.followup.send(
-                f"✅ Deleted page: **{deleted_page['title']}** ({len(deleted_page['items'])} items)",
+                f"✅ Deleted page: **{deleted_title}** ({deleted_items} items)",
                 ephemeral=True,
                 delete_after=5
             )
             
-            logger.info(f"Deleted page '{deleted_page['title']}' from channel {self.channel_id} by {interaction.user}")
+            logger.info(f"Deleted page '{deleted_title}' from channel {self.channel_id} by {interaction.user}")
     
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel_delete(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
