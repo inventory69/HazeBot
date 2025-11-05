@@ -32,7 +32,7 @@ class HazeBotAdminApp extends StatelessWidget {
             centerTitle: true,
             elevation: 2,
           ),
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             elevation: 2,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -55,7 +55,7 @@ class HazeBotAdminApp extends StatelessWidget {
             centerTitle: true,
             elevation: 2,
           ),
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             elevation: 2,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
