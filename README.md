@@ -6,6 +6,38 @@ A Discord bot designed for The Chillventory server ("Haze" on Discord). Built wi
 
 ---
 
+## 🌐 NEW: Web Interface & Android App
+
+HazeBot now includes a **modern web interface and Android app** for easy configuration management!
+
+### Key Features:
+- 🎨 **Modern Material Design UI** with dark mode support
+- 🔐 **Secure JWT authentication**
+- ⚙️ **Full bot configuration** through intuitive interface
+- 📱 **Cross-platform**: Web and Android support
+- 🚀 **Real-time updates** to bot settings
+
+### Quick Start:
+1. **Start the API server:**
+   ```bash
+   pip install -r api_requirements.txt
+   cd api && python app.py
+   ```
+
+2. **Run the web interface:**
+   ```bash
+   cd hazebot_admin
+   flutter run -d chrome
+   ```
+
+3. **Login** with default credentials (change in production!):
+   - Username: `admin`
+   - Password: `changeme`
+
+For detailed setup instructions, see **[SETUP_GUIDE.md](SETUP_GUIDE.md)**
+
+---
+
 ## ℹ️ Special Architecture Notes
 
 - **Test & Production Mode:** The bot automatically detects via the `PROD_MODE` environment variable whether it is running in test or production mode. IDs and tokens are dynamically loaded from `.env` and managed in `Config.py`, allowing safe operation in multiple environments.
