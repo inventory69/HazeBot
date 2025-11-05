@@ -2,16 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 
 class ConfigService extends ChangeNotifier {
-  final ApiService _apiService = ApiService();
   Map<String, dynamic>? _config;
   bool _isLoading = false;
   
   Map<String, dynamic>? get config => _config;
   bool get isLoading => _isLoading;
-  
-  void setApiService(ApiService apiService) {
-    // This will be called from AuthService after login
-  }
   
   Future<void> loadConfig(ApiService apiService) async {
     _isLoading = true;

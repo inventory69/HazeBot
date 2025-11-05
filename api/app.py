@@ -36,8 +36,12 @@ def token_required(f):
             if token.startswith('Bearer '):
                 token = token[7:]
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        except:
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
             return jsonify({'error': 'Token is invalid'}), 401
+        except Exception as e:
+            return jsonify({'error': f'Token validation failed: {str(e)}'}), 401
         
         return f(*args, **kwargs)
     
@@ -197,12 +201,20 @@ def config_channels():
     if request.method == 'PUT':
         data = request.get_json()
         
-        # Update current IDs dict
-        for key in data:
-            if key.upper() in Config.CURRENT_IDS:
-                Config.CURRENT_IDS[key.upper()] = int(data[key])
-                # Also update the module-level variable
-                setattr(Config, key.upper(), int(data[key]))
+        # Validate and update channel IDs
+        for key, value in data.items():
+            key_upper = key.upper()
+            if key_upper in Config.CURRENT_IDS:
+                try:
+                    # Validate Discord snowflake (should be a positive integer)
+                    channel_id = int(value)
+                    if channel_id <= 0:
+                        return jsonify({'error': f'Invalid channel ID for {key}: must be positive'}), 400
+                    
+                    Config.CURRENT_IDS[key_upper] = channel_id
+                    setattr(Config, key_upper, channel_id)
+                except (ValueError, TypeError):
+                    return jsonify({'error': f'Invalid channel ID for {key}: must be an integer'}), 400
         
         # Save to file
         save_config_to_file()
@@ -229,12 +241,41 @@ def config_roles():
     if request.method == 'PUT':
         data = request.get_json()
         
-        # Update current IDs dict
-        for key in data:
-            if key.upper() in Config.CURRENT_IDS:
-                Config.CURRENT_IDS[key.upper()] = int(data[key]) if isinstance(data[key], (int, str)) else data[key]
-                # Also update the module-level variable
-                setattr(Config, key.upper(), int(data[key]) if isinstance(data[key], (int, str)) else data[key])
+        # Validate and update role IDs
+        for key, value in data.items():
+            key_upper = key.upper()
+            if key_upper in Config.CURRENT_IDS:
+                try:
+                    # Handle lists (like interest_role_ids) and dicts (like interest_roles)
+                    if isinstance(value, list):
+                        # Validate each ID in the list
+                        validated_list = []
+                        for item in value:
+                            item_int = int(item)
+                            if item_int <= 0:
+                                return jsonify({'error': f'Invalid role ID in {key}: must be positive'}), 400
+                            validated_list.append(item_int)
+                        Config.CURRENT_IDS[key_upper] = validated_list
+                        setattr(Config, key_upper, validated_list)
+                    elif isinstance(value, dict):
+                        # Validate each ID in the dict
+                        validated_dict = {}
+                        for k, v in value.items():
+                            v_int = int(v)
+                            if v_int <= 0:
+                                return jsonify({'error': f'Invalid role ID for {k} in {key}: must be positive'}), 400
+                            validated_dict[k] = v_int
+                        Config.CURRENT_IDS[key_upper] = validated_dict
+                        setattr(Config, key_upper, validated_dict)
+                    else:
+                        # Single role ID
+                        role_id = int(value)
+                        if role_id <= 0:
+                            return jsonify({'error': f'Invalid role ID for {key}: must be positive'}), 400
+                        Config.CURRENT_IDS[key_upper] = role_id
+                        setattr(Config, key_upper, role_id)
+                except (ValueError, TypeError):
+                    return jsonify({'error': f'Invalid role ID for {key}: must be integer(s)'}), 400
         
         # Save to file
         save_config_to_file()
