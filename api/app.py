@@ -40,8 +40,9 @@ def token_required(f):
             return jsonify({'error': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Token is invalid'}), 401
-        except Exception as e:
-            return jsonify({'error': f'Token validation failed: {str(e)}'}), 401
+        except Exception:
+            # Don't expose internal error details to avoid information leakage
+            return jsonify({'error': 'Token validation failed'}), 401
         
         return f(*args, **kwargs)
     
@@ -492,7 +493,13 @@ if __name__ == '__main__':
     # Get port from environment or use default
     port = int(os.getenv('API_PORT', 5000))
     
+    # Check if we're in debug mode (only for development)
+    debug_mode = os.getenv('API_DEBUG', 'false').lower() == 'true'
+    
+    if debug_mode:
+        print("WARNING: Running in DEBUG mode. This should NEVER be used in production!")
+    
     print(f"Starting HazeBot Configuration API on port {port}")
     print(f"API Documentation: http://localhost:{port}/api/health")
     
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
