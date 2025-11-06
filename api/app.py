@@ -193,6 +193,23 @@ def config_general():
         return jsonify({'success': True, 'message': 'Configuration updated'})
 
 
+@app.route('/api/config/general/reset', methods=['POST'])
+@token_required
+def reset_general_config():
+    """Reset general configuration to default values"""
+    # Reset to default values from Config.py
+    Config.BotName = "Haze World Bot"
+    Config.CommandPrefix = "!"
+    Config.PresenceUpdateInterval = 3600
+    Config.MessageCooldown = 5
+    Config.FuzzyMatchingThreshold = 0.6
+    
+    # Save to file
+    save_config_to_file()
+    
+    return jsonify({'success': True, 'message': 'General configuration reset to defaults'})
+
+
 @app.route('/api/config/channels', methods=['GET', 'PUT'])
 @token_required
 def config_channels():
@@ -301,11 +318,24 @@ def config_roles():
 def config_meme():
     """Get or update meme configuration"""
     if request.method == 'GET':
+        # Try to get actual subreddits/lemmy from DailyMeme cog
+        bot = app.config.get('bot_instance')
+        subreddits = Config.DEFAULT_MEME_SUBREDDITS
+        lemmy_communities = Config.DEFAULT_MEME_LEMMY
+        
+        if bot:
+            daily_meme_cog = bot.get_cog('DailyMeme')
+            if daily_meme_cog:
+                subreddits = daily_meme_cog.meme_subreddits
+                lemmy_communities = daily_meme_cog.meme_lemmy
+        
         return jsonify({
             'default_subreddits': Config.DEFAULT_MEME_SUBREDDITS,
             'default_lemmy': Config.DEFAULT_MEME_LEMMY,
             'meme_sources': Config.MEME_SOURCES,
             'templates_cache_duration': Config.MEME_TEMPLATES_CACHE_DURATION,
+            'subreddits': subreddits,
+            'lemmy_communities': lemmy_communities,
         })
     
     if request.method == 'PUT':
@@ -707,10 +737,14 @@ def get_daily_meme_config():
         if not daily_meme_cog:
             return jsonify({'error': 'DailyMeme cog not loaded'}), 503
         
-        return jsonify({
-            'success': True,
-            'config': daily_meme_cog.daily_config
-        })
+        # Merge config with available sources
+        config_with_sources = {
+            **daily_meme_cog.daily_config,
+            'available_subreddits': daily_meme_cog.meme_subreddits,
+            'available_lemmy': daily_meme_cog.meme_lemmy,
+        }
+        
+        return jsonify(config_with_sources)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
