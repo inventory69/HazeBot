@@ -6,7 +6,6 @@ Provides REST endpoints to read and update bot configuration
 import os
 import json
 import sys
-import asyncio
 from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -22,228 +21,252 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 
 # Secret key for JWT (should be in environment variable in production)
-app.config['SECRET_KEY'] = os.getenv('API_SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config["SECRET_KEY"] = os.getenv("API_SECRET_KEY", "dev-secret-key-change-in-production")
+
 
 # Simple authentication decorator
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        
+        token = request.headers.get("Authorization")
+
         if not token:
-            return jsonify({'error': 'Token is missing'}), 401
-        
+            return jsonify({"error": "Token is missing"}), 401
+
         try:
-            if token.startswith('Bearer '):
+            if token.startswith("Bearer "):
                 token = token[7:]
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired'}), 401
+            return jsonify({"error": "Token has expired"}), 401
         except jwt.InvalidTokenError:
-            return jsonify({'error': 'Token is invalid'}), 401
+            return jsonify({"error": "Token is invalid"}), 401
         except Exception:
             # Don't expose internal error details to avoid information leakage
-            return jsonify({'error': 'Token validation failed'}), 401
-        
+            return jsonify({"error": "Token validation failed"}), 401
+
         return f(*args, **kwargs)
-    
+
     return decorated
 
 
-@app.route('/api/health', methods=['GET'])
+@app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint"""
-    return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
+    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
 
-@app.route('/api/auth/login', methods=['POST'])
+@app.route("/api/auth/login", methods=["POST"])
 def login():
     """Simple authentication endpoint"""
     data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
+    username = data.get("username")
+    password = data.get("password")
+
     # Build valid users dictionary from environment variables
-    valid_users = {
-        os.getenv('API_ADMIN_USER', 'admin'): os.getenv('API_ADMIN_PASS', 'changeme')
-    }
-    
+    valid_users = {os.getenv("API_ADMIN_USER", "admin"): os.getenv("API_ADMIN_PASS", "changeme")}
+
     # Add extra users from API_EXTRA_USERS (format: username:password,username2:password2)
-    extra_users = os.getenv('API_EXTRA_USERS', '')
+    extra_users = os.getenv("API_EXTRA_USERS", "")
     if extra_users:
-        for user_entry in extra_users.split(','):
+        for user_entry in extra_users.split(","):
             user_entry = user_entry.strip()
-            if ':' in user_entry:
-                user, pwd = user_entry.split(':', 1)
+            if ":" in user_entry:
+                user, pwd = user_entry.split(":", 1)
                 valid_users[user.strip()] = pwd.strip()
-    
+
     if username in valid_users and password == valid_users[username]:
-        token = jwt.encode({
-            'user': username,
-            'exp': datetime.utcnow() + timedelta(hours=24)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
-        
-        return jsonify({'token': token})
-    
-    return jsonify({'error': 'Invalid credentials'}), 401
+        token = jwt.encode(
+            {"user": username, "exp": datetime.utcnow() + timedelta(hours=24)},
+            app.config["SECRET_KEY"],
+            algorithm="HS256",
+        )
+
+        return jsonify({"token": token})
+
+    return jsonify({"error": "Invalid credentials"}), 401
 
 
-@app.route('/api/config', methods=['GET'])
+@app.route("/api/config", methods=["GET"])
 @token_required
 def get_config():
     """Get all bot configuration"""
     # Try to get actual subreddits/lemmy from DailyMeme cog
-    bot = app.config.get('bot_instance')
+    bot = app.config.get("bot_instance")
     subreddits = []
     lemmy_communities = []
-    
+    daily_meme_config = {}
+
     if bot:
-        daily_meme_cog = bot.get_cog('DailyMeme')
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if daily_meme_cog:
             subreddits = daily_meme_cog.meme_subreddits
             lemmy_communities = daily_meme_cog.meme_lemmy
-    
+            daily_meme_config = daily_meme_cog.daily_config
+
     config_data = {
         # General Settings
-        'general': {
-            'bot_name': Config.BotName,
-            'command_prefix': Config.CommandPrefix,
-            'presence_update_interval': Config.PresenceUpdateInterval,
-            'message_cooldown': Config.MessageCooldown,
-            'fuzzy_matching_threshold': Config.FuzzyMatchingThreshold,
-            'prod_mode': Config.PROD_MODE,
+        "general": {
+            "bot_name": Config.BotName,
+            "command_prefix": Config.CommandPrefix,
+            "presence_update_interval": Config.PresenceUpdateInterval,
+            "message_cooldown": Config.MessageCooldown,
+            "fuzzy_matching_threshold": Config.FuzzyMatchingThreshold,
+            "prod_mode": Config.PROD_MODE,
         },
         # Logging Configuration
-        'logging': {
-            'log_level': Config.LogLevel,
-            'cog_log_levels': Config.COG_LOG_LEVELS,
+        "logging": {
+            "log_level": Config.LogLevel,
+            "cog_log_levels": Config.COG_LOG_LEVELS,
         },
         # Discord IDs
-        'discord_ids': {
-            'guild_id': Config.GUILD_ID,
-            'guild_name': getattr(Config, 'GUILD_NAME', None),  # Optional: Add GUILD_NAME to Config.py
-            'admin_role_id': Config.ADMIN_ROLE_ID,
-            'moderator_role_id': Config.MODERATOR_ROLE_ID,
-            'normal_role_id': Config.NORMAL_ROLE_ID,
-            'member_role_id': Config.MEMBER_ROLE_ID,
-            'changelog_role_id': Config.CHANGELOG_ROLE_ID,
-            'meme_role_id': Config.MEME_ROLE_ID,
-            'interest_role_ids': Config.INTEREST_ROLE_IDS,
-            'interest_roles': Config.INTEREST_ROLES,
+        "discord_ids": {
+            "guild_id": Config.GUILD_ID,
+            "guild_name": getattr(Config, "GUILD_NAME", None),  # Optional: Add GUILD_NAME to Config.py
+            "admin_role_id": Config.ADMIN_ROLE_ID,
+            "moderator_role_id": Config.MODERATOR_ROLE_ID,
+            "normal_role_id": Config.NORMAL_ROLE_ID,
+            "member_role_id": Config.MEMBER_ROLE_ID,
+            "changelog_role_id": Config.CHANGELOG_ROLE_ID,
+            "meme_role_id": Config.MEME_ROLE_ID,
+            "interest_role_ids": Config.INTEREST_ROLE_IDS,
+            "interest_roles": Config.INTEREST_ROLES,
         },
         # Channels
-        'channels': {
-            'log_channel_id': Config.LOG_CHANNEL_ID,
-            'changelog_channel_id': Config.CHANGELOG_CHANNEL_ID,
-            'todo_channel_id': Config.TODO_CHANNEL_ID,
-            'rl_channel_id': Config.RL_CHANNEL_ID,
-            'meme_channel_id': Config.MEME_CHANNEL_ID,
-            'server_guide_channel_id': Config.SERVER_GUIDE_CHANNEL_ID,
-            'welcome_rules_channel_id': Config.WELCOME_RULES_CHANNEL_ID,
-            'welcome_public_channel_id': Config.WELCOME_PUBLIC_CHANNEL_ID,
-            'transcript_channel_id': Config.TRANSCRIPT_CHANNEL_ID,
-            'tickets_category_id': Config.TICKETS_CATEGORY_ID,
+        "channels": {
+            "log_channel_id": Config.LOG_CHANNEL_ID,
+            "changelog_channel_id": Config.CHANGELOG_CHANNEL_ID,
+            "todo_channel_id": Config.TODO_CHANNEL_ID,
+            "rl_channel_id": Config.RL_CHANNEL_ID,
+            "meme_channel_id": Config.MEME_CHANNEL_ID,
+            "server_guide_channel_id": Config.SERVER_GUIDE_CHANNEL_ID,
+            "welcome_rules_channel_id": Config.WELCOME_RULES_CHANNEL_ID,
+            "welcome_public_channel_id": Config.WELCOME_PUBLIC_CHANNEL_ID,
+            "transcript_channel_id": Config.TRANSCRIPT_CHANNEL_ID,
+            "tickets_category_id": Config.TICKETS_CATEGORY_ID,
         },
         # Rocket League
-        'rocket_league': {
-            'rank_check_interval_hours': Config.RL_RANK_CHECK_INTERVAL_HOURS,
-            'rank_cache_ttl_seconds': Config.RL_RANK_CACHE_TTL_SECONDS,
+        "rocket_league": {
+            "rank_check_interval_hours": Config.RL_RANK_CHECK_INTERVAL_HOURS,
+            "rank_cache_ttl_seconds": Config.RL_RANK_CACHE_TTL_SECONDS,
         },
         # Meme Configuration
-        'meme': {
-            'default_subreddits': Config.DEFAULT_MEME_SUBREDDITS,
-            'default_lemmy': Config.DEFAULT_MEME_LEMMY,
-            'meme_sources': Config.MEME_SOURCES,
-            'templates_cache_duration': Config.MEME_TEMPLATES_CACHE_DURATION,
-            'subreddits': subreddits,
-            'lemmy_communities': lemmy_communities,
+        "meme": {
+            "default_subreddits": Config.DEFAULT_MEME_SUBREDDITS,
+            "default_lemmy": Config.DEFAULT_MEME_LEMMY,
+            "meme_sources": Config.MEME_SOURCES,
+            "templates_cache_duration": Config.MEME_TEMPLATES_CACHE_DURATION,
+            "subreddits": subreddits,
+            "lemmy_communities": lemmy_communities,
         },
+        # Daily Meme
+        "daily_meme": daily_meme_config,
         # Welcome System
-        'welcome': {
-            'rules_text': Config.RULES_TEXT,
-            'welcome_messages': Config.WELCOME_MESSAGES,
+        "welcome": {
+            "rules_text": Config.RULES_TEXT,
+            "welcome_messages": Config.WELCOME_MESSAGES,
         },
         # Server Guide
-        'server_guide': Config.SERVER_GUIDE_CONFIG,
+        "server_guide": Config.SERVER_GUIDE_CONFIG,
         # Role Display Names
-        'role_names': Config.ROLE_NAMES,
+        "role_names": Config.ROLE_NAMES,
     }
-    
+
     return jsonify(config_data)
 
 
-@app.route('/api/config/general', methods=['GET', 'PUT'])
+@app.route("/api/config/general", methods=["GET", "PUT"])
 @token_required
 def config_general():
     """Get or update general configuration"""
-    if request.method == 'GET':
-        return jsonify({
-            'bot_name': Config.BotName,
-            'command_prefix': Config.CommandPrefix,
-            'presence_update_interval': Config.PresenceUpdateInterval,
-            'message_cooldown': Config.MessageCooldown,
-            'fuzzy_matching_threshold': Config.FuzzyMatchingThreshold,
-        })
-    
-    if request.method == 'PUT':
+    if request.method == "GET":
+        return jsonify(
+            {
+                "bot_name": Config.BotName,
+                "command_prefix": Config.CommandPrefix,
+                "presence_update_interval": Config.PresenceUpdateInterval,
+                "message_cooldown": Config.MessageCooldown,
+                "fuzzy_matching_threshold": Config.FuzzyMatchingThreshold,
+                "pink_color": Config.PINK.value if hasattr(Config, "PINK") else 0xAD1457,
+                "role_names": Config.ROLE_NAMES if hasattr(Config, "ROLE_NAMES") else {},
+            }
+        )
+
+    if request.method == "PUT":
         data = request.get_json()
-        
+
         # Update configuration (in memory)
-        if 'bot_name' in data:
-            Config.BotName = data['bot_name']
-        if 'command_prefix' in data:
-            Config.CommandPrefix = data['command_prefix']
-        if 'presence_update_interval' in data:
-            Config.PresenceUpdateInterval = int(data['presence_update_interval'])
-        if 'message_cooldown' in data:
-            Config.MessageCooldown = int(data['message_cooldown'])
-        if 'fuzzy_matching_threshold' in data:
-            Config.FuzzyMatchingThreshold = float(data['fuzzy_matching_threshold'])
-        
+        if "bot_name" in data:
+            Config.BotName = data["bot_name"]
+        if "command_prefix" in data:
+            Config.CommandPrefix = data["command_prefix"]
+        if "presence_update_interval" in data:
+            Config.PresenceUpdateInterval = int(data["presence_update_interval"])
+        if "message_cooldown" in data:
+            Config.MessageCooldown = int(data["message_cooldown"])
+        if "fuzzy_matching_threshold" in data:
+            Config.FuzzyMatchingThreshold = float(data["fuzzy_matching_threshold"])
+        if "pink_color" in data:
+            import discord
+
+            Config.PINK = discord.Color(int(data["pink_color"]))
+        if "role_names" in data:
+            Config.ROLE_NAMES = data["role_names"]
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Configuration updated'})
+
+        return jsonify({"success": True, "message": "Configuration updated"})
 
 
-@app.route('/api/config/general/reset', methods=['POST'])
+@app.route("/api/config/general/reset", methods=["POST"])
 @token_required
 def reset_general_config():
     """Reset general configuration to default values"""
+    import discord
+
     # Reset to default values from Config.py
     Config.BotName = "Haze World Bot"
     Config.CommandPrefix = "!"
     Config.PresenceUpdateInterval = 3600
     Config.MessageCooldown = 5
     Config.FuzzyMatchingThreshold = 0.6
-    
+    Config.PINK = discord.Color(0xAD1457)
+    Config.ROLE_NAMES = {
+        "user": "🎒 Lootling",
+        "mod": "📦 Slot Keeper",
+        "admin": "🧊 Inventory Master",
+    }
+
     # Save to file
     save_config_to_file()
-    
-    return jsonify({'success': True, 'message': 'General configuration reset to defaults'})
+
+    return jsonify({"success": True, "message": "General configuration reset to defaults"})
 
 
-@app.route('/api/config/channels', methods=['GET', 'PUT'])
+@app.route("/api/config/channels", methods=["GET", "PUT"])
 @token_required
 def config_channels():
     """Get or update channel configuration"""
-    if request.method == 'GET':
-        return jsonify({
-            'log_channel_id': Config.LOG_CHANNEL_ID,
-            'changelog_channel_id': Config.CHANGELOG_CHANNEL_ID,
-            'todo_channel_id': Config.TODO_CHANNEL_ID,
-            'rl_channel_id': Config.RL_CHANNEL_ID,
-            'meme_channel_id': Config.MEME_CHANNEL_ID,
-            'server_guide_channel_id': Config.SERVER_GUIDE_CHANNEL_ID,
-            'welcome_rules_channel_id': Config.WELCOME_RULES_CHANNEL_ID,
-            'welcome_public_channel_id': Config.WELCOME_PUBLIC_CHANNEL_ID,
-            'transcript_channel_id': Config.TRANSCRIPT_CHANNEL_ID,
-            'tickets_category_id': Config.TICKETS_CATEGORY_ID,
-        })
-    
-    if request.method == 'PUT':
+    if request.method == "GET":
+        return jsonify(
+            {
+                "log_channel_id": Config.LOG_CHANNEL_ID,
+                "changelog_channel_id": Config.CHANGELOG_CHANNEL_ID,
+                "todo_channel_id": Config.TODO_CHANNEL_ID,
+                "rl_channel_id": Config.RL_CHANNEL_ID,
+                "meme_channel_id": Config.MEME_CHANNEL_ID,
+                "server_guide_channel_id": Config.SERVER_GUIDE_CHANNEL_ID,
+                "welcome_rules_channel_id": Config.WELCOME_RULES_CHANNEL_ID,
+                "welcome_public_channel_id": Config.WELCOME_PUBLIC_CHANNEL_ID,
+                "transcript_channel_id": Config.TRANSCRIPT_CHANNEL_ID,
+                "tickets_category_id": Config.TICKETS_CATEGORY_ID,
+            }
+        )
+
+    if request.method == "PUT":
         data = request.get_json()
-        
+
         # Validate and update channel IDs
         for key, value in data.items():
             key_upper = key.upper()
@@ -252,38 +275,62 @@ def config_channels():
                     # Validate Discord snowflake (should be a positive integer)
                     channel_id = int(value)
                     if channel_id <= 0:
-                        return jsonify({'error': f'Invalid channel ID for {key}: must be positive'}), 400
-                    
+                        return jsonify({"error": f"Invalid channel ID for {key}: must be positive"}), 400
+
                     Config.CURRENT_IDS[key_upper] = channel_id
                     setattr(Config, key_upper, channel_id)
                 except (ValueError, TypeError):
-                    return jsonify({'error': f'Invalid channel ID for {key}: must be an integer'}), 400
-        
+                    return jsonify({"error": f"Invalid channel ID for {key}: must be an integer"}), 400
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Channel configuration updated'})
+
+        return jsonify({"success": True, "message": "Channel configuration updated"})
 
 
-@app.route('/api/config/roles', methods=['GET', 'PUT'])
+@app.route("/api/config/channels/reset", methods=["POST"])
+@token_required
+def reset_channels_config():
+    """Reset channels configuration to default values"""
+    # Reset to default values from CURRENT_IDS (which is already set based on PROD_MODE)
+    Config.LOG_CHANNEL_ID = Config.CURRENT_IDS["LOG_CHANNEL_ID"]
+    Config.CHANGELOG_CHANNEL_ID = Config.CURRENT_IDS["CHANGELOG_CHANNEL_ID"]
+    Config.TODO_CHANNEL_ID = Config.CURRENT_IDS["TODO_CHANNEL_ID"]
+    Config.RL_CHANNEL_ID = Config.CURRENT_IDS["RL_CHANNEL_ID"]
+    Config.MEME_CHANNEL_ID = Config.CURRENT_IDS.get("MEME_CHANNEL_ID")
+    Config.SERVER_GUIDE_CHANNEL_ID = Config.CURRENT_IDS.get("SERVER_GUIDE_CHANNEL_ID")
+    Config.WELCOME_RULES_CHANNEL_ID = Config.CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
+    Config.WELCOME_PUBLIC_CHANNEL_ID = Config.CURRENT_IDS["WELCOME_PUBLIC_CHANNEL_ID"]
+    Config.TRANSCRIPT_CHANNEL_ID = Config.CURRENT_IDS["TRANSCRIPT_CHANNEL_ID"]
+    Config.TICKETS_CATEGORY_ID = Config.CURRENT_IDS["TICKETS_CATEGORY_ID"]
+
+    # Save to file
+    save_config_to_file()
+
+    return jsonify({"success": True, "message": "Channels configuration reset to defaults"})
+
+
+@app.route("/api/config/roles", methods=["GET", "PUT"])
 @token_required
 def config_roles():
     """Get or update role configuration"""
-    if request.method == 'GET':
-        return jsonify({
-            'admin_role_id': Config.ADMIN_ROLE_ID,
-            'moderator_role_id': Config.MODERATOR_ROLE_ID,
-            'normal_role_id': Config.NORMAL_ROLE_ID,
-            'member_role_id': Config.MEMBER_ROLE_ID,
-            'changelog_role_id': Config.CHANGELOG_ROLE_ID,
-            'meme_role_id': Config.MEME_ROLE_ID,
-            'interest_role_ids': Config.INTEREST_ROLE_IDS,
-            'interest_roles': Config.INTEREST_ROLES,
-        })
-    
-    if request.method == 'PUT':
+    if request.method == "GET":
+        return jsonify(
+            {
+                "admin_role_id": Config.ADMIN_ROLE_ID,
+                "moderator_role_id": Config.MODERATOR_ROLE_ID,
+                "normal_role_id": Config.NORMAL_ROLE_ID,
+                "member_role_id": Config.MEMBER_ROLE_ID,
+                "changelog_role_id": Config.CHANGELOG_ROLE_ID,
+                "meme_role_id": Config.MEME_ROLE_ID,
+                "interest_role_ids": Config.INTEREST_ROLE_IDS,
+                "interest_roles": Config.INTEREST_ROLES,
+            }
+        )
+
+    if request.method == "PUT":
         data = request.get_json()
-        
+
         # Validate and update role IDs
         for key, value in data.items():
             key_upper = key.upper()
@@ -296,7 +343,7 @@ def config_roles():
                         for item in value:
                             item_int = int(item)
                             if item_int <= 0:
-                                return jsonify({'error': f'Invalid role ID in {key}: must be positive'}), 400
+                                return jsonify({"error": f"Invalid role ID in {key}: must be positive"}), 400
                             validated_list.append(item_int)
                         Config.CURRENT_IDS[key_upper] = validated_list
                         setattr(Config, key_upper, validated_list)
@@ -306,7 +353,7 @@ def config_roles():
                         for k, v in value.items():
                             v_int = int(v)
                             if v_int <= 0:
-                                return jsonify({'error': f'Invalid role ID for {k} in {key}: must be positive'}), 400
+                                return jsonify({"error": f"Invalid role ID for {k} in {key}: must be positive"}), 400
                             validated_dict[k] = v_int
                         Config.CURRENT_IDS[key_upper] = validated_dict
                         setattr(Config, key_upper, validated_dict)
@@ -314,272 +361,552 @@ def config_roles():
                         # Single role ID
                         role_id = int(value)
                         if role_id <= 0:
-                            return jsonify({'error': f'Invalid role ID for {key}: must be positive'}), 400
+                            return jsonify({"error": f"Invalid role ID for {key}: must be positive"}), 400
                         Config.CURRENT_IDS[key_upper] = role_id
                         setattr(Config, key_upper, role_id)
                 except (ValueError, TypeError):
-                    return jsonify({'error': f'Invalid role ID for {key}: must be integer(s)'}), 400
-        
+                    return jsonify({"error": f"Invalid role ID for {key}: must be integer(s)"}), 400
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Role configuration updated'})
+
+        return jsonify({"success": True, "message": "Role configuration updated"})
 
 
-@app.route('/api/config/meme', methods=['GET', 'PUT'])
+@app.route("/api/config/roles/reset", methods=["POST"])
+@token_required
+def reset_roles_config():
+    """Reset all role IDs to defaults from CURRENT_IDS"""
+    Config.ADMIN_ROLE_ID = Config.CURRENT_IDS["ADMIN_ROLE_ID"]
+    Config.MODERATOR_ROLE_ID = Config.CURRENT_IDS["MODERATOR_ROLE_ID"]
+    Config.NORMAL_ROLE_ID = Config.CURRENT_IDS["NORMAL_ROLE_ID"]
+    Config.MEMBER_ROLE_ID = Config.CURRENT_IDS["MEMBER_ROLE_ID"]
+    Config.CHANGELOG_ROLE_ID = Config.CURRENT_IDS["CHANGELOG_ROLE_ID"]
+    Config.MEME_ROLE_ID = Config.CURRENT_IDS.get("MEME_ROLE_ID")
+
+    # Save to file
+    save_config_to_file()
+
+    return jsonify({"success": True, "message": "Roles configuration reset to defaults"})
+
+
+@app.route("/api/config/meme", methods=["GET", "PUT"])
 @token_required
 def config_meme():
     """Get or update meme configuration"""
-    if request.method == 'GET':
+    if request.method == "GET":
         # Try to get actual subreddits/lemmy from DailyMeme cog
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         subreddits = Config.DEFAULT_MEME_SUBREDDITS
         lemmy_communities = Config.DEFAULT_MEME_LEMMY
-        
+
         if bot:
-            daily_meme_cog = bot.get_cog('DailyMeme')
+            daily_meme_cog = bot.get_cog("DailyMeme")
             if daily_meme_cog:
                 subreddits = daily_meme_cog.meme_subreddits
                 lemmy_communities = daily_meme_cog.meme_lemmy
-        
-        return jsonify({
-            'default_subreddits': Config.DEFAULT_MEME_SUBREDDITS,
-            'default_lemmy': Config.DEFAULT_MEME_LEMMY,
-            'meme_sources': Config.MEME_SOURCES,
-            'templates_cache_duration': Config.MEME_TEMPLATES_CACHE_DURATION,
-            'subreddits': subreddits,
-            'lemmy_communities': lemmy_communities,
-        })
-    
-    if request.method == 'PUT':
+
+        return jsonify(
+            {
+                "default_subreddits": Config.DEFAULT_MEME_SUBREDDITS,
+                "default_lemmy": Config.DEFAULT_MEME_LEMMY,
+                "meme_sources": Config.MEME_SOURCES,
+                "templates_cache_duration": Config.MEME_TEMPLATES_CACHE_DURATION,
+                "subreddits": subreddits,
+                "lemmy_communities": lemmy_communities,
+            }
+        )
+
+    if request.method == "PUT":
         data = request.get_json()
-        
-        if 'default_subreddits' in data:
-            Config.DEFAULT_MEME_SUBREDDITS = data['default_subreddits']
-        if 'default_lemmy' in data:
-            Config.DEFAULT_MEME_LEMMY = data['default_lemmy']
-        if 'meme_sources' in data:
-            Config.MEME_SOURCES = data['meme_sources']
-        if 'templates_cache_duration' in data:
-            Config.MEME_TEMPLATES_CACHE_DURATION = int(data['templates_cache_duration'])
-        
+
+        if "default_subreddits" in data:
+            Config.DEFAULT_MEME_SUBREDDITS = data["default_subreddits"]
+        if "default_lemmy" in data:
+            Config.DEFAULT_MEME_LEMMY = data["default_lemmy"]
+        if "meme_sources" in data:
+            Config.MEME_SOURCES = data["meme_sources"]
+        if "templates_cache_duration" in data:
+            Config.MEME_TEMPLATES_CACHE_DURATION = int(data["templates_cache_duration"])
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Meme configuration updated'})
+
+        return jsonify({"success": True, "message": "Meme configuration updated"})
 
 
-@app.route('/api/config/rocket_league', methods=['GET', 'PUT'])
+@app.route("/api/config/rocket_league", methods=["GET", "PUT"])
 @token_required
 def config_rocket_league():
     """Get or update Rocket League configuration"""
-    if request.method == 'GET':
-        return jsonify({
-            'rank_check_interval_hours': Config.RL_RANK_CHECK_INTERVAL_HOURS,
-            'rank_cache_ttl_seconds': Config.RL_RANK_CACHE_TTL_SECONDS,
-        })
-    
-    if request.method == 'PUT':
+    if request.method == "GET":
+        return jsonify(
+            {
+                "rank_check_interval_hours": Config.RL_RANK_CHECK_INTERVAL_HOURS,
+                "rank_cache_ttl_seconds": Config.RL_RANK_CACHE_TTL_SECONDS,
+            }
+        )
+
+    if request.method == "PUT":
         data = request.get_json()
-        
-        if 'rank_check_interval_hours' in data:
-            Config.RL_RANK_CHECK_INTERVAL_HOURS = int(data['rank_check_interval_hours'])
-        if 'rank_cache_ttl_seconds' in data:
-            Config.RL_RANK_CACHE_TTL_SECONDS = int(data['rank_cache_ttl_seconds'])
-        
+
+        if "rank_check_interval_hours" in data:
+            Config.RL_RANK_CHECK_INTERVAL_HOURS = int(data["rank_check_interval_hours"])
+        if "rank_cache_ttl_seconds" in data:
+            Config.RL_RANK_CACHE_TTL_SECONDS = int(data["rank_cache_ttl_seconds"])
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Rocket League configuration updated'})
+
+        return jsonify({"success": True, "message": "Rocket League configuration updated"})
 
 
-@app.route('/api/config/welcome', methods=['GET', 'PUT'])
+@app.route("/api/config/rocket_league/reset", methods=["POST"])
+@token_required
+def reset_rocket_league_config():
+    """Reset Rocket League configuration to default values"""
+    # Reset to default values from Config.py
+    Config.RL_RANK_CHECK_INTERVAL_HOURS = 3
+    Config.RL_RANK_CACHE_TTL_SECONDS = 10500  # 2h 55min
+
+    # Save to file
+    save_config_to_file()
+
+    return jsonify({"success": True, "message": "Rocket League configuration reset to defaults"})
+
+
+@app.route("/api/rocket-league/accounts", methods=["GET"])
+@token_required
+def get_rl_accounts():
+    """Get all linked Rocket League accounts"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        rl_cog = bot.get_cog("RocketLeague")
+        if not rl_cog:
+            return jsonify({"error": "RocketLeague cog not loaded"}), 503
+
+        # Import the load function from the cog's module
+        from Cogs.RocketLeague import load_rl_accounts
+
+        accounts = load_rl_accounts()
+
+        # Enrich with Discord user information
+        enriched_accounts = []
+        for user_id, data in accounts.items():
+            user = bot.get_user(int(user_id))
+            enriched_accounts.append(
+                {
+                    "user_id": user_id,
+                    "username": user.name if user else "Unknown User",
+                    "display_name": user.display_name if user else "Unknown User",
+                    "avatar_url": str(user.avatar.url) if user and user.avatar else None,
+                    "platform": data.get("platform"),
+                    "rl_username": data.get("username"),
+                    "ranks": data.get("ranks", {}),
+                    "rank_display": data.get("rank_display", {}),
+                    "icon_urls": data.get("icon_urls", {}),
+                    "last_fetched": data.get("last_fetched"),
+                }
+            )
+
+        return jsonify(enriched_accounts)
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to get RL accounts: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/rocket-league/accounts/<user_id>", methods=["DELETE"])
+@token_required
+def delete_rl_account(user_id):
+    """Delete/unlink a Rocket League account (admin function)"""
+    try:
+        from Cogs.RocketLeague import load_rl_accounts, save_rl_accounts
+
+        accounts = load_rl_accounts()
+
+        if user_id not in accounts:
+            return jsonify({"error": "Account not found"}), 404
+
+        # Get username for logging
+        rl_username = accounts[user_id].get("username", "Unknown")
+
+        # Delete the account
+        del accounts[user_id]
+        save_rl_accounts(accounts)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Successfully unlinked account for user {user_id} (RL: {rl_username})",
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to delete RL account: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/rocket-league/check-ranks", methods=["POST"])
+@token_required
+def trigger_rank_check():
+    """Manually trigger rank check for all linked accounts"""
+    try:
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        rl_cog = bot.get_cog("RocketLeague")
+        if not rl_cog:
+            return jsonify({"error": "RocketLeague cog not loaded"}), 503
+
+        # Use the bot's existing event loop
+        loop = bot.loop
+
+        # Call the rank check function with force=True
+        future = asyncio.run_coroutine_threadsafe(rl_cog._check_and_update_ranks(force=True), loop)
+
+        # Wait for result with timeout
+        future.result(timeout=120)  # 2 minutes timeout
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Rank check completed successfully",
+                "note": "Check the RL channel for any rank promotion notifications",
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to check ranks: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/rocket-league/stats/<platform>/<username>", methods=["GET"])
+@token_required
+def get_rl_stats(platform, username):
+    """Get Rocket League stats for a specific player"""
+    try:
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        rl_cog = bot.get_cog("RocketLeague")
+        if not rl_cog:
+            return jsonify({"error": "RocketLeague cog not loaded"}), 503
+
+        # Validate platform
+        if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
+            return jsonify({"error": "Invalid platform. Use: steam, epic, psn, xbl, or switch"}), 400
+
+        # Use the bot's existing event loop
+        loop = bot.loop
+
+        # Fetch stats using the bot's function
+        future = asyncio.run_coroutine_threadsafe(rl_cog.get_player_stats(platform.lower(), username), loop)
+
+        # Wait for result with timeout
+        stats = future.result(timeout=90)
+
+        if not stats:
+            return jsonify({"error": "Player not found or error fetching stats"}), 404
+
+        return jsonify(
+            {
+                "success": True,
+                "stats": {
+                    "username": stats["username"],
+                    "platform": platform.upper(),
+                    "rank_1v1": stats["rank_1v1"],
+                    "rank_2v2": stats["rank_2v2"],
+                    "rank_3v3": stats["rank_3v3"],
+                    "rank_4v4": stats.get("rank_4v4", "N/A"),
+                    "season_reward": stats["season_reward"],
+                    "highest_icon_url": stats.get("highest_icon_url"),
+                    "tier_names": stats.get("tier_names", {}),
+                    "rank_display": stats.get("rank_display", {}),
+                    "icon_urls": stats.get("icon_urls", {}),
+                },
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to fetch RL stats: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/config/welcome", methods=["GET", "PUT"])
 @token_required
 def config_welcome():
     """Get or update welcome system configuration"""
-    if request.method == 'GET':
-        return jsonify({
-            'rules_text': Config.RULES_TEXT,
-            'welcome_messages': Config.WELCOME_MESSAGES,
-        })
-    
-    if request.method == 'PUT':
+    if request.method == "GET":
+        return jsonify(
+            {
+                "rules_text": Config.RULES_TEXT,
+                "welcome_messages": Config.WELCOME_MESSAGES,
+                "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
+            }
+        )
+
+    if request.method == "PUT":
         data = request.get_json()
-        
-        if 'rules_text' in data:
-            Config.RULES_TEXT = data['rules_text']
-        if 'welcome_messages' in data:
-            Config.WELCOME_MESSAGES = data['welcome_messages']
-        
+
+        if "rules_text" in data:
+            Config.RULES_TEXT = data["rules_text"]
+        if "welcome_messages" in data:
+            Config.WELCOME_MESSAGES = data["welcome_messages"]
+        if "welcome_button_replies" in data:
+            Config.WELCOME_BUTTON_REPLIES = data["welcome_button_replies"]
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Welcome configuration updated'})
+
+        return jsonify({"success": True, "message": "Welcome configuration updated"})
 
 
-@app.route('/api/config/server_guide', methods=['GET', 'PUT'])
+@app.route("/api/config/welcome/reset", methods=["POST"])
+@token_required
+def reset_welcome_config():
+    """Reset welcome configuration to defaults"""
+    # Import the original defaults
+    import importlib
+    import Config as OriginalConfig
+    importlib.reload(OriginalConfig)
+
+    Config.RULES_TEXT = OriginalConfig.RULES_TEXT
+    Config.WELCOME_MESSAGES = OriginalConfig.WELCOME_MESSAGES
+    Config.WELCOME_BUTTON_REPLIES = OriginalConfig.WELCOME_BUTTON_REPLIES
+
+    save_config_to_file()
+
+    return jsonify({
+        "success": True,
+        "message": "Welcome configuration reset to defaults",
+        "config": {
+            "rules_text": Config.RULES_TEXT,
+            "welcome_messages": Config.WELCOME_MESSAGES,
+            "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
+        }
+    })
+
+
+@app.route("/api/config/rocket_league_texts", methods=["GET", "PUT"])
+@token_required
+def config_rocket_league_texts():
+    """Get or update Rocket League text configuration"""
+    if request.method == "GET":
+        return jsonify(
+            {
+                "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
+                "congrats_replies": Config.RL_CONGRATS_REPLIES,
+            }
+        )
+
+    if request.method == "PUT":
+        data = request.get_json()
+
+        if "promotion_config" in data:
+            Config.RL_RANK_PROMOTION_CONFIG = data["promotion_config"]
+        if "congrats_replies" in data:
+            Config.RL_CONGRATS_REPLIES = data["congrats_replies"]
+
+        # Save to file
+        save_config_to_file()
+
+        return jsonify({"success": True, "message": "Rocket League text configuration updated"})
+
+
+@app.route("/api/config/rocket_league_texts/reset", methods=["POST"])
+@token_required
+def reset_rocket_league_texts_config():
+    """Reset Rocket League text configuration to defaults"""
+    # Import the original defaults
+    import importlib
+    import Config as OriginalConfig
+    importlib.reload(OriginalConfig)
+
+    Config.RL_RANK_PROMOTION_CONFIG = OriginalConfig.RL_RANK_PROMOTION_CONFIG
+    Config.RL_CONGRATS_REPLIES = OriginalConfig.RL_CONGRATS_REPLIES
+
+    save_config_to_file()
+
+    return jsonify({
+        "success": True,
+        "message": "Rocket League text configuration reset to defaults",
+        "config": {
+            "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
+            "congrats_replies": Config.RL_CONGRATS_REPLIES,
+        }
+    })
+
+
+@app.route("/api/config/server_guide", methods=["GET", "PUT"])
 @token_required
 def config_server_guide():
     """Get or update server guide configuration"""
-    if request.method == 'GET':
+    if request.method == "GET":
         return jsonify(Config.SERVER_GUIDE_CONFIG)
-    
-    if request.method == 'PUT':
+
+    if request.method == "PUT":
         data = request.get_json()
         Config.SERVER_GUIDE_CONFIG = data
-        
+
         # Save to file
         save_config_to_file()
-        
-        return jsonify({'success': True, 'message': 'Server guide configuration updated'})
+
+        return jsonify({"success": True, "message": "Server guide configuration updated"})
 
 
 # Test endpoints
-@app.route('/api/test/random-meme', methods=['GET'])
+@app.route("/api/test/random-meme", methods=["GET"])
 @token_required
 def test_random_meme():
     """Get a random meme from configured sources using the actual bot function"""
     try:
         import asyncio
-        
+
         # Get bot instance
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot instance not available. Make sure to start with start_with_api.py'}), 503
-        
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
         # Get DailyMeme cog
-        daily_meme_cog = bot.get_cog('DailyMeme')
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if not daily_meme_cog:
-            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
-        
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
         # Use the bot's existing event loop instead of creating a new one
         loop = bot.loop
-        
+
         # Create a future and schedule it on the bot's loop
         future = asyncio.run_coroutine_threadsafe(
             daily_meme_cog.get_daily_meme(
                 allow_nsfw=False,  # Don't allow NSFW for admin panel
-                max_sources=3,     # Fetch from 3 sources for speed
-                min_score=50,      # Lower threshold for testing
-                pool_size=25       # Smaller pool for speed
+                max_sources=3,  # Fetch from 3 sources for speed
+                min_score=50,  # Lower threshold for testing
+                pool_size=25,  # Smaller pool for speed
             ),
-            loop
+            loop,
         )
-        
+
         # Wait for result with timeout
         meme = future.result(timeout=30)
-        
+
         if meme:
-            return jsonify({
-                'success': True,
-                'meme': {
-                    'url': meme.get('url'),
-                    'title': meme.get('title'),
-                    'subreddit': meme.get('subreddit'),
-                    'author': meme.get('author'),
-                    'score': meme.get('upvotes', meme.get('score', 0)),
-                    'nsfw': meme.get('nsfw', False),
-                    'permalink': meme.get('permalink', '')
+            return jsonify(
+                {
+                    "success": True,
+                    "meme": {
+                        "url": meme.get("url"),
+                        "title": meme.get("title"),
+                        "subreddit": meme.get("subreddit"),
+                        "author": meme.get("author"),
+                        "score": meme.get("upvotes", meme.get("score", 0)),
+                        "nsfw": meme.get("nsfw", False),
+                        "permalink": meme.get("permalink", ""),
+                    },
                 }
-            })
+            )
         else:
-            return jsonify({'error': 'No suitable memes found'}), 404
-            
+            return jsonify({"error": "No suitable memes found"}), 404
+
     except Exception as e:
         import traceback
-        return jsonify({
-            'error': f'Failed to get random meme: {str(e)}',
-            'details': traceback.format_exc()
-        }), 500
+
+        return jsonify({"error": f"Failed to get random meme: {str(e)}", "details": traceback.format_exc()}), 500
 
 
-@app.route('/api/test/daily-meme', methods=['POST'])
+@app.route("/api/test/daily-meme", methods=["POST"])
 @token_required
 def test_daily_meme():
     """Test daily meme posting using the actual bot function"""
     try:
         import asyncio
-        
+
         # Get bot instance
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot instance not available. Make sure to start with start_with_api.py'}), 503
-        
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
         # Get DailyMeme cog
-        daily_meme_cog = bot.get_cog('DailyMeme')
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if not daily_meme_cog:
-            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
-        
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
         # Use the bot's existing event loop
         loop = bot.loop
-        
+
         # Call the actual daily meme task function
-        future = asyncio.run_coroutine_threadsafe(
-            daily_meme_cog.daily_meme_task(),
-            loop
-        )
-        
+        future = asyncio.run_coroutine_threadsafe(daily_meme_cog.daily_meme_task(), loop)
+
         # Wait for result with timeout
         future.result(timeout=30)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Daily meme posted successfully',
-            'note': 'Check your Discord meme channel to see the posted meme'
-        })
-            
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Daily meme posted successfully",
+                "note": "Check your Discord meme channel to see the posted meme",
+            }
+        )
+
     except Exception as e:
         import traceback
-        return jsonify({
-            'error': f'Failed to post daily meme: {str(e)}',
-            'details': traceback.format_exc()
-        }), 500
+
+        return jsonify({"error": f"Failed to post daily meme: {str(e)}", "details": traceback.format_exc()}), 500
 
 
-@app.route('/api/test/send-meme', methods=['POST'])
+@app.route("/api/test/send-meme", methods=["POST"])
 @token_required
 def send_meme_to_discord():
     """Send a specific meme to Discord"""
     try:
         import asyncio
-        
+
         # Get meme data from request
         data = request.get_json()
-        if not data or 'meme' not in data:
-            return jsonify({'error': 'Meme data required'}), 400
-        
-        meme_data = data['meme']
-        
+        if not data or "meme" not in data:
+            return jsonify({"error": "Meme data required"}), 400
+
+        meme_data = data["meme"]
+
         # Ensure meme_data has the correct structure expected by post_meme
         # The bot expects: url, title, subreddit, upvotes, author, permalink, nsfw
-        if 'upvotes' not in meme_data and 'score' in meme_data:
-            meme_data['upvotes'] = meme_data['score']
-        
+        if "upvotes" not in meme_data and "score" in meme_data:
+            meme_data["upvotes"] = meme_data["score"]
+
         # Get bot instance
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot instance not available'}), 503
-        
+            return jsonify({"error": "Bot instance not available"}), 503
+
         # Get DailyMeme cog
-        daily_meme_cog = bot.get_cog('DailyMeme')
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if not daily_meme_cog:
-            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
-        
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
         # Get meme channel
         meme_channel_id = Config.MEME_CHANNEL_ID
         channel = bot.get_channel(meme_channel_id)
         if not channel:
-            return jsonify({'error': f'Meme channel {meme_channel_id} not found'}), 404
-        
+            return jsonify({"error": f"Meme channel {meme_channel_id} not found"}), 404
+
         # Use the bot's existing event loop
         loop = bot.loop
-        
+
         # Post the meme to Discord with custom message
         async def post_meme():
             import discord
             from datetime import datetime
             from Utils.EmbedUtils import set_pink_footer
-            
+
             # Create embed manually (same as post_meme but with custom message)
             embed = discord.Embed(
                 title=meme_data["title"][:256],
@@ -605,322 +932,337 @@ def send_meme_to_discord():
 
             # Send with custom message
             await channel.send("🎭 Meme sent from Admin Panel", embed=embed)
-        
+
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Meme sent to Discord successfully',
-            'channel_id': meme_channel_id
-        })
-            
+
+        return jsonify({"success": True, "message": "Meme sent to Discord successfully", "channel_id": meme_channel_id})
+
     except Exception as e:
         import traceback
-        return jsonify({
-            'error': f'Failed to send meme to Discord: {str(e)}',
-            'details': traceback.format_exc()
-        }), 500
+
+        return jsonify({"error": f"Failed to send meme to Discord: {str(e)}", "details": traceback.format_exc()}), 500
 
 
 def set_bot_instance(bot):
     """Set the bot instance for the API to use"""
-    app.config['bot_instance'] = bot
+    app.config["bot_instance"] = bot
 
 
 def save_config_to_file():
     """Save current configuration to a JSON file for persistence"""
-    config_file = Path(__file__).parent.parent / 'Data' / 'api_config_overrides.json'
+    config_file = Path(__file__).parent.parent / "Data" / "api_config_overrides.json"
     config_file.parent.mkdir(exist_ok=True)
-    
+
     config_data = {
-        'general': {
-            'bot_name': Config.BotName,
-            'command_prefix': Config.CommandPrefix,
-            'presence_update_interval': Config.PresenceUpdateInterval,
-            'message_cooldown': Config.MessageCooldown,
-            'fuzzy_matching_threshold': Config.FuzzyMatchingThreshold,
+        "general": {
+            "bot_name": Config.BotName,
+            "command_prefix": Config.CommandPrefix,
+            "presence_update_interval": Config.PresenceUpdateInterval,
+            "message_cooldown": Config.MessageCooldown,
+            "fuzzy_matching_threshold": Config.FuzzyMatchingThreshold,
         },
-        'channels': {
-            'log_channel_id': Config.LOG_CHANNEL_ID,
-            'changelog_channel_id': Config.CHANGELOG_CHANNEL_ID,
-            'todo_channel_id': Config.TODO_CHANNEL_ID,
-            'rl_channel_id': Config.RL_CHANNEL_ID,
-            'meme_channel_id': Config.MEME_CHANNEL_ID,
-            'server_guide_channel_id': Config.SERVER_GUIDE_CHANNEL_ID,
-            'welcome_rules_channel_id': Config.WELCOME_RULES_CHANNEL_ID,
-            'welcome_public_channel_id': Config.WELCOME_PUBLIC_CHANNEL_ID,
-            'transcript_channel_id': Config.TRANSCRIPT_CHANNEL_ID,
-            'tickets_category_id': Config.TICKETS_CATEGORY_ID,
+        "channels": {
+            "log_channel_id": Config.LOG_CHANNEL_ID,
+            "changelog_channel_id": Config.CHANGELOG_CHANNEL_ID,
+            "todo_channel_id": Config.TODO_CHANNEL_ID,
+            "rl_channel_id": Config.RL_CHANNEL_ID,
+            "meme_channel_id": Config.MEME_CHANNEL_ID,
+            "server_guide_channel_id": Config.SERVER_GUIDE_CHANNEL_ID,
+            "welcome_rules_channel_id": Config.WELCOME_RULES_CHANNEL_ID,
+            "welcome_public_channel_id": Config.WELCOME_PUBLIC_CHANNEL_ID,
+            "transcript_channel_id": Config.TRANSCRIPT_CHANNEL_ID,
+            "tickets_category_id": Config.TICKETS_CATEGORY_ID,
         },
-        'roles': {
-            'admin_role_id': Config.ADMIN_ROLE_ID,
-            'moderator_role_id': Config.MODERATOR_ROLE_ID,
-            'normal_role_id': Config.NORMAL_ROLE_ID,
-            'member_role_id': Config.MEMBER_ROLE_ID,
-            'changelog_role_id': Config.CHANGELOG_ROLE_ID,
-            'meme_role_id': Config.MEME_ROLE_ID,
-            'interest_role_ids': Config.INTEREST_ROLE_IDS,
-            'interest_roles': Config.INTEREST_ROLES,
+        "roles": {
+            "admin_role_id": Config.ADMIN_ROLE_ID,
+            "moderator_role_id": Config.MODERATOR_ROLE_ID,
+            "normal_role_id": Config.NORMAL_ROLE_ID,
+            "member_role_id": Config.MEMBER_ROLE_ID,
+            "changelog_role_id": Config.CHANGELOG_ROLE_ID,
+            "meme_role_id": Config.MEME_ROLE_ID,
+            "interest_role_ids": Config.INTEREST_ROLE_IDS,
+            "interest_roles": Config.INTEREST_ROLES,
         },
-        'meme': {
-            'default_subreddits': Config.DEFAULT_MEME_SUBREDDITS,
-            'default_lemmy': Config.DEFAULT_MEME_LEMMY,
-            'meme_sources': Config.MEME_SOURCES,
-            'templates_cache_duration': Config.MEME_TEMPLATES_CACHE_DURATION,
+        "meme": {
+            "default_subreddits": Config.DEFAULT_MEME_SUBREDDITS,
+            "default_lemmy": Config.DEFAULT_MEME_LEMMY,
+            "meme_sources": Config.MEME_SOURCES,
+            "templates_cache_duration": Config.MEME_TEMPLATES_CACHE_DURATION,
         },
-        'rocket_league': {
-            'rank_check_interval_hours': Config.RL_RANK_CHECK_INTERVAL_HOURS,
-            'rank_cache_ttl_seconds': Config.RL_RANK_CACHE_TTL_SECONDS,
+        "rocket_league": {
+            "rank_check_interval_hours": Config.RL_RANK_CHECK_INTERVAL_HOURS,
+            "rank_cache_ttl_seconds": Config.RL_RANK_CACHE_TTL_SECONDS,
         },
-        'welcome': {
-            'rules_text': Config.RULES_TEXT,
-            'welcome_messages': Config.WELCOME_MESSAGES,
+        "welcome": {
+            "rules_text": Config.RULES_TEXT,
+            "welcome_messages": Config.WELCOME_MESSAGES,
         },
-        'server_guide': Config.SERVER_GUIDE_CONFIG,
+        "server_guide": Config.SERVER_GUIDE_CONFIG,
     }
-    
-    with open(config_file, 'w') as f:
+
+    with open(config_file, "w") as f:
         json.dump(config_data, f, indent=2)
 
 
 def load_config_from_file():
     """Load configuration overrides from JSON file"""
-    config_file = Path(__file__).parent.parent / 'Data' / 'api_config_overrides.json'
-    
+    config_file = Path(__file__).parent.parent / "Data" / "api_config_overrides.json"
+
     if not config_file.exists():
         return
-    
+
     try:
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             config_data = json.load(f)
-        
+
         # Apply general settings
-        if 'general' in config_data:
-            for key, value in config_data['general'].items():
+        if "general" in config_data:
+            for key, value in config_data["general"].items():
                 setattr(Config, key.upper() if not key.isupper() else key, value)
-        
+
         # Apply channel settings
-        if 'channels' in config_data:
-            for key, value in config_data['channels'].items():
+        if "channels" in config_data:
+            for key, value in config_data["channels"].items():
                 setattr(Config, key.upper(), value)
                 Config.CURRENT_IDS[key.upper()] = value
-        
+
         # Apply role settings
-        if 'roles' in config_data:
-            for key, value in config_data['roles'].items():
+        if "roles" in config_data:
+            for key, value in config_data["roles"].items():
                 setattr(Config, key.upper(), value)
                 Config.CURRENT_IDS[key.upper()] = value
-        
+
         # Apply meme settings
-        if 'meme' in config_data:
-            for key, value in config_data['meme'].items():
+        if "meme" in config_data:
+            for key, value in config_data["meme"].items():
                 setattr(Config, key.upper() if not key.isupper() else key, value)
-        
+
         # Apply Rocket League settings
-        if 'rocket_league' in config_data:
-            for key, value in config_data['rocket_league'].items():
+        if "rocket_league" in config_data:
+            for key, value in config_data["rocket_league"].items():
                 setattr(Config, key.upper() if not key.isupper() else key, value)
-        
+
         # Apply welcome settings
-        if 'welcome' in config_data:
-            for key, value in config_data['welcome'].items():
+        if "welcome" in config_data:
+            for key, value in config_data["welcome"].items():
                 setattr(Config, key.upper(), value)
-        
+
         # Apply server guide settings
-        if 'server_guide' in config_data:
-            Config.SERVER_GUIDE_CONFIG = config_data['server_guide']
-            
+        if "server_guide" in config_data:
+            Config.SERVER_GUIDE_CONFIG = config_data["server_guide"]
+
     except Exception as e:
         print(f"Error loading config from file: {e}")
 
 
 # ===== DAILY MEME CONFIGURATION ENDPOINTS =====
 
-@app.route('/api/daily-meme/config', methods=['GET'])
+
+@app.route("/api/daily-meme/config", methods=["GET"])
 @token_required
 def get_daily_meme_config():
     """Get daily meme configuration"""
     try:
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 503
-            
-        daily_meme_cog = bot.get_cog('DailyMeme')
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if not daily_meme_cog:
-            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
-        
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
         # Merge config with available sources
         config_with_sources = {
             **daily_meme_cog.daily_config,
-            'available_subreddits': daily_meme_cog.meme_subreddits,
-            'available_lemmy': daily_meme_cog.meme_lemmy,
+            "available_subreddits": daily_meme_cog.meme_subreddits,
+            "available_lemmy": daily_meme_cog.meme_lemmy,
         }
-        
+
         return jsonify(config_with_sources)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/daily-meme/config', methods=['POST'])
+@app.route("/api/daily-meme/config", methods=["POST"])
 @token_required
 def update_daily_meme_config():
     """Update daily meme configuration"""
     try:
         data = request.json
-        
-        bot = app.config.get('bot_instance')
+
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 503
-            
-        daily_meme_cog = bot.get_cog('DailyMeme')
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if not daily_meme_cog:
-            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
-        
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
         # Extract meme sources if provided
-        if 'subreddits' in data:
-            daily_meme_cog.meme_subreddits = data.pop('subreddits')
+        if "subreddits" in data:
+            daily_meme_cog.meme_subreddits = data.pop("subreddits")
             daily_meme_cog.save_meme_subreddits()
-        
-        if 'lemmy_communities' in data:
-            daily_meme_cog.meme_lemmy = data.pop('lemmy_communities')
+
+        if "lemmy_communities" in data:
+            daily_meme_cog.meme_lemmy = data.pop("lemmy_communities")
             daily_meme_cog.save_meme_lemmy()
-        
+
         # Update configuration
         daily_meme_cog.daily_config.update(data)
         daily_meme_cog.save_daily_config()
-        
+
         # Restart task if needed
         daily_meme_cog.restart_daily_task()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Daily meme configuration updated',
-            'config': daily_meme_cog.daily_config
-        })
+
+        return jsonify(
+            {"success": True, "message": "Daily meme configuration updated", "config": daily_meme_cog.daily_config}
+        )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/daily-meme/config/reset', methods=['POST'])
+@app.route("/api/daily-meme/config/reset", methods=["POST"])
 @token_required
 def reset_daily_meme_config():
     """Reset daily meme configuration to defaults"""
     try:
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 503
-            
-        daily_meme_cog = bot.get_cog('DailyMeme')
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        daily_meme_cog = bot.get_cog("DailyMeme")
         if not daily_meme_cog:
-            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
-        
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
         # Reset to defaults
         daily_meme_cog.daily_config = {
-            'enabled': True,
-            'hour': 12,
-            'minute': 0,
-            'channel_id': Config.MEME_CHANNEL_ID,
-            'role_id': Config.MEME_ROLE_ID,
-            'allow_nsfw': True,
-            'min_score': 100,
-            'max_sources': 5,
-            'pool_size': 50,
-            'use_subreddits': [],
-            'use_lemmy': []
+            "enabled": True,
+            "hour": 12,
+            "minute": 0,
+            "channel_id": Config.MEME_CHANNEL_ID,
+            "role_id": Config.MEME_ROLE_ID,
+            "allow_nsfw": True,
+            "min_score": 100,
+            "max_sources": 5,
+            "pool_size": 50,
+            "use_subreddits": [],
+            "use_lemmy": [],
         }
         daily_meme_cog.save_daily_config()
         daily_meme_cog.restart_daily_task()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Daily meme configuration reset to defaults',
-            'config': daily_meme_cog.daily_config
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Daily meme configuration reset to defaults",
+                "config": daily_meme_cog.daily_config,
+            }
+        )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 # ===== GUILD INFO ENDPOINTS =====
 
-@app.route('/api/guild/channels', methods=['GET'])
+
+@app.route("/api/guild/channels", methods=["GET"])
 @token_required
 def get_guild_channels():
-    """Get all text channels in the guild"""
+    """Get all text channels and categories in the guild"""
     try:
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 503
-        
+            return jsonify({"error": "Bot not initialized"}), 503
+
         guild = bot.get_guild(Config.GUILD_ID)
         if not guild:
-            return jsonify({'error': 'Guild not found'}), 404
-        
-        # Get all text channels
+            return jsonify({"error": "Guild not found"}), 404
+
+        # Get all channels (text channels and categories)
         channels = []
+
+        # Add text channels
         for channel in guild.text_channels:
-            channels.append({
-                'id': str(channel.id),
-                'name': channel.name,
-                'category': channel.category.name if channel.category else None,
-                'position': channel.position
-            })
-        
-        # Sort by category and position
-        channels.sort(key=lambda x: (x['category'] or '', x['position']))
-        
+            channels.append(
+                {
+                    "id": str(channel.id),
+                    "name": channel.name,
+                    "category": channel.category.name if channel.category else None,
+                    "position": channel.position,
+                    "type": "text",
+                }
+            )
+
+        # Add categories
+        for category in guild.categories:
+            channels.append(
+                {
+                    "id": str(category.id),
+                    "name": category.name,
+                    "category": None,
+                    "position": category.position,
+                    "type": "category",
+                }
+            )
+
+        # Sort by type (categories first), then by position
+        channels.sort(key=lambda x: (0 if x["type"] == "category" else 1, x["position"]))
+
         return jsonify(channels)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/guild/roles', methods=['GET'])
+@app.route("/api/guild/roles", methods=["GET"])
 @token_required
 def get_guild_roles():
     """Get all roles in the guild"""
     try:
-        bot = app.config.get('bot_instance')
+        bot = app.config.get("bot_instance")
         if not bot:
-            return jsonify({'error': 'Bot not initialized'}), 503
-        
+            return jsonify({"error": "Bot not initialized"}), 503
+
         guild = bot.get_guild(Config.GUILD_ID)
         if not guild:
-            return jsonify({'error': 'Guild not found'}), 404
-        
+            return jsonify({"error": "Guild not found"}), 404
+
         # Get all roles (excluding @everyone)
         roles = []
         for role in guild.roles:
-            if role.name != '@everyone':
-                roles.append({
-                    'id': str(role.id),
-                    'name': role.name,
-                    'color': role.color.value,
-                    'position': role.position,
-                    'mentionable': role.mentionable
-                })
-        
+            if role.name != "@everyone":
+                roles.append(
+                    {
+                        "id": str(role.id),
+                        "name": role.name,
+                        "color": role.color.value,
+                        "position": role.position,
+                        "mentionable": role.mentionable,
+                    }
+                )
+
         # Sort by position (highest first)
-        roles.sort(key=lambda x: x['position'], reverse=True)
-        
+        roles.sort(key=lambda x: x["position"], reverse=True)
+
         return jsonify(roles)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Load any saved configuration on startup
     load_config_from_file()
-    
+
     # Get port from environment or use default
-    port = int(os.getenv('API_PORT', 5000))
-    
+    port = int(os.getenv("API_PORT", 5000))
+
     # Check if we're in debug mode (only for development)
-    debug_mode = os.getenv('API_DEBUG', 'false').lower() == 'true'
-    
+    debug_mode = os.getenv("API_DEBUG", "false").lower() == "true"
+
     if debug_mode:
         print("WARNING: Running in DEBUG mode. This should NEVER be used in production!")
-    
+
     print(f"Starting HazeBot Configuration API on port {port}")
     print(f"API Documentation: http://localhost:{port}/api/health")
-    
-    app.run(host='0.0.0.0', port=port, debug=debug_mode)
+
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)

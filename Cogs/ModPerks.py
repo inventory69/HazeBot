@@ -707,27 +707,29 @@ class ModPanel(commands.Cog):
             else:
                 await ctx_or_interaction.response.send_message(message, ephemeral=True)
             return
-        
+
         guild = ctx_or_interaction.guild if hasattr(ctx_or_interaction, "guild") else ctx_or_interaction.guild
-        
+
         # Get both roles
         changelog_role = guild.get_role(CHANGELOG_ROLE_ID)
         meme_role = guild.get_role(MEME_ROLE_ID)
-        
+
         # Build description with both opt-in types
         description_parts = []
-        
+
         # Changelog opt-ins
         if changelog_role:
             users_with_changelog = [member for member in guild.members if changelog_role in member.roles]
             if users_with_changelog:
                 user_list = "\n".join([f"<@{member.id}> ({member.display_name})" for member in users_with_changelog])
-                description_parts.append(f"**📢 Changelog Notifications ({len(users_with_changelog)} users):**\n{user_list}")
+                description_parts.append(
+                    f"**📢 Changelog Notifications ({len(users_with_changelog)} users):**\n{user_list}"
+                )
             else:
                 description_parts.append("**📢 Changelog Notifications:**\nNo users opted in.")
         else:
             description_parts.append("**📢 Changelog Notifications:**\n❌ Role not found.")
-        
+
         # Daily Meme opt-ins
         if meme_role:
             users_with_meme = [member for member in guild.members if meme_role in member.roles]
@@ -738,9 +740,9 @@ class ModPanel(commands.Cog):
                 description_parts.append("**🎭 Daily Memes:**\nNo users opted in.")
         else:
             description_parts.append("**🎭 Daily Memes:**\n❌ Role not found.")
-        
+
         description = "\n\n".join(description_parts)
-        
+
         embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=PINK)
         set_pink_footer(embed, bot=self.bot.user)
         if hasattr(ctx_or_interaction, "send"):

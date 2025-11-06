@@ -333,7 +333,7 @@ class TodoPageNavigationView(discord.ui.View):
                             try:
                                 old_message = await channel.fetch_message(message_id)
                                 await old_message.delete()
-                                
+
                                 # Remove from persistent views
                                 if cog:
                                     cog._remove_persistent_view(self.channel_id, message_id)
@@ -721,7 +721,7 @@ class TodoConfirmView(discord.ui.View):
 
         # Send confirmation via followup
         await interaction.followup.send("✅ To-do item added successfully!", ephemeral=True)
-        
+
         # Delete the view message (the original preview with buttons)
         if self.view_message:
             try:
@@ -738,7 +738,7 @@ class TodoConfirmView(discord.ui.View):
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_message("❌ Cancelled. Item was not added.", ephemeral=True)
-        
+
         # Delete the view message (the original preview with buttons)
         if self.view_message:
             try:
