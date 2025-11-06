@@ -692,6 +692,99 @@ def load_config_from_file():
         print(f"Error loading config from file: {e}")
 
 
+# ===== DAILY MEME CONFIGURATION ENDPOINTS =====
+
+@app.route('/api/daily-meme/config', methods=['GET'])
+@token_required
+def get_daily_meme_config():
+    """Get daily meme configuration"""
+    try:
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 503
+            
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if not daily_meme_cog:
+            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
+        
+        return jsonify({
+            'success': True,
+            'config': daily_meme_cog.daily_config
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/daily-meme/config', methods=['POST'])
+@token_required
+def update_daily_meme_config():
+    """Update daily meme configuration"""
+    try:
+        data = request.json
+        
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 503
+            
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if not daily_meme_cog:
+            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
+        
+        # Update configuration
+        daily_meme_cog.daily_config.update(data)
+        daily_meme_cog.save_daily_config()
+        
+        # Restart task if needed
+        daily_meme_cog.restart_daily_task()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Daily meme configuration updated',
+            'config': daily_meme_cog.daily_config
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/daily-meme/config/reset', methods=['POST'])
+@token_required
+def reset_daily_meme_config():
+    """Reset daily meme configuration to defaults"""
+    try:
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 503
+            
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if not daily_meme_cog:
+            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
+        
+        # Reset to defaults
+        daily_meme_cog.daily_config = {
+            'enabled': True,
+            'hour': 12,
+            'minute': 0,
+            'channel_id': Config.MEME_CHANNEL_ID,
+            'role_id': Config.MEME_ROLE_ID,
+            'allow_nsfw': True,
+            'min_score': 100,
+            'max_sources': 5,
+            'pool_size': 50,
+            'use_subreddits': [],
+            'use_lemmy': []
+        }
+        daily_meme_cog.save_daily_config()
+        daily_meme_cog.restart_daily_task()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Daily meme configuration reset to defaults',
+            'config': daily_meme_cog.daily_config
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     # Load any saved configuration on startup
     load_config_from_file()
