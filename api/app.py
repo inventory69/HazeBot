@@ -6,6 +6,7 @@ Provides REST endpoints to read and update bot configuration
 import os
 import json
 import sys
+import asyncio
 from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -62,11 +63,21 @@ def login():
     username = data.get('username')
     password = data.get('password')
     
-    # Simple check (in production, use proper authentication)
-    admin_user = os.getenv('API_ADMIN_USER', 'admin')
-    admin_pass = os.getenv('API_ADMIN_PASS', 'changeme')
+    # Build valid users dictionary from environment variables
+    valid_users = {
+        os.getenv('API_ADMIN_USER', 'admin'): os.getenv('API_ADMIN_PASS', 'changeme')
+    }
     
-    if username == admin_user and password == admin_pass:
+    # Add extra users from API_EXTRA_USERS (format: username:password,username2:password2)
+    extra_users = os.getenv('API_EXTRA_USERS', '')
+    if extra_users:
+        for user_entry in extra_users.split(','):
+            user_entry = user_entry.strip()
+            if ':' in user_entry:
+                user, pwd = user_entry.split(':', 1)
+                valid_users[user.strip()] = pwd.strip()
+    
+    if username in valid_users and password == valid_users[username]:
         token = jwt.encode({
             'user': username,
             'exp': datetime.utcnow() + timedelta(hours=24)
@@ -377,6 +388,200 @@ def config_server_guide():
         save_config_to_file()
         
         return jsonify({'success': True, 'message': 'Server guide configuration updated'})
+
+
+# Test endpoints
+@app.route('/api/test/random-meme', methods=['GET'])
+@token_required
+def test_random_meme():
+    """Get a random meme from configured sources using the actual bot function"""
+    try:
+        import asyncio
+        
+        # Get bot instance
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot instance not available. Make sure to start with start_with_api.py'}), 503
+        
+        # Get DailyMeme cog
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if not daily_meme_cog:
+            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
+        
+        # Use the bot's existing event loop instead of creating a new one
+        loop = bot.loop
+        
+        # Create a future and schedule it on the bot's loop
+        future = asyncio.run_coroutine_threadsafe(
+            daily_meme_cog.get_daily_meme(
+                allow_nsfw=False,  # Don't allow NSFW for admin panel
+                max_sources=3,     # Fetch from 3 sources for speed
+                min_score=50,      # Lower threshold for testing
+                pool_size=25       # Smaller pool for speed
+            ),
+            loop
+        )
+        
+        # Wait for result with timeout
+        meme = future.result(timeout=30)
+        
+        if meme:
+            return jsonify({
+                'success': True,
+                'meme': {
+                    'url': meme.get('url'),
+                    'title': meme.get('title'),
+                    'subreddit': meme.get('subreddit'),
+                    'author': meme.get('author'),
+                    'score': meme.get('upvotes', meme.get('score', 0)),
+                    'nsfw': meme.get('nsfw', False),
+                    'permalink': meme.get('permalink', '')
+                }
+            })
+        else:
+            return jsonify({'error': 'No suitable memes found'}), 404
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': f'Failed to get random meme: {str(e)}',
+            'details': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/test/daily-meme', methods=['POST'])
+@token_required
+def test_daily_meme():
+    """Test daily meme posting using the actual bot function"""
+    try:
+        import asyncio
+        
+        # Get bot instance
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot instance not available. Make sure to start with start_with_api.py'}), 503
+        
+        # Get DailyMeme cog
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if not daily_meme_cog:
+            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
+        
+        # Use the bot's existing event loop
+        loop = bot.loop
+        
+        # Call the actual daily meme task function
+        future = asyncio.run_coroutine_threadsafe(
+            daily_meme_cog.daily_meme_task(),
+            loop
+        )
+        
+        # Wait for result with timeout
+        future.result(timeout=30)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Daily meme posted successfully',
+            'note': 'Check your Discord meme channel to see the posted meme'
+        })
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': f'Failed to post daily meme: {str(e)}',
+            'details': traceback.format_exc()
+        }), 500
+
+
+@app.route('/api/test/send-meme', methods=['POST'])
+@token_required
+def send_meme_to_discord():
+    """Send a specific meme to Discord"""
+    try:
+        import asyncio
+        
+        # Get meme data from request
+        data = request.get_json()
+        if not data or 'meme' not in data:
+            return jsonify({'error': 'Meme data required'}), 400
+        
+        meme_data = data['meme']
+        
+        # Ensure meme_data has the correct structure expected by post_meme
+        # The bot expects: url, title, subreddit, upvotes, author, permalink, nsfw
+        if 'upvotes' not in meme_data and 'score' in meme_data:
+            meme_data['upvotes'] = meme_data['score']
+        
+        # Get bot instance
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot instance not available'}), 503
+        
+        # Get DailyMeme cog
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if not daily_meme_cog:
+            return jsonify({'error': 'DailyMeme cog not loaded'}), 503
+        
+        # Get meme channel
+        meme_channel_id = Config.MEME_CHANNEL_ID
+        channel = bot.get_channel(meme_channel_id)
+        if not channel:
+            return jsonify({'error': f'Meme channel {meme_channel_id} not found'}), 404
+        
+        # Use the bot's existing event loop
+        loop = bot.loop
+        
+        # Post the meme to Discord with custom message
+        async def post_meme():
+            import discord
+            from datetime import datetime
+            from Utils.EmbedUtils import set_pink_footer
+            
+            # Create embed manually (same as post_meme but with custom message)
+            embed = discord.Embed(
+                title=meme_data["title"][:256],
+                url=meme_data["permalink"],
+                color=Config.PINK,
+                timestamp=datetime.now(),
+            )
+            embed.set_image(url=meme_data["url"])
+            embed.add_field(name="👍 Upvotes", value=f"{meme_data['upvotes']:,}", inline=True)
+
+            # Display source appropriately
+            source_name = f"r/{meme_data['subreddit']}"
+            if meme_data["subreddit"].startswith("lemmy:"):
+                source_name = meme_data["subreddit"].replace("lemmy:", "")
+
+            embed.add_field(name="📍 Source", value=source_name, inline=True)
+            embed.add_field(name="👤 Author", value=f"u/{meme_data['author']}", inline=True)
+
+            if meme_data.get("nsfw"):
+                embed.add_field(name="⚠️", value="NSFW Content", inline=False)
+
+            set_pink_footer(embed, bot=bot.user)
+
+            # Send with custom message
+            await channel.send("🎭 Meme sent from Admin Panel", embed=embed)
+        
+        future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
+        future.result(timeout=30)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Meme sent to Discord successfully',
+            'channel_id': meme_channel_id
+        })
+            
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': f'Failed to send meme to Discord: {str(e)}',
+            'details': traceback.format_exc()
+        }), 500
+
+
+def set_bot_instance(bot):
+    """Set the bot instance for the API to use"""
+    app.config['bot_instance'] = bot
 
 
 def save_config_to_file():
