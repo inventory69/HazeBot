@@ -110,6 +110,7 @@ def get_config():
         # Discord IDs
         'discord_ids': {
             'guild_id': Config.GUILD_ID,
+            'guild_name': getattr(Config, 'GUILD_NAME', None),  # Optional: Add GUILD_NAME to Config.py
             'admin_role_id': Config.ADMIN_ROLE_ID,
             'moderator_role_id': Config.MODERATOR_ROLE_ID,
             'normal_role_id': Config.NORMAL_ROLE_ID,

@@ -27,6 +27,9 @@ BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN" if PROD_MODE else "TEST_DISCORD_BOT_TO
 # Guild ID selection based on PROD_MODE
 GUILD_ID = int(os.getenv("DISCORD_GUILD_ID" if PROD_MODE else "DISCORD_TEST_GUILD_ID", "0"))
 
+# Guild Name (optional, for display in admin interface)
+GUILD_NAME = os.getenv("DISCORD_GUILD_NAME" if PROD_MODE else "DISCORD_TEST_GUILD_NAME", None)
+
 # Data directory selection based on PROD_MODE
 DATA_DIR = "Data" if PROD_MODE else "TestData"
 
