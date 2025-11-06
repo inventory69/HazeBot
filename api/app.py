@@ -92,6 +92,17 @@ def login():
 @token_required
 def get_config():
     """Get all bot configuration"""
+    # Try to get actual subreddits/lemmy from DailyMeme cog
+    bot = app.config.get('bot_instance')
+    subreddits = []
+    lemmy_communities = []
+    
+    if bot:
+        daily_meme_cog = bot.get_cog('DailyMeme')
+        if daily_meme_cog:
+            subreddits = daily_meme_cog.meme_subreddits
+            lemmy_communities = daily_meme_cog.meme_lemmy
+    
     config_data = {
         # General Settings
         'general': {
@@ -144,6 +155,8 @@ def get_config():
             'default_lemmy': Config.DEFAULT_MEME_LEMMY,
             'meme_sources': Config.MEME_SOURCES,
             'templates_cache_duration': Config.MEME_TEMPLATES_CACHE_DURATION,
+            'subreddits': subreddits,
+            'lemmy_communities': lemmy_communities,
         },
         # Welcome System
         'welcome': {
@@ -764,6 +777,15 @@ def update_daily_meme_config():
         if not daily_meme_cog:
             return jsonify({'error': 'DailyMeme cog not loaded'}), 503
         
+        # Extract meme sources if provided
+        if 'subreddits' in data:
+            daily_meme_cog.meme_subreddits = data.pop('subreddits')
+            daily_meme_cog.save_meme_subreddits()
+        
+        if 'lemmy_communities' in data:
+            daily_meme_cog.meme_lemmy = data.pop('lemmy_communities')
+            daily_meme_cog.save_meme_lemmy()
+        
         # Update configuration
         daily_meme_cog.daily_config.update(data)
         daily_meme_cog.save_daily_config()
@@ -815,6 +837,72 @@ def reset_daily_meme_config():
             'message': 'Daily meme configuration reset to defaults',
             'config': daily_meme_cog.daily_config
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ===== GUILD INFO ENDPOINTS =====
+
+@app.route('/api/guild/channels', methods=['GET'])
+@token_required
+def get_guild_channels():
+    """Get all text channels in the guild"""
+    try:
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 503
+        
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({'error': 'Guild not found'}), 404
+        
+        # Get all text channels
+        channels = []
+        for channel in guild.text_channels:
+            channels.append({
+                'id': str(channel.id),
+                'name': channel.name,
+                'category': channel.category.name if channel.category else None,
+                'position': channel.position
+            })
+        
+        # Sort by category and position
+        channels.sort(key=lambda x: (x['category'] or '', x['position']))
+        
+        return jsonify(channels)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/guild/roles', methods=['GET'])
+@token_required
+def get_guild_roles():
+    """Get all roles in the guild"""
+    try:
+        bot = app.config.get('bot_instance')
+        if not bot:
+            return jsonify({'error': 'Bot not initialized'}), 503
+        
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({'error': 'Guild not found'}), 404
+        
+        # Get all roles (excluding @everyone)
+        roles = []
+        for role in guild.roles:
+            if role.name != '@everyone':
+                roles.append({
+                    'id': str(role.id),
+                    'name': role.name,
+                    'color': role.color.value,
+                    'position': role.position,
+                    'mentionable': role.mentionable
+                })
+        
+        # Sort by position (highest first)
+        roles.sort(key=lambda x: x['position'], reverse=True)
+        
+        return jsonify(roles)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
