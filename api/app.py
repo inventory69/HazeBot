@@ -1102,11 +1102,11 @@ def update_daily_meme_config():
         # Extract meme sources if provided
         if "subreddits" in data:
             daily_meme_cog.meme_subreddits = data.pop("subreddits")
-            daily_meme_cog.save_meme_subreddits()
+            daily_meme_cog.save_subreddits()  # Fixed method name
 
         if "lemmy_communities" in data:
             daily_meme_cog.meme_lemmy = data.pop("lemmy_communities")
-            daily_meme_cog.save_meme_lemmy()
+            daily_meme_cog.save_lemmy_communities()  # Fixed method name
 
         # Update configuration
         daily_meme_cog.daily_config.update(data)
@@ -1146,8 +1146,8 @@ def reset_daily_meme_config():
             "min_score": 100,
             "max_sources": 5,
             "pool_size": 50,
-            "use_subreddits": [],
-            "use_lemmy": [],
+            "use_subreddits": None,  # None = use all
+            "use_lemmy": None,  # None = use all
         }
         daily_meme_cog.save_daily_config()
         daily_meme_cog.restart_daily_task()

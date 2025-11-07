@@ -86,10 +86,11 @@ class DailyMeme(commands.Cog):
             "minute": 0,
             "channel_id": MEME_CHANNEL_ID,
             "allow_nsfw": True,
-            "ping_role_id": MEME_ROLE_ID,
+            "role_id": MEME_ROLE_ID,  # Changed from ping_role_id for consistency
             # Selection preferences
-            "use_subreddits": [],  # Empty = use all configured
-            "use_lemmy": [],  # Empty = use all configured
+            # Note: None = use all, [] = use none, ["a", "b"] = use specific
+            "use_subreddits": None,  # None = use all configured
+            "use_lemmy": None,  # None = use all configured
             "min_score": 100,  # Minimum upvotes
             "max_sources": 5,  # How many subreddits/communities to fetch from
             "pool_size": 50,  # Pick from top X memes
@@ -99,6 +100,9 @@ class DailyMeme(commands.Cog):
             if os.path.exists(self.daily_config_file):
                 with open(self.daily_config_file, "r") as f:
                     config = json.load(f)
+                    # Migration: rename ping_role_id to role_id if it exists
+                    if "ping_role_id" in config and "role_id" not in config:
+                        config["role_id"] = config.pop("ping_role_id")
                     # Merge with defaults (in case new settings are added)
                     return {**default_config, **config}
         except Exception as e:
@@ -659,41 +663,53 @@ class DailyMeme(commands.Cog):
                         all_memes.extend(memes)
                 else:
                     # Use configured subreddits or all available
-                    subreddits_pool = configured_subreddits if configured_subreddits else self.meme_subreddits
-                    if not subreddits_pool:
+                    # None = use all, empty list [] = use none, list with items = use those
+                    if configured_subreddits is None:
                         subreddits_pool = self.meme_subreddits
+                    else:
+                        subreddits_pool = configured_subreddits
 
-                    # Fetch from random subset of subreddits for speed (use cache if available)
-                    selected_subs = random.sample(subreddits_pool, min(max_sources, len(subreddits_pool)))
-                    logger.debug(f"📊 Fetching from {len(selected_subs)} random subreddits: {selected_subs}")
+                    if not subreddits_pool:
+                        # Skip if explicitly set to empty
+                        logger.debug("📊 Subreddit fetching skipped (none selected)")
+                    else:
+                        # Fetch from random subset of subreddits for speed (use cache if available)
+                        selected_subs = random.sample(subreddits_pool, min(max_sources, len(subreddits_pool)))
+                        logger.debug(f"📊 Fetching from {len(selected_subs)} random subreddits: {selected_subs}")
+
+                        # Parallel fetching for speed
+                        fetch_tasks = [self.fetch_reddit_meme(sub, sort="hot") for sub in selected_subs]
+                        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+                        for memes in results:
+                            if memes and not isinstance(memes, Exception):
+                                all_memes.extend(memes)
+
+            elif src == "lemmy":
+                # Use configured Lemmy communities or all available
+                # None = use all, empty list [] = use none, list with items = use those
+                if configured_lemmy is None:
+                    lemmy_pool = self.meme_lemmy
+                else:
+                    lemmy_pool = configured_lemmy
+
+                if not lemmy_pool:
+                    # Skip if explicitly set to empty
+                    logger.debug("📊 Lemmy fetching skipped (none selected)")
+                else:
+                    # Fetch from random subset of Lemmy communities for speed
+                    selected_communities = random.sample(lemmy_pool, min(max_sources, len(lemmy_pool)))
+                    logger.debug(
+                        f"📊 Fetching from {len(selected_communities)} random Lemmy communities: {selected_communities}"
+                    )
 
                     # Parallel fetching for speed
-                    fetch_tasks = [self.fetch_reddit_meme(sub, sort="hot") for sub in selected_subs]
+                    fetch_tasks = [self.fetch_lemmy_meme(community) for community in selected_communities]
                     results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
                     for memes in results:
                         if memes and not isinstance(memes, Exception):
                             all_memes.extend(memes)
-
-            elif src == "lemmy":
-                # Use configured Lemmy communities or all available
-                lemmy_pool = configured_lemmy if configured_lemmy else self.meme_lemmy
-                if not lemmy_pool:
-                    lemmy_pool = self.meme_lemmy
-
-                # Fetch from random subset of Lemmy communities for speed
-                selected_communities = random.sample(lemmy_pool, min(max_sources, len(lemmy_pool)))
-                logger.debug(
-                    f"📊 Fetching from {len(selected_communities)} random Lemmy communities: {selected_communities}"
-                )
-
-                # Parallel fetching for speed
-                fetch_tasks = [self.fetch_lemmy_meme(community) for community in selected_communities]
-                results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
-
-                for memes in results:
-                    if memes and not isinstance(memes, Exception):
-                        all_memes.extend(memes)
 
             # Add more source types here (e.g., elif src == "newsource":)
 
@@ -866,8 +882,8 @@ class DailyMeme(commands.Cog):
 
             if meme:
                 # Check if we should ping the role
-                ping_role_id = self.daily_config.get("ping_role_id")
-                mention = f"<@&{ping_role_id}>" if ping_role_id else ""
+                role_id = self.daily_config.get("role_id")
+                mention = f"<@&{role_id}>" if role_id else ""
                 await self.post_meme(meme, channel, mention=mention)
             else:
                 logger.error("Failed to fetch daily meme")
@@ -1633,7 +1649,7 @@ class DailyMeme(commands.Cog):
         embed.add_field(name="🔞 NSFW", value=nsfw_status, inline=True)
 
         # Ping Role
-        role_id = config.get("ping_role_id")
+        role_id = config.get("role_id")
         role_display = f"<@&{role_id}>" if role_id else "None"
         embed.add_field(name="🔔 Ping Role", value=role_display, inline=True)
 

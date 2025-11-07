@@ -715,7 +715,8 @@ class RocketLeague(commands.Cog):
 
             stats = await self.get_player_stats(platform, username, force_refresh=force)
             if stats:
-                new_ranks = stats["tier_names"]
+                new_ranks = stats["tier_names"]  # For comparison (tier names only)
+                new_rank_display = stats.get("rank_display", {})  # For storage (with divisions and emojis)
                 new_icon_urls = stats.get("icon_urls", {})
 
                 # Log fetched ranks
@@ -802,7 +803,8 @@ class RocketLeague(commands.Cog):
                 else:
                     logger.warning(f"User {user_id} not found in bot cache, cannot send rank promotion")
                 # Update ranks and last_fetched
-                data["ranks"] = new_ranks
+                data["ranks"] = new_ranks  # Store tier names for comparison
+                data["rank_display"] = new_rank_display  # Store full display with divisions and emojis
                 data["icon_urls"] = new_icon_urls
                 data["last_fetched"] = now.isoformat()
                 save_rl_accounts(accounts)
