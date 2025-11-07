@@ -3,7 +3,8 @@ from discord.ext import commands
 import openai
 import os
 from datetime import datetime
-from Config import PINK, CHANGELOG_ROLE_ID, CHANGELOG_CHANNEL_ID
+import Config
+from Config import CHANGELOG_ROLE_ID, CHANGELOG_CHANNEL_ID
 from Utils.EmbedUtils import set_pink_footer
 import logging
 
@@ -86,7 +87,7 @@ PR-Text:
         embed = discord.Embed(
             title=f"🆕 {title} – {date}",
             description=changelog + "\n\u200b",  # Adds a small space before the footer
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         return embed

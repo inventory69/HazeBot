@@ -10,8 +10,8 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import Config
 from Config import (
-    PINK,
     MEME_CHANNEL_ID,
     DEFAULT_MEME_SUBREDDITS,
     DEFAULT_MEME_LEMMY,
@@ -134,7 +134,7 @@ class ChooseSourceButton(discord.ui.Button):
         embed = discord.Embed(
             title="🎯 Choose Meme Source",
             description="Select a specific subreddit or Lemmy community to fetch memes from.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         set_pink_footer(embed, bot=interaction.client.user)
@@ -249,7 +249,7 @@ class SourceSelectionView(discord.ui.View):
             embed = discord.Embed(
                 title=meme.get("title", "Meme"),
                 url=meme.get("url"),
-                color=PINK,
+                color=Config.PINK,
             )
             embed.set_image(url=meme.get("url"))
 
@@ -580,7 +580,7 @@ class SubredditManagementButton(discord.ui.Button):
         embed = discord.Embed(
             title="🎭 Subreddit Management",
             description=f"Currently using **{len(cog.meme_subreddits)}** subreddits.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         subreddit_list = "\n".join([f"• r/{sub}" for sub in sorted(cog.meme_subreddits)])
@@ -611,7 +611,7 @@ class LemmyManagementButton(discord.ui.Button):
         embed = discord.Embed(
             title="🎭 Lemmy Community Management",
             description=f"Currently using **{len(cog.meme_lemmy)}** Lemmy communities.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         community_list = "\n".join([f"• {comm}" for comm in sorted(cog.meme_lemmy)])
@@ -642,7 +642,7 @@ class SourceManagementButton(discord.ui.Button):
         embed = discord.Embed(
             title="🎭 Source Management",
             description=f"Currently using **{len(cog.meme_sources)}** meme sources.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Note: source_display can be extended when adding new sources
@@ -773,7 +773,7 @@ class DailyConfigView(discord.ui.View):
         embed = discord.Embed(
             title="🎯 Meme Selection Preferences",
             description="Configure how memes are selected for the daily post.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         config = self.cog.daily_config
@@ -984,7 +984,7 @@ class SelectionSettingsView(discord.ui.View):
             description=(
                 "Configure which subreddits to use for daily memes.\nLeave empty to use all available subreddits."
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         config = self.cog.daily_config.get("use_subreddits", [])
@@ -1014,7 +1014,7 @@ class SelectionSettingsView(discord.ui.View):
                 "Configure which Lemmy communities to use for daily memes.\n"
                 "Leave empty to use all available communities."
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         config = self.cog.daily_config.get("use_lemmy", [])
@@ -1071,7 +1071,7 @@ class SetMinScoreModal(discord.ui.Modal, title="Set Minimum Score"):
             embed = discord.Embed(
                 title="🎯 Meme Selection Preferences",
                 description="Configure how memes are selected for the daily post.",
-                color=PINK,
+                color=Config.PINK,
             )
 
             config = self.cog.daily_config
@@ -1126,7 +1126,7 @@ class SetMaxSourcesModal(discord.ui.Modal, title="Set Max Sources"):
             embed = discord.Embed(
                 title="🎯 Meme Selection Preferences",
                 description="Configure how memes are selected for the daily post.",
-                color=PINK,
+                color=Config.PINK,
             )
 
             config = self.cog.daily_config
@@ -1181,7 +1181,7 @@ class SetPoolSizeModal(discord.ui.Modal, title="Set Pool Size"):
             embed = discord.Embed(
                 title="🎯 Meme Selection Preferences",
                 description="Configure how memes are selected for the daily post.",
-                color=PINK,
+                color=Config.PINK,
             )
 
             config = self.cog.daily_config
@@ -1242,7 +1242,7 @@ class ManageSubredditsView(discord.ui.View):
             description=(
                 "Configure which subreddits to use for daily memes.\nLeave empty to use all available subreddits."
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         embed.add_field(
@@ -1262,7 +1262,7 @@ class ManageSubredditsView(discord.ui.View):
         embed = discord.Embed(
             title="🎯 Meme Selection Preferences",
             description="Configure how memes are selected for the daily post.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         config = self.cog.daily_config
@@ -1319,7 +1319,7 @@ class ManageLemmyView(discord.ui.View):
                 "Configure which Lemmy communities to use for daily memes.\n"
                 "Leave empty to use all available communities."
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         embed.add_field(
@@ -1339,7 +1339,7 @@ class ManageLemmyView(discord.ui.View):
         embed = discord.Embed(
             title="🎯 Meme Selection Preferences",
             description="Configure how memes are selected for the daily post.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         config = self.cog.daily_config

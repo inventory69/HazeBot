@@ -6,15 +6,8 @@ import logging
 import json
 from datetime import datetime
 from typing import Dict, List, Any
-from Config import (
-    PINK,
-    ADMIN_ROLE_ID,
-    MODERATOR_ROLE_ID,
-    MOD_DATA_FILE,
-    CHANGELOG_ROLE_ID,
-    MEME_ROLE_ID,
-    get_guild_id,
-)
+import Config
+from Config import ADMIN_ROLE_ID, MODERATOR_ROLE_ID, MOD_DATA_FILE, CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
 from Utils.CacheUtils import cache_instance as cache
 
@@ -76,7 +69,7 @@ def create_modpanel_embed(bot_user: discord.User) -> discord.Embed:
     embed = discord.Embed(
         title="📦 Mod Panel",
         description="Quick moderation actions for Slot Keepers and Admins.",
-        color=PINK,
+        color=Config.PINK,
     )
     embed.add_field(
         name="Actions",
@@ -417,7 +410,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title="📦 Mod Panel Help",
             description="Quick moderation actions for Slot Keepers and Admins.\nUse `!modpanel` or `/modpanel`.",
-            color=PINK,
+            color=Config.PINK,
         )
         embed.add_field(
             name="Actions",
@@ -486,7 +479,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title="📋 Mod Tools",
             description="Quick access to moderation tools.\nSelect a user for details or use the buttons below.",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         members = [
@@ -539,7 +532,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title="📊 Moderation Overview",
             description="Overview of moderation actions taken.",
-            color=PINK,
+            color=Config.PINK,
         )
         actions = ["warnings", "kicks", "bans", "mutes"]
         for action in actions:
@@ -628,7 +621,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title=f"📊 Moderation Details for {user.display_name}",
             description=f"Detailed moderation actions for {user.mention}.",
-            color=PINK,
+            color=Config.PINK,
         )
         actions = ["warnings", "kicks", "bans", "mutes"]
         for action in actions:
@@ -743,7 +736,7 @@ class ModPanel(commands.Cog):
 
         description = "\n\n".join(description_parts)
 
-        embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=PINK)
+        embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=Config.PINK)
         set_pink_footer(embed, bot=self.bot.user)
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed)

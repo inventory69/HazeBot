@@ -63,6 +63,9 @@ Intents.message_content = True
 # Color Scheme
 PINK = discord.Color(0xAD1457)
 
+# Embed Footer Text
+EMBED_FOOTER_TEXT = "Powered by Haze World 💖"
+
 # Role Display Names
 ROLE_NAMES = {
     "user": "🎒 Lootling",

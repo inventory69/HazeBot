@@ -2,8 +2,8 @@ from discord.ext import commands
 from discord import app_commands
 import discord
 from typing import Dict, List, Optional
+import Config
 from Config import (
-    PINK,
     MOD_COMMANDS,
     ADMIN_COMMANDS,
     SLASH_COMMANDS,
@@ -65,7 +65,7 @@ class RoleInfo(commands.Cog):
         )
         embed = discord.Embed(
             title=f"📢 Role Info: {role.name}",
-            color=role.color if role.color.value else PINK,
+            color=role.color if role.color.value else Config.PINK,
             description=description,
         )
         embed.add_field(name="Permissions", value=perms_text, inline=False)

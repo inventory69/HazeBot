@@ -2,8 +2,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Optional, Any
+import Config
 from Config import (
-    PINK,
     ADMIN_ROLE_ID,
     MODERATOR_ROLE_ID,
     NORMAL_ROLE_ID,
@@ -87,7 +87,7 @@ class Profile(commands.Cog):
         self.bot = bot
 
     async def create_profile_embed(self, member: discord.Member) -> discord.Embed:
-        embed = discord.Embed(title=f"👤 Profile: {member.display_name}", color=PINK)
+        embed = discord.Embed(title=f"👤 Profile: {member.display_name}", color=Config.PINK)
         embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         embed.add_field(name="Joined At", value=member.joined_at.strftime("%B %d, %Y"), inline=True)
         embed.add_field(

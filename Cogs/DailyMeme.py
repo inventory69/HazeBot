@@ -10,8 +10,8 @@ import logging
 import asyncio
 from bs4 import BeautifulSoup
 
+import Config
 from Config import (
-    PINK,
     get_guild_id,
     get_data_dir,
     MEME_CHANNEL_ID,
@@ -635,14 +635,15 @@ class DailyMeme(commands.Cog):
             max_sources = self.daily_config.get("max_sources", 5)
             min_score = self.daily_config.get("min_score", 100)
             pool_size = self.daily_config.get("pool_size", 50)
-            configured_subreddits = self.daily_config.get("use_subreddits", [])
-            configured_lemmy = self.daily_config.get("use_lemmy", [])
+            configured_subreddits = self.daily_config.get("use_subreddits")
+            configured_lemmy = self.daily_config.get("use_lemmy")
         else:
             max_sources = max_sources or 3
             min_score = min_score or 0
             pool_size = pool_size or 50
-            configured_subreddits = []
-            configured_lemmy = []
+            # None means use all available sources (not restricted)
+            configured_subreddits = None
+            configured_lemmy = None
 
         # Try to get hot memes from specified or all sources
         all_memes = []
@@ -768,7 +769,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title=meme["title"][:256],  # Discord title limit
             url=meme["permalink"],
-            color=PINK,
+            color=Config.PINK,
             timestamp=datetime.now(),
         )
         embed.set_image(url=meme["url"])
@@ -833,7 +834,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title=meme["title"][:256],
             url=meme["permalink"],
-            color=PINK,
+            color=Config.PINK,
         )
         embed.set_image(url=meme["url"])
         embed.add_field(name="👍 Upvotes", value=f"{meme['upvotes']:,}", inline=True)
@@ -1016,7 +1017,7 @@ class DailyMeme(commands.Cog):
                 if not is_admin_or_mod
                 else "**Mod/Admin Access:** Full management + no cooldown"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         if is_admin_or_mod:
@@ -1176,7 +1177,7 @@ class DailyMeme(commands.Cog):
                 if not is_admin_or_mod
                 else "**Mod/Admin Access:** Full management + no cooldown"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         if is_admin_or_mod:
@@ -1249,7 +1250,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🎭 Meme Subreddits Configuration",
             description=f"Currently using **{len(self.meme_subreddits)}** subreddits for meme sourcing.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Split into chunks of 10 for better display
@@ -1351,7 +1352,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🔄 Subreddits Reset",
             description=f"Reset to default configuration with **{len(self.meme_subreddits)}** subreddits.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         subreddit_list = "\n".join([f"• r/{sub}" for sub in sorted(self.meme_subreddits)])
@@ -1373,7 +1374,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🎭 Lemmy Communities Configuration",
             description=f"Currently using **{len(self.meme_lemmy)}** Lemmy communities for meme sourcing.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Split into chunks for better display
@@ -1481,7 +1482,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🔄 Lemmy Communities Reset",
             description=f"Reset to default configuration with **{len(self.meme_lemmy)}** Lemmy communities.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         community_list = "\n".join([f"• {comm}" for comm in sorted(self.meme_lemmy)])
@@ -1503,7 +1504,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🎭 Active Meme Sources",
             description=f"Currently using **{len(self.meme_sources)}** meme sources.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Show enabled sources (extend source_display when adding new sources)
@@ -1595,7 +1596,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🔄 Sources Reset",
             description=f"Reset to default configuration with **{len(self.meme_sources)}** sources.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Extend source_display when adding new sources
@@ -1628,7 +1629,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="⚙️ Daily Meme Configuration",
             description="Configure when and how the daily meme is posted.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Status

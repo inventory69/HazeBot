@@ -6,13 +6,8 @@ import json
 import openai
 import asyncio
 from typing import Dict, List, Any, Optional
-from Config import (
-    PINK,
-    ADMIN_ROLE_ID,
-    MODERATOR_ROLE_ID,
-    get_guild_id,
-    get_data_dir,
-)
+import Config
+from Config import ADMIN_ROLE_ID, MODERATOR_ROLE_ID, get_guild_id, get_data_dir
 from Utils.EmbedUtils import set_pink_footer
 import logging
 
@@ -302,7 +297,7 @@ class TodoPageNavigationView(discord.ui.View):
         embed = discord.Embed(
             title="⚙️ Page Management",
             description=description,
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
 
@@ -825,7 +820,7 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
                     f"**Description:** {formatted_task['description']}\n\n"
                     "Do you want to add this to the to-do list?"
                 ),
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
 
@@ -1014,7 +1009,7 @@ Rules:
         total_pages: Optional[int] = None,
     ) -> discord.Embed:
         """Create a formatted to-do list embed."""
-        embed = discord.Embed(color=PINK)
+        embed = discord.Embed(color=Config.PINK)
 
         # Use page title if provided, otherwise use default
         if page_title:
@@ -1113,7 +1108,7 @@ class TodoManageView(discord.ui.View):
         embed = discord.Embed(
             title="Select Priority",
             description="Choose the priority level for the new to-do item:",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         view = PrioritySelectView(self.bot, self.channel_id, action="add", management_message=self.management_message)
@@ -1150,7 +1145,7 @@ class TodoManageView(discord.ui.View):
             view = TodoEditSelectView(self.bot, self.channel_id, items)
 
             embed = discord.Embed(
-                title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK
+                title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=Config.PINK
             )
             set_pink_footer(embed, bot=self.bot.user)
 
@@ -1302,7 +1297,7 @@ class TodoEditSelectView(discord.ui.View):
             embed = discord.Embed(
                 title="Edit Priority",
                 description=f"Editing: **{item['title']}**\n\nChoose new priority level:",
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
             view = PrioritySelectView(
@@ -1549,7 +1544,7 @@ class TodoList(commands.Cog):
             description=f"Use the buttons below to manage the to-do list for <#{channel_id}>.\n\n"
             f"**Current Page:** {current_page_idx + 1}/{len(pages)}\n"
             f"**Items on Current Page:** {current_items}",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
 

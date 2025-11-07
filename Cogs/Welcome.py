@@ -6,8 +6,8 @@ from datetime import datetime
 from discord.ext import commands
 import discord
 from typing import Optional, Any
+import Config
 from Config import (
-    PINK,
     INTEREST_ROLES,
     WELCOME_RULES_CHANNEL_ID,
     WELCOME_PUBLIC_CHANNEL_ID,
@@ -135,7 +135,7 @@ class AcceptRulesButton(discord.ui.Button):
             embed = discord.Embed(
                 title=f"🎉 Welcome to {guild.name}, {member.display_name}!",
                 description=welcome_message,
-                color=PINK,
+                color=Config.PINK,
             )
             embed.add_field(
                 name="🎨 Your Interests",
@@ -397,7 +397,7 @@ class Welcome(commands.Cog):
                     "⏰ **Note:** You have **15 minutes** to complete this. If not, you'll be kicked from the server.\n"
                     "📝 **Privacy:** This message is public, but your selections and responses are only visible to you."
                 ),
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
             view = AcceptRulesView(member, cog=self)

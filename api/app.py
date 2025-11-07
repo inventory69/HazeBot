@@ -151,6 +151,10 @@ def get_config():
             "rank_check_interval_hours": Config.RL_RANK_CHECK_INTERVAL_HOURS,
             "rank_cache_ttl_seconds": Config.RL_RANK_CACHE_TTL_SECONDS,
         },
+        "rocket_league_texts": {
+            "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
+            "congrats_replies": Config.RL_CONGRATS_REPLIES,
+        },
         # Meme Configuration
         "meme": {
             "default_subreddits": Config.DEFAULT_MEME_SUBREDDITS,
@@ -166,6 +170,9 @@ def get_config():
         "welcome": {
             "rules_text": Config.RULES_TEXT,
             "welcome_messages": Config.WELCOME_MESSAGES,
+        },
+        "welcome_texts": {
+            "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
         },
         # Server Guide
         "server_guide": Config.SERVER_GUIDE_CONFIG,
@@ -189,6 +196,9 @@ def config_general():
                 "message_cooldown": Config.MessageCooldown,
                 "fuzzy_matching_threshold": Config.FuzzyMatchingThreshold,
                 "pink_color": Config.PINK.value if hasattr(Config, "PINK") else 0xAD1457,
+                "embed_footer_text": Config.EMBED_FOOTER_TEXT
+                if hasattr(Config, "EMBED_FOOTER_TEXT")
+                else "Powered by Haze World 💖",
                 "role_names": Config.ROLE_NAMES if hasattr(Config, "ROLE_NAMES") else {},
             }
         )
@@ -211,6 +221,8 @@ def config_general():
             import discord
 
             Config.PINK = discord.Color(int(data["pink_color"]))
+        if "embed_footer_text" in data:
+            Config.EMBED_FOOTER_TEXT = data["embed_footer_text"]
         if "role_names" in data:
             Config.ROLE_NAMES = data["role_names"]
 
@@ -233,6 +245,7 @@ def reset_general_config():
     Config.MessageCooldown = 5
     Config.FuzzyMatchingThreshold = 0.6
     Config.PINK = discord.Color(0xAD1457)
+    Config.EMBED_FOOTER_TEXT = "Powered by Haze World 💖"
     Config.ROLE_NAMES = {
         "user": "🎒 Lootling",
         "mod": "📦 Slot Keeper",
@@ -450,7 +463,7 @@ def config_rocket_league():
 
     if request.method == "PUT":
         data = request.get_json()
-        
+
         print(f"🔍 DEBUG API: Received RL config update: {data}")
 
         if "rank_check_interval_hours" in data:
@@ -657,7 +670,6 @@ def config_welcome():
             {
                 "rules_text": Config.RULES_TEXT,
                 "welcome_messages": Config.WELCOME_MESSAGES,
-                "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
             }
         )
 
@@ -668,8 +680,6 @@ def config_welcome():
             Config.RULES_TEXT = data["rules_text"]
         if "welcome_messages" in data:
             Config.WELCOME_MESSAGES = data["welcome_messages"]
-        if "welcome_button_replies" in data:
-            Config.WELCOME_BUTTON_REPLIES = data["welcome_button_replies"]
 
         # Save to file
         save_config_to_file()
@@ -684,23 +694,72 @@ def reset_welcome_config():
     # Import the original defaults
     import importlib
     import Config as OriginalConfig
+
     importlib.reload(OriginalConfig)
 
     Config.RULES_TEXT = OriginalConfig.RULES_TEXT
     Config.WELCOME_MESSAGES = OriginalConfig.WELCOME_MESSAGES
+
+    save_config_to_file()
+
+    return jsonify(
+        {
+            "success": True,
+            "message": "Welcome configuration reset to defaults",
+            "config": {
+                "rules_text": Config.RULES_TEXT,
+                "welcome_messages": Config.WELCOME_MESSAGES,
+            },
+        }
+    )
+
+
+@app.route("/api/config/welcome_texts", methods=["GET", "PUT"])
+@token_required
+def config_welcome_texts():
+    """Get or update welcome text configuration"""
+    if request.method == "GET":
+        return jsonify(
+            {
+                "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
+            }
+        )
+
+    if request.method == "PUT":
+        data = request.get_json()
+
+        if "welcome_button_replies" in data:
+            Config.WELCOME_BUTTON_REPLIES = data["welcome_button_replies"]
+
+        # Save to file
+        save_config_to_file()
+
+        return jsonify({"success": True, "message": "Welcome text configuration updated"})
+
+
+@app.route("/api/config/welcome_texts/reset", methods=["POST"])
+@token_required
+def reset_welcome_texts_config():
+    """Reset welcome text configuration to defaults"""
+    # Import the original defaults
+    import importlib
+    import Config as OriginalConfig
+
+    importlib.reload(OriginalConfig)
+
     Config.WELCOME_BUTTON_REPLIES = OriginalConfig.WELCOME_BUTTON_REPLIES
 
     save_config_to_file()
 
-    return jsonify({
-        "success": True,
-        "message": "Welcome configuration reset to defaults",
-        "config": {
-            "rules_text": Config.RULES_TEXT,
-            "welcome_messages": Config.WELCOME_MESSAGES,
-            "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
+    return jsonify(
+        {
+            "success": True,
+            "message": "Welcome text configuration reset to defaults",
+            "config": {
+                "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
+            },
         }
-    })
+    )
 
 
 @app.route("/api/config/rocket_league_texts", methods=["GET", "PUT"])
@@ -736,6 +795,7 @@ def reset_rocket_league_texts_config():
     # Import the original defaults
     import importlib
     import Config as OriginalConfig
+
     importlib.reload(OriginalConfig)
 
     Config.RL_RANK_PROMOTION_CONFIG = OriginalConfig.RL_RANK_PROMOTION_CONFIG
@@ -743,14 +803,16 @@ def reset_rocket_league_texts_config():
 
     save_config_to_file()
 
-    return jsonify({
-        "success": True,
-        "message": "Rocket League text configuration reset to defaults",
-        "config": {
-            "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
-            "congrats_replies": Config.RL_CONGRATS_REPLIES,
+    return jsonify(
+        {
+            "success": True,
+            "message": "Rocket League text configuration reset to defaults",
+            "config": {
+                "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
+                "congrats_replies": Config.RL_CONGRATS_REPLIES,
+            },
         }
-    })
+    )
 
 
 @app.route("/api/config/server_guide", methods=["GET", "PUT"])
@@ -768,6 +830,132 @@ def config_server_guide():
         save_config_to_file()
 
         return jsonify({"success": True, "message": "Server guide configuration updated"})
+
+
+# ===== LOGS ENDPOINTS =====
+
+
+@app.route("/api/logs", methods=["GET"])
+@token_required
+def get_logs():
+    """Get bot logs with optional filtering"""
+    try:
+        # Query parameters
+        cog_name = request.args.get("cog", None)  # Filter by cog name
+        level = request.args.get("level", None)  # Filter by log level (INFO, WARNING, ERROR, DEBUG)
+        limit = int(request.args.get("limit", 500))  # Number of lines to return
+        search = request.args.get("search", None)  # Search term
+
+        # Read log file
+        log_file = Path(__file__).parent.parent / "Logs" / "HazeBot.log"
+
+        if not log_file.exists():
+            return jsonify({"error": "Log file not found", "logs": []}), 404
+
+        # Read last N lines
+        with open(log_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            lines = lines[-limit * 2 :]  # Read more to account for filtering
+
+        # Parse and filter logs
+        parsed_logs = []
+        for line in lines:
+            # Skip empty lines
+            if not line.strip():
+                continue
+
+            # Apply filters
+            if cog_name and cog_name.lower() not in line.lower():
+                continue
+
+            if level and level.upper() not in line:
+                continue
+
+            if search and search.lower() not in line.lower():
+                continue
+
+            # Parse log line - format: [timestamp] emoji LEVEL | message
+            # Example: [23:23:44] 💖  INFO    │ message
+            try:
+                # Extract timestamp
+                timestamp_match = line.find("[")
+                timestamp_end = line.find("]")
+                timestamp = line[timestamp_match + 1 : timestamp_end] if timestamp_match != -1 else ""
+
+                # Extract level
+                level_match = None
+                for log_level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+                    if log_level in line:
+                        level_match = log_level
+                        break
+
+                # Extract message (everything after │ or after level)
+                separator_idx = line.find("│")
+                if separator_idx != -1:
+                    message = line[separator_idx + 1 :].strip()
+                else:
+                    # Fallback: take everything after level
+                    if level_match:
+                        level_idx = line.find(level_match) + len(level_match)
+                        message = line[level_idx:].strip()
+                    else:
+                        message = line.strip()
+
+                parsed_logs.append(
+                    {
+                        "timestamp": timestamp,
+                        "level": level_match or "INFO",
+                        "message": message,
+                        "raw": line.strip(),
+                    }
+                )
+            except Exception as e:
+                # If parsing fails, just include the raw line
+                parsed_logs.append(
+                    {
+                        "timestamp": "",
+                        "level": "UNKNOWN",
+                        "message": line.strip(),
+                        "raw": line.strip(),
+                    }
+                )
+
+        # Limit final results
+        parsed_logs = parsed_logs[-limit:]
+
+        return jsonify(
+            {
+                "total": len(parsed_logs),
+                "limit": limit,
+                "filters": {
+                    "cog": cog_name,
+                    "level": level,
+                    "search": search,
+                },
+                "logs": parsed_logs,
+            }
+        )
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/logs/cogs", methods=["GET"])
+@token_required
+def get_available_cogs():
+    """Get list of available cogs for log filtering"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get all loaded cogs
+        cogs = sorted([cog for cog in bot.cogs.keys()])
+
+        return jsonify({"cogs": cogs})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # Test endpoints
@@ -959,7 +1147,7 @@ def save_config_to_file():
     """Save current configuration to a JSON file for persistence"""
     config_file = Path(__file__).parent.parent / Config.DATA_DIR / "api_config_overrides.json"
     config_file.parent.mkdir(exist_ok=True)
-    
+
     print(f"💾 DEBUG: Saving config to: {config_file} (DATA_DIR={Config.DATA_DIR})")
 
     config_data = {
@@ -969,6 +1157,10 @@ def save_config_to_file():
             "presence_update_interval": Config.PresenceUpdateInterval,
             "message_cooldown": Config.MessageCooldown,
             "fuzzy_matching_threshold": Config.FuzzyMatchingThreshold,
+            "pink_color": Config.PINK.value if hasattr(Config.PINK, "value") else 0xAD1457,
+            "embed_footer_text": Config.EMBED_FOOTER_TEXT
+            if hasattr(Config, "EMBED_FOOTER_TEXT")
+            else "Powered by Haze World 💖",
         },
         "channels": {
             "log_channel_id": Config.LOG_CHANNEL_ID,
@@ -1002,18 +1194,27 @@ def save_config_to_file():
             "rank_check_interval_hours": Config.RL_RANK_CHECK_INTERVAL_HOURS,
             "rank_cache_ttl_seconds": Config.RL_RANK_CACHE_TTL_SECONDS,
         },
+        "rocket_league_texts": {
+            "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
+            "congrats_replies": Config.RL_CONGRATS_REPLIES,
+        },
         "welcome": {
             "rules_text": Config.RULES_TEXT,
             "welcome_messages": Config.WELCOME_MESSAGES,
         },
+        "welcome_texts": {
+            "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
+        },
         "server_guide": Config.SERVER_GUIDE_CONFIG,
     }
-    
-    print(f"💾 DEBUG: Saving RL config to file: interval={config_data['rocket_league']['rank_check_interval_hours']}h, cache={config_data['rocket_league']['rank_cache_ttl_seconds']}s")
+
+    rl_interval = config_data["rocket_league"]["rank_check_interval_hours"]
+    rl_cache = config_data["rocket_league"]["rank_cache_ttl_seconds"]
+    print(f"💾 DEBUG: Saving RL config to file: interval={rl_interval}h, cache={rl_cache}s")
 
     with open(config_file, "w") as f:
         json.dump(config_data, f, indent=2)
-    
+
     print(f"✅ Config saved to {config_file}")
 
 

@@ -1,9 +1,9 @@
 from discord.ext import commands
 import discord
 from typing import Any
+import Config
 from Config import (
     BotName,
-    PINK,
     SLASH_COMMANDS,
     ADMIN_COMMANDS,
     MOD_COMMANDS,
@@ -48,7 +48,7 @@ class Utility(commands.Cog):
                 "**Legend:** `!command` = Prefix only • `!cmd` / `/cmd` = Both available\n"
                 "`<parameter>` = Required • Use buttons for interactive features!"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Command descriptions mapping (centralized)
@@ -300,7 +300,7 @@ class Utility(commands.Cog):
         embed = discord.Embed(
             title=f"{BotName} Status",
             description="The bot is online and fabulous! 💖",
-            color=PINK,
+            color=Config.PINK,
         )
         embed.add_field(name="Latency", value=f"{round(latency * 1000)} ms")
         embed.add_field(name="Guilds", value=f"{guild_count}")
@@ -308,12 +308,17 @@ class Utility(commands.Cog):
         return embed
 
     def create_clear_embed(self, deleted_count: int, bot_user: discord.User) -> discord.Embed:
-        embed = discord.Embed(description=f"🧹 {deleted_count} messages have been deleted.", color=PINK)
+        embed = discord.Embed(description=f"🧹 {deleted_count} messages have been deleted.", color=Config.PINK)
+        set_pink_footer(embed, bot=bot_user)
+        return embed
+
+    def create_error_embed(self, message: str, bot_user: discord.User) -> discord.Embed:
+        embed = discord.Embed(description=message, color=Config.PINK)
         set_pink_footer(embed, bot=bot_user)
         return embed
 
     def create_say_embed(self, message: str, bot_user: discord.User) -> discord.Embed:
-        embed = discord.Embed(description=message, color=PINK)
+        embed = discord.Embed(description=message, color=Config.PINK)
         set_pink_footer(embed, bot=bot_user)
         return embed
 

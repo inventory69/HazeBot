@@ -8,8 +8,8 @@ import logging
 from datetime import datetime
 from typing import Optional, List
 
+import Config
 from Config import (
-    PINK,
     get_guild_id,
     get_data_dir,
     IMGFLIP_USERNAME,
@@ -198,7 +198,7 @@ class MemeGeneratorHubView(discord.ui.View):
                 f"**Selected:** {selected_emoji} {selected_name} · {selected_boxes} boxes\n"
                 f"**Click a button to preview · Click ✨ Create to make meme**"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         embed.add_field(name="📋 Templates", value=left_column, inline=True)
@@ -332,7 +332,7 @@ class MemeTextModal(discord.ui.Modal):
         embed = discord.Embed(
             title=f"🎨 Preview: {self.template_info.get('name', 'Meme')}",
             description="Review your meme before posting:",
-            color=PINK,
+            color=Config.PINK,
         )
         embed.set_image(url=meme_url)  # Show the GENERATED meme with texts
 
@@ -380,7 +380,7 @@ class MemePreviewView(discord.ui.View):
         # Create embed for posting
         embed = discord.Embed(
             title=f"🎨 Custom Meme: {self.template_info.get('name', 'Meme')}",
-            color=PINK,
+            color=Config.PINK,
             timestamp=datetime.now(),
         )
         embed.set_image(url=meme_url)
@@ -804,7 +804,7 @@ class MemeGenerator(commands.Cog):
     #     embed = discord.Embed(
     #         title="🎨 Popular Meme Templates",
     #         description="Use `/creatememe` to create a custom meme with these templates!",
-    #         color=PINK,
+    #         color=Config.PINK,
     #     )
     #
     #     for i, template in enumerate(popular, 1):

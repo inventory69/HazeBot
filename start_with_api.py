@@ -270,37 +270,38 @@ class HazeWorldBot(commands.Bot):
 def start_api(bot):
     """Start the Flask API server in a separate thread"""
     Logger.info("🌐 Starting API server...")
-    
+
     # Import API app
-    sys.path.insert(0, str(Path(__file__).parent / 'api'))
+    sys.path.insert(0, str(Path(__file__).parent / "api"))
     from api.app import app, set_bot_instance
-    
+
     # Set bot instance for API to use
     set_bot_instance(bot)
-    
+
     # Get port from environment
-    port = int(os.getenv('API_PORT', 5070))
-    debug_mode = os.getenv('API_DEBUG', 'false').lower() == 'true'
-    
+    port = int(os.getenv("API_PORT", 5070))
+    debug_mode = os.getenv("API_DEBUG", "false").lower() == "true"
+
     Logger.info(f"🌐 API server starting on port {port}")
-    
+
     # Run Flask app
-    app.run(host='0.0.0.0', port=port, debug=debug_mode, use_reloader=False)
+    app.run(host="0.0.0.0", port=port, debug=debug_mode, use_reloader=False)
 
 
 def main():
     """Main entry point"""
     # Create bot instance
     bot = HazeWorldBot()
-    
+
     # Start API in separate thread
     api_thread = threading.Thread(target=start_api, args=(bot,), daemon=True)
     api_thread.start()
-    
+
     Logger.info("⏳ Waiting for API to start...")
     import time
+
     time.sleep(2)  # Give API time to start
-    
+
     # Start bot
     Logger.info("🤖 Starting Discord bot...")
     bot.run(Token)

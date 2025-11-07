@@ -10,8 +10,8 @@ import smtplib
 import asyncio
 import re
 from typing import List, Dict, Optional, Any
+import Config
 from Config import (
-    PINK,
     ADMIN_ROLE_ID,
     MODERATOR_ROLE_ID,
     TICKETS_CATEGORY_ID,
@@ -230,7 +230,7 @@ def create_ticket_embed(ticket_data: Dict[str, Any], bot_user: discord.User) -> 
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket_num}",
         description=f"**Type:** {ticket_data['type']}\n**Status:** {ticket_data['status']}\n**Creator:** <@{ticket_data['user_id']}>",
-        color=PINK,
+        color=Config.PINK,
     )
     if ticket_data.get("claimed_by"):
         embed.add_field(name="Handler", value=f"<@{ticket_data['claimed_by']}>", inline=True)
@@ -244,7 +244,7 @@ def create_transcript_embed(transcript: str, bot_user: discord.User) -> discord.
     embed = discord.Embed(
         title="Ticket Transcript",
         description="The transcript has been created and sent via email.",
-        color=PINK,
+        color=Config.PINK,
     )
     embed.add_field(name="Transcript", value=transcript[:1024], inline=False)  # Limit length
     set_pink_footer(embed, bot=bot_user)
@@ -544,7 +544,7 @@ async def close_ticket_async(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
         description=f"**Type:** {ticket['type']}\n**Creator:** <@{ticket['user_id']}>\
             \n**Status:** Closed",
-        color=PINK,
+        color=Config.PINK,
     )
 
     # Add ticket details
@@ -587,7 +587,7 @@ async def close_ticket_async(
             close_embed = discord.Embed(
                 title=f"Ticket #{ticket['ticket_num']} - Closing Message",
                 description=close_message,
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(close_embed, bot=bot.user)
             await creator.send(embed=close_embed)
@@ -796,7 +796,7 @@ class TicketSystem(commands.Cog):
         embed = discord.Embed(
             title="🎫 Ticket System Help",
             description="Create a new ticket for support, bugs, or applications.\nUse `!ticket` or `/ticket`.",
-            color=PINK,
+            color=Config.PINK,
         )
         embed.add_field(
             name="Commands",

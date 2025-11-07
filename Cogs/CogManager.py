@@ -1,10 +1,10 @@
+import Config
 import discord
 from discord.ext import commands
 import json
 import os
 import logging
 
-from Config import PINK
 from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
@@ -377,7 +377,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="📥 Load Cog", description="Select a cog to load from the dropdown below:", color=PINK
+                title="📥 Load Cog", description="Select a cog to load from the dropdown below:", color=Config.PINK
             )
 
             # Show list of all unloaded cogs (show class names)
@@ -493,7 +493,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="📤 Unload Cog", description="Select a cog to unload from the dropdown below:", color=PINK
+                title="📤 Unload Cog", description="Select a cog to unload from the dropdown below:", color=Config.PINK
             )
 
             # Show list of all loaded cogs
@@ -643,7 +643,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="🔄 Reload Cog", description="Select a cog to reload from the dropdown below:", color=PINK
+                title="🔄 Reload Cog", description="Select a cog to reload from the dropdown below:", color=Config.PINK
             )
 
             # Show list of all available cogs (no limit)
@@ -783,7 +783,7 @@ class CogManager(commands.Cog):
             disabled = self.get_disabled_cogs()
             loaded = [cog for cog in self.bot.cogs.keys()]
 
-            embed = discord.Embed(title="🔧 Cog Status", color=PINK)
+            embed = discord.Embed(title="🔧 Cog Status", color=Config.PINK)
 
             # Loaded cogs
             loaded_text = "\n".join([f"✅ {cog}" for cog in loaded]) or "None"
@@ -814,7 +814,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="📋 View Cog Logs", description="Select a cog to view its recent logs:", color=PINK
+                title="📋 View Cog Logs", description="Select a cog to view its recent logs:", color=Config.PINK
             )
 
             # Show list of all available cogs (no limit)
@@ -944,7 +944,7 @@ class CogManager(commands.Cog):
                 embed = discord.Embed(
                     title=f"📋 Logs: {cog_name}",
                     description=f"No logs found for this cog in recent history.\n*Searching for: `{actual_cog_name}`*",
-                    color=PINK,
+                    color=Config.PINK,
                 )
                 set_pink_footer(embed, bot=self.bot.user)
 
@@ -999,7 +999,7 @@ class CogManager(commands.Cog):
             embed = discord.Embed(
                 title=f"📋 Logs: {cog_name}",
                 description=f"Showing last {len(recent_logs)} log entries from recent history",
-                color=PINK,
+                color=Config.PINK,
             )
 
             # Add statistics

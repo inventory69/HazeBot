@@ -2,7 +2,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from typing import Any
-from Config import PINK, CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
+import Config
+from Config import CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
 import logging
 
@@ -52,7 +53,7 @@ class PreferencesSystem(commands.Cog):
         embed = discord.Embed(
             title="🛠️ Preferences Menu",
             description="Customize your notification preferences.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         embed.add_field(

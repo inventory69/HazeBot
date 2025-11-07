@@ -10,8 +10,8 @@ import discord
 from discord import app_commands
 from bs4 import BeautifulSoup
 from typing import Dict, Optional, Tuple, Any
+import Config
 from Config import (
-    PINK,
     RL_TIER_ORDER,
     RL_ACCOUNTS_FILE,
     RANK_EMOJIS,
@@ -21,7 +21,6 @@ from Config import (
     RL_RANK_PROMOTION_CONFIG,
     RL_CONGRATS_REPLIES,
 )
-import Config  # Import module itself to access dynamic values
 
 from Utils.EmbedUtils import set_pink_footer
 from Utils.CacheUtils import file_cache
@@ -173,7 +172,7 @@ class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
         embed = discord.Embed(
             title="🔗 Confirm Rocket League Account Linking",
             description=f"Player found: **{stats['username']}**\nPlatform: **{platform.upper()}**\n\nDo you want to link this account?",
-            color=PINK,
+            color=Config.PINK,
         )
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
@@ -379,7 +378,9 @@ class RocketLeague(commands.Cog):
             logger.info(f"🔍 DEBUG: Config values at cog setup - Interval: {interval_hours}h, Cache TTL: {cache_ttl}s")
             self.check_ranks.change_interval(hours=interval_hours)
             self.check_ranks.start()
-            logger.info(f"Rank check task started with {interval_hours}h interval. Using FlareSolverr URL: {self.flaresolverr_url}")
+            logger.info(
+                f"Rank check task started with {interval_hours}h interval. Using FlareSolverr URL: {self.flaresolverr_url}"
+            )
 
         self.bot.add_view(RocketLeagueHubView())
         logger.info("RocketLeague hub view restored.")
@@ -642,7 +643,7 @@ class RocketLeague(commands.Cog):
         """
         embed = discord.Embed(
             title=f"Rocket League Stats for {stats['username']} ({platform.upper()})",
-            color=PINK,
+            color=Config.PINK,
         )
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
@@ -783,7 +784,7 @@ class RocketLeague(commands.Cog):
                             embed = discord.Embed(
                                 title=config["embed_title"],
                                 description=embed_description,
-                                color=PINK,
+                                color=Config.PINK,
                             )
                             if icon_url:
                                 embed.set_thumbnail(url=icon_url)
@@ -899,7 +900,7 @@ class RocketLeague(commands.Cog):
         embed = discord.Embed(
             title="🔗 Confirm Rocket League Account Linking",
             description=f"Player found: **{stats['username']}**\nPlatform: **{platform.upper()}**\n\nDo you want to link this account?",
-            color=PINK,
+            color=Config.PINK,
         )
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
@@ -1044,7 +1045,7 @@ class RocketLeague(commands.Cog):
                 "**Supported Platforms:**\n"
                 "Steam, Epic, PSN, Xbox, Nintendo Switch"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Check if user has account linked
