@@ -16,6 +16,7 @@ from functools import wraps
 # Add parent directory to path to import Config
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import Config
+from Utils.ConfigLoader import load_config_from_file
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
@@ -449,13 +450,18 @@ def config_rocket_league():
 
     if request.method == "PUT":
         data = request.get_json()
+        
+        print(f"🔍 DEBUG API: Received RL config update: {data}")
 
         if "rank_check_interval_hours" in data:
             Config.RL_RANK_CHECK_INTERVAL_HOURS = int(data["rank_check_interval_hours"])
+            print(f"✅ API: Set RL_RANK_CHECK_INTERVAL_HOURS to {Config.RL_RANK_CHECK_INTERVAL_HOURS}")
         if "rank_cache_ttl_seconds" in data:
             Config.RL_RANK_CACHE_TTL_SECONDS = int(data["rank_cache_ttl_seconds"])
+            print(f"✅ API: Set RL_RANK_CACHE_TTL_SECONDS to {Config.RL_RANK_CACHE_TTL_SECONDS}")
 
         # Save to file
+        print("💾 API: Saving config to file...")
         save_config_to_file()
 
         return jsonify({"success": True, "message": "Rocket League configuration updated"})
@@ -951,8 +957,10 @@ def set_bot_instance(bot):
 
 def save_config_to_file():
     """Save current configuration to a JSON file for persistence"""
-    config_file = Path(__file__).parent.parent / "Data" / "api_config_overrides.json"
+    config_file = Path(__file__).parent.parent / Config.DATA_DIR / "api_config_overrides.json"
     config_file.parent.mkdir(exist_ok=True)
+    
+    print(f"💾 DEBUG: Saving config to: {config_file} (DATA_DIR={Config.DATA_DIR})")
 
     config_data = {
         "general": {
@@ -1000,60 +1008,13 @@ def save_config_to_file():
         },
         "server_guide": Config.SERVER_GUIDE_CONFIG,
     }
+    
+    print(f"💾 DEBUG: Saving RL config to file: interval={config_data['rocket_league']['rank_check_interval_hours']}h, cache={config_data['rocket_league']['rank_cache_ttl_seconds']}s")
 
     with open(config_file, "w") as f:
         json.dump(config_data, f, indent=2)
-
-
-def load_config_from_file():
-    """Load configuration overrides from JSON file"""
-    config_file = Path(__file__).parent.parent / "Data" / "api_config_overrides.json"
-
-    if not config_file.exists():
-        return
-
-    try:
-        with open(config_file, "r") as f:
-            config_data = json.load(f)
-
-        # Apply general settings
-        if "general" in config_data:
-            for key, value in config_data["general"].items():
-                setattr(Config, key.upper() if not key.isupper() else key, value)
-
-        # Apply channel settings
-        if "channels" in config_data:
-            for key, value in config_data["channels"].items():
-                setattr(Config, key.upper(), value)
-                Config.CURRENT_IDS[key.upper()] = value
-
-        # Apply role settings
-        if "roles" in config_data:
-            for key, value in config_data["roles"].items():
-                setattr(Config, key.upper(), value)
-                Config.CURRENT_IDS[key.upper()] = value
-
-        # Apply meme settings
-        if "meme" in config_data:
-            for key, value in config_data["meme"].items():
-                setattr(Config, key.upper() if not key.isupper() else key, value)
-
-        # Apply Rocket League settings
-        if "rocket_league" in config_data:
-            for key, value in config_data["rocket_league"].items():
-                setattr(Config, key.upper() if not key.isupper() else key, value)
-
-        # Apply welcome settings
-        if "welcome" in config_data:
-            for key, value in config_data["welcome"].items():
-                setattr(Config, key.upper(), value)
-
-        # Apply server guide settings
-        if "server_guide" in config_data:
-            Config.SERVER_GUIDE_CONFIG = config_data["server_guide"]
-
-    except Exception as e:
-        print(f"Error loading config from file: {e}")
+    
+    print(f"✅ Config saved to {config_file}")
 
 
 # ===== DAILY MEME CONFIGURATION ENDPOINTS =====

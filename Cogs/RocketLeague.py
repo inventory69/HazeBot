@@ -20,9 +20,8 @@ from Config import (
     RL_CONGRATS_VIEWS_FILE,
     RL_RANK_PROMOTION_CONFIG,
     RL_CONGRATS_REPLIES,
-    RL_RANK_CHECK_INTERVAL_HOURS,
-    RL_RANK_CACHE_TTL_SECONDS,
 )
+import Config  # Import module itself to access dynamic values
 
 from Utils.EmbedUtils import set_pink_footer
 from Utils.CacheUtils import file_cache
@@ -374,8 +373,13 @@ class RocketLeague(commands.Cog):
         """Setup the cog - called on ready and after reload"""
         # Only start once
         if not self.check_ranks.is_running():
+            # Change the loop interval dynamically based on Config
+            interval_hours = Config.RL_RANK_CHECK_INTERVAL_HOURS
+            cache_ttl = Config.RL_RANK_CACHE_TTL_SECONDS
+            logger.info(f"🔍 DEBUG: Config values at cog setup - Interval: {interval_hours}h, Cache TTL: {cache_ttl}s")
+            self.check_ranks.change_interval(hours=interval_hours)
             self.check_ranks.start()
-            logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
+            logger.info(f"Rank check task started with {interval_hours}h interval. Using FlareSolverr URL: {self.flaresolverr_url}")
 
         self.bot.add_view(RocketLeagueHubView())
         logger.info("RocketLeague hub view restored.")
@@ -612,7 +616,7 @@ class RocketLeague(commands.Cog):
             return result
 
         # Cache using configured TTL
-        return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=RL_RANK_CACHE_TTL_SECONDS)
+        return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=Config.RL_RANK_CACHE_TTL_SECONDS)
 
     async def _get_rl_account(self, user_id: int, platform: Optional[str], username: Optional[str]) -> Tuple[str, str]:
         """
@@ -698,7 +702,7 @@ class RocketLeague(commands.Cog):
                 if last_fetched_str:
                     last_fetched = datetime.fromisoformat(last_fetched_str)
                     time_since_last = now - last_fetched
-                    if time_since_last < timedelta(hours=RL_RANK_CHECK_INTERVAL_HOURS):
+                    if time_since_last < timedelta(hours=Config.RL_RANK_CHECK_INTERVAL_HOURS):
                         logger.debug(
                             f"Skipping {data['username']} - last checked {time_since_last.total_seconds() / 60:.1f} minutes ago"
                         )
@@ -813,7 +817,7 @@ class RocketLeague(commands.Cog):
                 logger.warning(f"Failed to fetch stats for {username} ({platform})")
         logger.info("Rank check completed.")
 
-    @tasks.loop(hours=RL_RANK_CHECK_INTERVAL_HOURS)
+    @tasks.loop(hours=1)  # Will be changed dynamically in cog_load
     async def check_ranks(self) -> None:
         """
         Check for rank promotions at configured interval.

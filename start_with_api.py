@@ -27,6 +27,7 @@ root_logger.handlers.clear()
 import pathlib
 import discord
 from discord.ext import commands
+import Config
 from Config import (
     CommandPrefix,
     Intents,
@@ -43,6 +44,7 @@ from Config import (
 from Utils.Logger import Logger
 from dotenv import load_dotenv
 from Utils.Env import LoadEnv
+from Utils.ConfigLoader import load_config_from_file
 import difflib
 from Utils.EmbedUtils import set_pink_footer
 import asyncio
@@ -52,6 +54,11 @@ import os
 load_dotenv()
 Token = BOT_TOKEN
 EnvDict = LoadEnv()
+
+# Load saved configuration overrides before starting the bot
+print("🔄 Loading configuration from file...")
+load_config_from_file()
+print(f"🔍 After load: RL_RANK_CHECK_INTERVAL_HOURS = {Config.RL_RANK_CHECK_INTERVAL_HOURS}")
 
 loaded_count = sum(1 for v in EnvDict.values() if v is not None)
 Logger.info(f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}")
