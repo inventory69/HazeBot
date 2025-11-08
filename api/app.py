@@ -22,22 +22,75 @@ from Utils.ConfigLoader import load_config_from_file
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 
+
 # Configure logging - suppress 200 OK responses
 class NoSuccessRequestsFilter(logging.Filter):
     def filter(self, record):
         # Filter out successful requests (200 OK)
         msg = record.getMessage()
         # Check if it's a 200 response with any HTTP method
-        if ' 200 ' in msg and any(method in msg for method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']):
+        if " 200 " in msg and any(
+            method in msg for method in ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+        ):
             return False
         return True
 
+
 # Apply filter to werkzeug logger (Flask's request logger)
-werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger = logging.getLogger("werkzeug")
 werkzeug_logger.addFilter(NoSuccessRequestsFilter())
 
 # Secret key for JWT (should be in environment variable in production)
 app.config["SECRET_KEY"] = os.getenv("API_SECRET_KEY", "dev-secret-key-change-in-production")
+
+
+# Audit logging setup
+def log_action(username, action, details=None):
+    """Log user actions to file and console"""
+    from Utils.Logger import Logger
+
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "username": username,
+        "action": action,
+        "details": details or {},
+    }
+
+    # Log to console
+    Logger.info(f"🔧 [API Action] {username} - {action}" + (f" | {details}" if details else ""))
+
+    # Log to audit file
+    audit_log_path = Path(__file__).parent.parent / "Logs" / "api_audit.log"
+    audit_log_path.parent.mkdir(exist_ok=True)
+
+    with open(audit_log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_entry) + "\n")
+
+
+# Decorator for logging config updates
+def log_config_action(config_name):
+    """Decorator to automatically log configuration changes"""
+
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            # Get the request data before processing
+            if request.method in ["PUT", "POST"] and request.is_json:
+                data = request.get_json()
+                action_type = "update" if request.method == "PUT" else "reset" if "reset" in request.path else "action"
+                log_action(
+                    request.username,
+                    f"{action_type}_{config_name}_config",
+                    {"keys_modified": list(data.keys()) if data else []},
+                )
+            elif request.method == "POST" and "reset" in request.path:
+                log_action(request.username, f"reset_{config_name}_config", {"status": "reset to defaults"})
+
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 # Simple authentication decorator
@@ -52,7 +105,9 @@ def token_required(f):
         try:
             if token.startswith("Bearer "):
                 token = token[7:]
-            jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            # Store username in request context
+            request.username = data.get("user", "unknown")
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token has expired"}), 401
         except jwt.InvalidTokenError:
@@ -221,28 +276,48 @@ def config_general():
     if request.method == "PUT":
         data = request.get_json()
 
+        # Track changes for logging
+        changes = []
+
         # Update configuration (in memory)
         if "bot_name" in data:
+            changes.append(f"bot_name: {Config.BotName} -> {data['bot_name']}")
             Config.BotName = data["bot_name"]
         if "command_prefix" in data:
+            changes.append(f"command_prefix: {Config.CommandPrefix} -> {data['command_prefix']}")
             Config.CommandPrefix = data["command_prefix"]
         if "presence_update_interval" in data:
+            changes.append(
+                f"presence_update_interval: {Config.PresenceUpdateInterval} -> {data['presence_update_interval']}"
+            )
             Config.PresenceUpdateInterval = int(data["presence_update_interval"])
         if "message_cooldown" in data:
+            changes.append(f"message_cooldown: {Config.MessageCooldown} -> {data['message_cooldown']}")
             Config.MessageCooldown = int(data["message_cooldown"])
         if "fuzzy_matching_threshold" in data:
+            changes.append(
+                f"fuzzy_matching_threshold: {Config.FuzzyMatchingThreshold} -> {data['fuzzy_matching_threshold']}"
+            )
             Config.FuzzyMatchingThreshold = float(data["fuzzy_matching_threshold"])
         if "pink_color" in data:
             import discord
 
+            changes.append(
+                f"pink_color: {Config.PINK.value if hasattr(Config, 'PINK') else 'N/A'} -> {data['pink_color']}"
+            )
             Config.PINK = discord.Color(int(data["pink_color"]))
         if "embed_footer_text" in data:
+            changes.append("embed_footer_text changed")
             Config.EMBED_FOOTER_TEXT = data["embed_footer_text"]
         if "role_names" in data:
+            changes.append(f"role_names updated ({len(data['role_names'])} roles)")
             Config.ROLE_NAMES = data["role_names"]
 
         # Save to file
         save_config_to_file()
+
+        # Log the action
+        log_action(request.username, "update_general_config", {"changes": changes})
 
         return jsonify({"success": True, "message": "Configuration updated"})
 
@@ -270,11 +345,15 @@ def reset_general_config():
     # Save to file
     save_config_to_file()
 
+    # Log the action
+    log_action(request.username, "reset_general_config", {"status": "reset to defaults"})
+
     return jsonify({"success": True, "message": "General configuration reset to defaults"})
 
 
 @app.route("/api/config/channels", methods=["GET", "PUT"])
 @token_required
+@log_config_action("channels")
 def config_channels():
     """Get or update channel configuration"""
     if request.method == "GET":
@@ -341,6 +420,7 @@ def reset_channels_config():
 
 @app.route("/api/config/roles", methods=["GET", "PUT"])
 @token_required
+@log_config_action("roles")
 def config_roles():
     """Get or update role configuration"""
     if request.method == "GET":
@@ -421,6 +501,7 @@ def reset_roles_config():
 
 @app.route("/api/config/meme", methods=["GET", "PUT"])
 @token_required
+@log_config_action("meme")
 def config_meme():
     """Get or update meme configuration"""
     if request.method == "GET":
@@ -466,6 +547,7 @@ def config_meme():
 
 @app.route("/api/config/rocket_league", methods=["GET", "PUT"])
 @token_required
+@log_config_action("rocket_league")
 def config_rocket_league():
     """Get or update Rocket League configuration"""
     if request.method == "GET":
@@ -678,6 +760,7 @@ def get_rl_stats(platform, username):
 
 @app.route("/api/config/welcome", methods=["GET", "PUT"])
 @token_required
+@log_config_action("welcome")
 def config_welcome():
     """Get or update welcome system configuration"""
     if request.method == "GET":
@@ -924,7 +1007,7 @@ def get_logs():
                         "raw": line.strip(),
                     }
                 )
-            except Exception as e:
+            except Exception:
                 # If parsing fails, just include the raw line
                 parsed_logs.append(
                     {
@@ -974,6 +1057,361 @@ def get_available_cogs():
 
 
 # Test endpoints
+@app.route("/api/meme-sources", methods=["GET"])
+@token_required
+def get_meme_sources():
+    """Get available meme sources (subreddits and Lemmy communities)"""
+    try:
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
+        # Get DailyMeme cog
+        daily_meme_cog = bot.get_cog("DailyMeme")
+        if not daily_meme_cog:
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
+        return jsonify(
+            {
+                "success": True,
+                "sources": {
+                    "subreddits": list(daily_meme_cog.meme_subreddits),
+                    "lemmy": list(daily_meme_cog.meme_lemmy),
+                },
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to get sources: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+# ===== MEME GENERATOR ENDPOINTS =====
+
+
+@app.route("/api/meme-generator/templates", methods=["GET"])
+@token_required
+def get_meme_templates():
+    """Get available meme templates from Imgflip"""
+    try:
+        import asyncio
+
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
+        # Get MemeGenerator cog
+        meme_gen_cog = bot.get_cog("MemeGenerator")
+        if not meme_gen_cog:
+            return jsonify({"error": "MemeGenerator cog not loaded"}), 503
+
+        # Check if credentials are configured
+        from Config import IMGFLIP_USERNAME, IMGFLIP_PASSWORD
+
+        if not IMGFLIP_USERNAME or not IMGFLIP_PASSWORD:
+            return (
+                jsonify(
+                    {
+                        "error": "Imgflip credentials not configured",
+                        "details": "Bot administrator needs to configure IMGFLIP_USERNAME and IMGFLIP_PASSWORD",
+                    }
+                ),
+                503,
+            )
+
+        # Get templates (use cached if available)
+        loop = bot.loop
+
+        # Ensure templates are loaded
+        if not meme_gen_cog.templates:
+            future = asyncio.run_coroutine_threadsafe(meme_gen_cog.fetch_templates(), loop)
+            future.result(timeout=10)
+
+        templates = meme_gen_cog.templates
+
+        return jsonify(
+            {
+                "success": True,
+                "templates": templates,
+                "count": len(templates),
+                "cached_since": meme_gen_cog.templates_last_fetched,
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to get templates: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/meme-generator/templates/refresh", methods=["POST"])
+@token_required
+def refresh_meme_templates():
+    """Force refresh meme templates from Imgflip API"""
+    try:
+        import asyncio
+
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
+        # Get MemeGenerator cog
+        meme_gen_cog = bot.get_cog("MemeGenerator")
+        if not meme_gen_cog:
+            return jsonify({"error": "MemeGenerator cog not loaded"}), 503
+
+        loop = bot.loop
+
+        # Force fetch new templates
+        future = asyncio.run_coroutine_threadsafe(meme_gen_cog.fetch_templates(force=True), loop)
+        templates = future.result(timeout=10)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Templates refreshed successfully",
+                "count": len(templates),
+                "timestamp": meme_gen_cog.templates_last_fetched,
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to refresh templates: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/meme-generator/generate", methods=["POST"])
+@token_required
+def generate_meme():
+    """Generate a meme using Imgflip API"""
+    try:
+        import asyncio
+
+        data = request.get_json()
+        template_id = data.get("template_id")
+        texts = data.get("texts", [])  # List of text strings
+
+        if not template_id:
+            return jsonify({"error": "template_id is required"}), 400
+
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
+        # Get MemeGenerator cog
+        meme_gen_cog = bot.get_cog("MemeGenerator")
+        if not meme_gen_cog:
+            return jsonify({"error": "MemeGenerator cog not loaded"}), 503
+
+        loop = bot.loop
+
+        # Generate meme based on text count
+        if len(texts) <= 2:
+            # Simple meme with top/bottom text
+            text0 = texts[0] if len(texts) > 0 else ""
+            text1 = texts[1] if len(texts) > 1 else ""
+            future = asyncio.run_coroutine_threadsafe(meme_gen_cog.create_meme(template_id, text0, text1), loop)
+        else:
+            # Advanced meme with multiple text boxes
+            text_params = {f"text{i}": text for i, text in enumerate(texts)}
+            future = asyncio.run_coroutine_threadsafe(meme_gen_cog.create_meme_advanced(template_id, text_params), loop)
+
+        meme_url = future.result(timeout=15)
+
+        if not meme_url:
+            return jsonify({"error": "Failed to generate meme"}), 500
+
+        return jsonify({"success": True, "url": meme_url})
+
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to generate meme: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/meme-generator/post-to-discord", methods=["POST"])
+@token_required
+def post_generated_meme_to_discord():
+    """Post a generated meme to Discord"""
+    try:
+        import asyncio
+
+        data = request.get_json()
+        meme_url = data.get("meme_url")
+        template_name = data.get("template_name", "Custom Meme")
+        texts = data.get("texts", [])
+
+        if not meme_url:
+            return jsonify({"error": "meme_url is required"}), 400
+
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
+        # Get meme channel
+        meme_channel_id = Config.MEME_CHANNEL_ID
+        channel = bot.get_channel(meme_channel_id)
+        if not channel:
+            return jsonify({"error": f"Meme channel {meme_channel_id} not found"}), 404
+
+        loop = bot.loop
+
+        # Post the meme to Discord
+        async def post_meme():
+            import discord
+            from datetime import datetime
+            from Utils.EmbedUtils import set_pink_footer
+
+            embed = discord.Embed(
+                title=f"🎨 Custom Meme: {template_name}",
+                color=Config.PINK,
+                timestamp=datetime.now(),
+            )
+            embed.set_image(url=meme_url)
+
+            # Add text fields if provided
+            labels = ["🔝 Top Text", "🔽 Bottom Text", "⏺️ Middle Text", "📝 Text 4", "📝 Text 5"]
+            for i, text in enumerate(texts):
+                if text and text.strip():
+                    label = labels[i] if i < len(labels) else f"📝 Text {i + 1}"
+                    embed.add_field(name=label, value=text[:1024], inline=True)
+
+            embed.add_field(name="🖥️ Created via", value="Admin Panel", inline=False)
+
+            set_pink_footer(embed, bot=bot.user)
+
+            await channel.send("🎨 New custom meme generated!", embed=embed)
+
+        future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
+        future.result(timeout=30)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Meme posted to Discord successfully",
+                "channel_id": meme_channel_id,
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to post meme to Discord: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/test/meme-from-source", methods=["GET"])
+@token_required
+def test_meme_from_source():
+    """Get a meme from a specific source (subreddit or Lemmy community)"""
+    try:
+        import asyncio
+        import random
+
+        # Get source parameter
+        source = request.args.get("source")
+        if not source or not source.strip():
+            return jsonify(
+                {"error": "Missing 'source' parameter. Use subreddit name or lemmy community (instance@community)"}
+            ), 400
+
+        source = source.strip()
+
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot instance not available. Make sure to start with start_with_api.py"}), 503
+
+        # Get DailyMeme cog
+        daily_meme_cog = bot.get_cog("DailyMeme")
+        if not daily_meme_cog:
+            return jsonify({"error": "DailyMeme cog not loaded"}), 503
+
+        # Use the bot's existing event loop
+        loop = bot.loop
+
+        # Determine if it's Lemmy or Reddit
+        if "@" in source:
+            # Lemmy community
+            lemmy_source = source.lower()
+            if lemmy_source not in daily_meme_cog.meme_lemmy:
+                available = list(daily_meme_cog.meme_lemmy)
+                return jsonify(
+                    {
+                        "error": f"'{source}' is not configured as a Lemmy community",
+                        "available_lemmy": available,
+                    }
+                ), 400
+
+            # Fetch from Lemmy
+            future = asyncio.run_coroutine_threadsafe(
+                daily_meme_cog.fetch_lemmy_meme(lemmy_source),
+                loop,
+            )
+            memes = future.result(timeout=30)
+            source_display = lemmy_source
+            source_type = "lemmy"
+
+        else:
+            # Reddit subreddit - normalize the input
+            subreddit = source.lower().strip().replace("r/", "")
+
+            if not subreddit:
+                return jsonify({"error": "Empty subreddit name"}), 400
+
+            if subreddit not in daily_meme_cog.meme_subreddits:
+                available = list(daily_meme_cog.meme_subreddits)
+                return jsonify(
+                    {
+                        "error": f"r/{subreddit} is not configured",
+                        "available_subreddits": available,
+                    }
+                ), 400
+
+            # Fetch from Reddit
+            future = asyncio.run_coroutine_threadsafe(
+                daily_meme_cog.fetch_reddit_meme(subreddit),
+                loop,
+            )
+            memes = future.result(timeout=30)
+            source_display = f"r/{subreddit}"
+            source_type = "reddit"
+
+        if not memes:
+            return jsonify({"error": f"No memes found from {source_display}"}), 404
+
+        # Pick random meme
+        meme = random.choice(memes)
+
+        return jsonify(
+            {
+                "success": True,
+                "source": source_display,
+                "source_type": source_type,
+                "meme": {
+                    "url": meme.get("url"),
+                    "title": meme.get("title"),
+                    "subreddit": meme.get("subreddit"),
+                    "author": meme.get("author"),
+                    "score": meme.get("score", meme.get("upvotes", 0)),
+                    "nsfw": meme.get("nsfw", False),
+                    "permalink": meme.get("permalink", ""),
+                },
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to fetch meme: {str(e)}", "details": traceback.format_exc()}), 500
+
+
 @app.route("/api/test/random-meme", methods=["GET"])
 @token_required
 def test_random_meme():
@@ -1263,6 +1701,7 @@ def get_daily_meme_config():
 
 @app.route("/api/daily-meme/config", methods=["POST"])
 @token_required
+@log_config_action("daily_meme")
 def update_daily_meme_config():
     """Update daily meme configuration"""
     try:

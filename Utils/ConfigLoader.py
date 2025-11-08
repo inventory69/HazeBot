@@ -75,7 +75,7 @@ def load_config_from_file():
             rl_texts = config_data["rocket_league_texts"]
             if "promotion_config" in rl_texts:
                 Config.RL_RANK_PROMOTION_CONFIG = rl_texts["promotion_config"]
-                print(f"✅ Set RL_RANK_PROMOTION_CONFIG")
+                print("✅ Set RL_RANK_PROMOTION_CONFIG")
             if "congrats_replies" in rl_texts:
                 Config.RL_CONGRATS_REPLIES = rl_texts["congrats_replies"]
                 print(f"✅ Set RL_CONGRATS_REPLIES ({len(Config.RL_CONGRATS_REPLIES)} messages)")
