@@ -6,6 +6,7 @@ Provides REST endpoints to read and update bot configuration
 import os
 import json
 import sys
+import logging
 from pathlib import Path
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -20,6 +21,20 @@ from Utils.ConfigLoader import load_config_from_file
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
+
+# Configure logging - suppress 200 OK responses
+class NoSuccessRequestsFilter(logging.Filter):
+    def filter(self, record):
+        # Filter out successful requests (200 OK)
+        msg = record.getMessage()
+        # Check if it's a 200 response with any HTTP method
+        if ' 200 ' in msg and any(method in msg for method in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']):
+            return False
+        return True
+
+# Apply filter to werkzeug logger (Flask's request logger)
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.addFilter(NoSuccessRequestsFilter())
 
 # Secret key for JWT (should be in environment variable in production)
 app.config["SECRET_KEY"] = os.getenv("API_SECRET_KEY", "dev-secret-key-change-in-production")
