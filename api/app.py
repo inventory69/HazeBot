@@ -8,11 +8,13 @@ import json
 import sys
 import logging
 from pathlib import Path
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
+import requests
+from urllib.parse import urlencode
 
 # Add parent directory to path to import Config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -106,8 +108,10 @@ def token_required(f):
             if token.startswith("Bearer "):
                 token = token[7:]
             data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
-            # Store username in request context
+            # Store username and permissions in request context
             request.username = data.get("user", "unknown")
+            request.user_role = data.get("role", "admin")
+            request.user_permissions = data.get("permissions", ["all"])
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token has expired"}), 401
         except jwt.InvalidTokenError:
@@ -119,6 +123,30 @@ def token_required(f):
         return f(*args, **kwargs)
 
     return decorated
+
+
+# Permission checking decorator
+def require_permission(permission):
+    """Decorator to check if user has required permission"""
+
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            user_permissions = getattr(request, "user_permissions", [])
+
+            # Admin/mod with 'all' permission can access everything
+            if "all" in user_permissions:
+                return f(*args, **kwargs)
+
+            # Check specific permission
+            if permission not in user_permissions:
+                return jsonify({"error": "Insufficient permissions"}), 403
+
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 @app.route("/api/health", methods=["GET"])
@@ -148,18 +176,178 @@ def login():
 
     if username in valid_users and password == valid_users[username]:
         token = jwt.encode(
-            {"user": username, "exp": datetime.utcnow() + timedelta(hours=24)},
+            {
+                "user": username,
+                "exp": datetime.utcnow() + timedelta(hours=24),
+                "role": "admin",
+                "permissions": ["all"],
+                "auth_type": "legacy",
+            },
             app.config["SECRET_KEY"],
             algorithm="HS256",
         )
 
-        return jsonify({"token": token})
+        return jsonify({"token": token, "user": username, "role": "admin", "permissions": ["all"]})
 
     return jsonify({"error": "Invalid credentials"}), 401
 
 
+# Discord OAuth2 Configuration
+DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "https://test-hazebot-admin.hzwd.xyz/auth/callback")
+DISCORD_API_ENDPOINT = "https://discord.com/api/v10"
+
+# Role-based permissions
+ROLE_PERMISSIONS = {
+    "admin": ["all"],
+    "mod": ["all"],
+    "lootling": ["meme_generator"],
+}
+
+
+def get_user_role_from_discord(member_data, guild_id):
+    """Determine user role based on Discord guild roles"""
+    role_ids = member_data.get("roles", [])
+
+    # Get bot instance to fetch role IDs from Config
+    bot = app.config.get("bot_instance")
+    if not bot:
+        return "lootling"
+
+    # Get role IDs from Config
+    admin_role_id = str(Config.ADMIN_ROLE_ID)
+    mod_role_id = str(Config.MODERATOR_ROLE_ID)
+
+    # Check for admin/mod roles
+    if admin_role_id in role_ids:
+        return "admin"
+    elif mod_role_id in role_ids:
+        return "mod"
+    else:
+        return "lootling"
+
+
+@app.route("/api/discord/auth", methods=["GET"])
+def discord_auth():
+    """Initiate Discord OAuth2 flow"""
+    params = {
+        "client_id": DISCORD_CLIENT_ID,
+        "redirect_uri": DISCORD_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "identify guilds.members.read",
+    }
+
+    auth_url = f"{DISCORD_API_ENDPOINT}/oauth2/authorize?{urlencode(params)}"
+    return jsonify({"auth_url": auth_url})
+
+
+@app.route("/api/discord/callback", methods=["GET"])
+def discord_callback():
+    """Handle Discord OAuth2 callback"""
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "No authorization code provided"}), 400
+
+    # Exchange code for access token
+    token_data = {
+        "client_id": DISCORD_CLIENT_ID,
+        "client_secret": DISCORD_CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": DISCORD_REDIRECT_URI,
+    }
+
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    token_response = requests.post(f"{DISCORD_API_ENDPOINT}/oauth2/token", data=token_data, headers=headers)
+
+    if token_response.status_code != 200:
+        return jsonify({"error": "Failed to obtain access token"}), 400
+
+    access_token = token_response.json().get("access_token")
+
+    # Get user info
+    user_headers = {"Authorization": f"Bearer {access_token}"}
+    user_response = requests.get(f"{DISCORD_API_ENDPOINT}/users/@me", headers=user_headers)
+
+    if user_response.status_code != 200:
+        return jsonify({"error": "Failed to get user info"}), 400
+
+    user_data = user_response.json()
+
+    # Get guild member info to check roles
+    guild_id = os.getenv("DISCORD_GUILD_ID") if os.getenv("PROD_MODE", "false").lower() == "true" else os.getenv("DISCORD_TEST_GUILD_ID")
+
+    member_response = requests.get(
+        f"{DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member", headers=user_headers
+    )
+
+    if member_response.status_code != 200:
+        return jsonify({"error": "User is not a member of the guild"}), 403
+
+    member_data = member_response.json()
+
+    # Determine role and permissions
+    role = get_user_role_from_discord(member_data, guild_id)
+    permissions = ROLE_PERMISSIONS.get(role, ["meme_generator"])
+
+    # Create JWT token
+    token = jwt.encode(
+        {
+            "user": user_data["username"],
+            "discord_id": user_data["id"],
+            "exp": datetime.utcnow() + timedelta(hours=24),
+            "role": role,
+            "permissions": permissions,
+            "auth_type": "discord",
+        },
+        app.config["SECRET_KEY"],
+        algorithm="HS256",
+    )
+
+    # Log the action
+    log_action(user_data["username"], "discord_oauth_login", {"role": role, "permissions": permissions})
+
+    # Detect if request is from mobile app (check 'state' parameter from OAuth flow)
+    state = request.args.get("state", "")
+    is_mobile_app = state == "mobile"
+
+    if is_mobile_app:
+        # Redirect to deep link for mobile app
+        return redirect(f"hazebot://oauth?token={token}")
+    else:
+        # Redirect to frontend web URL with token
+        frontend_url = "https://test-hazebot-admin.hzwd.xyz"
+        return redirect(f"{frontend_url}?token={token}")
+
+
+@app.route("/api/auth/me", methods=["GET"])
+@token_required
+def get_current_user():
+    """Get current user info from JWT token"""
+    token = request.headers.get("Authorization")
+    if token.startswith("Bearer "):
+        token = token[7:]
+
+    try:
+        data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+        return jsonify(
+            {
+                "user": data.get("user"),
+                "discord_id": data.get("discord_id"),
+                "role": data.get("role", "admin"),
+                "permissions": data.get("permissions", ["all"]),
+                "auth_type": data.get("auth_type", "legacy"),
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": "Invalid token"}), 401
+
+
 @app.route("/api/config", methods=["GET"])
 @token_required
+@require_permission("all")
 def get_config():
     """Get all bot configuration"""
     # Try to get actual subreddits/lemmy from DailyMeme cog
@@ -173,7 +361,12 @@ def get_config():
         if daily_meme_cog:
             subreddits = daily_meme_cog.meme_subreddits
             lemmy_communities = daily_meme_cog.meme_lemmy
-            daily_meme_config = daily_meme_cog.daily_config
+            # Convert Discord IDs to strings to prevent precision loss in Flutter Web
+            daily_meme_config = daily_meme_cog.daily_config.copy()
+            if "channel_id" in daily_meme_config and daily_meme_config["channel_id"]:
+                daily_meme_config["channel_id"] = str(daily_meme_config["channel_id"])
+            if "role_id" in daily_meme_config and daily_meme_config["role_id"]:
+                daily_meme_config["role_id"] = str(daily_meme_config["role_id"])
 
     config_data = {
         # General Settings
@@ -190,31 +383,31 @@ def get_config():
             "log_level": Config.LogLevel,
             "cog_log_levels": Config.COG_LOG_LEVELS,
         },
-        # Discord IDs
+        # Discord IDs (convert to strings to prevent precision loss in Flutter Web)
         "discord_ids": {
-            "guild_id": Config.GUILD_ID,
+            "guild_id": str(Config.GUILD_ID) if Config.GUILD_ID else None,
             "guild_name": getattr(Config, "GUILD_NAME", None),  # Optional: Add GUILD_NAME to Config.py
-            "admin_role_id": Config.ADMIN_ROLE_ID,
-            "moderator_role_id": Config.MODERATOR_ROLE_ID,
-            "normal_role_id": Config.NORMAL_ROLE_ID,
-            "member_role_id": Config.MEMBER_ROLE_ID,
-            "changelog_role_id": Config.CHANGELOG_ROLE_ID,
-            "meme_role_id": Config.MEME_ROLE_ID,
-            "interest_role_ids": Config.INTEREST_ROLE_IDS,
+            "admin_role_id": str(Config.ADMIN_ROLE_ID) if Config.ADMIN_ROLE_ID else None,
+            "moderator_role_id": str(Config.MODERATOR_ROLE_ID) if Config.MODERATOR_ROLE_ID else None,
+            "normal_role_id": str(Config.NORMAL_ROLE_ID) if Config.NORMAL_ROLE_ID else None,
+            "member_role_id": str(Config.MEMBER_ROLE_ID) if Config.MEMBER_ROLE_ID else None,
+            "changelog_role_id": str(Config.CHANGELOG_ROLE_ID) if Config.CHANGELOG_ROLE_ID else None,
+            "meme_role_id": str(Config.MEME_ROLE_ID) if Config.MEME_ROLE_ID else None,
+            "interest_role_ids": [str(rid) for rid in Config.INTEREST_ROLE_IDS] if Config.INTEREST_ROLE_IDS else [],
             "interest_roles": Config.INTEREST_ROLES,
         },
-        # Channels
+        # Channels (convert to strings to prevent precision loss in Flutter Web)
         "channels": {
-            "log_channel_id": Config.LOG_CHANNEL_ID,
-            "changelog_channel_id": Config.CHANGELOG_CHANNEL_ID,
-            "todo_channel_id": Config.TODO_CHANNEL_ID,
-            "rl_channel_id": Config.RL_CHANNEL_ID,
-            "meme_channel_id": Config.MEME_CHANNEL_ID,
-            "server_guide_channel_id": Config.SERVER_GUIDE_CHANNEL_ID,
-            "welcome_rules_channel_id": Config.WELCOME_RULES_CHANNEL_ID,
-            "welcome_public_channel_id": Config.WELCOME_PUBLIC_CHANNEL_ID,
-            "transcript_channel_id": Config.TRANSCRIPT_CHANNEL_ID,
-            "tickets_category_id": Config.TICKETS_CATEGORY_ID,
+            "log_channel_id": str(Config.LOG_CHANNEL_ID) if Config.LOG_CHANNEL_ID else None,
+            "changelog_channel_id": str(Config.CHANGELOG_CHANNEL_ID) if Config.CHANGELOG_CHANNEL_ID else None,
+            "todo_channel_id": str(Config.TODO_CHANNEL_ID) if Config.TODO_CHANNEL_ID else None,
+            "rl_channel_id": str(Config.RL_CHANNEL_ID) if Config.RL_CHANNEL_ID else None,
+            "meme_channel_id": str(Config.MEME_CHANNEL_ID) if Config.MEME_CHANNEL_ID else None,
+            "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID) if Config.SERVER_GUIDE_CHANNEL_ID else None,
+            "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID) if Config.WELCOME_RULES_CHANNEL_ID else None,
+            "welcome_public_channel_id": str(Config.WELCOME_PUBLIC_CHANNEL_ID) if Config.WELCOME_PUBLIC_CHANNEL_ID else None,
+            "transcript_channel_id": str(Config.TRANSCRIPT_CHANNEL_ID) if Config.TRANSCRIPT_CHANNEL_ID else None,
+            "tickets_category_id": str(Config.TICKETS_CATEGORY_ID) if Config.TICKETS_CATEGORY_ID else None,
         },
         # Rocket League
         "rocket_league": {
@@ -255,6 +448,7 @@ def get_config():
 
 @app.route("/api/config/general", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 def config_general():
     """Get or update general configuration"""
     if request.method == "GET":
@@ -324,6 +518,7 @@ def config_general():
 
 @app.route("/api/config/general/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_general_config():
     """Reset general configuration to default values"""
     import discord
@@ -353,22 +548,24 @@ def reset_general_config():
 
 @app.route("/api/config/channels", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 @log_config_action("channels")
 def config_channels():
     """Get or update channel configuration"""
     if request.method == "GET":
+        # Return IDs as strings to prevent precision loss in Flutter Web (JavaScript)
         return jsonify(
             {
-                "log_channel_id": Config.LOG_CHANNEL_ID,
-                "changelog_channel_id": Config.CHANGELOG_CHANNEL_ID,
-                "todo_channel_id": Config.TODO_CHANNEL_ID,
-                "rl_channel_id": Config.RL_CHANNEL_ID,
-                "meme_channel_id": Config.MEME_CHANNEL_ID,
-                "server_guide_channel_id": Config.SERVER_GUIDE_CHANNEL_ID,
-                "welcome_rules_channel_id": Config.WELCOME_RULES_CHANNEL_ID,
-                "welcome_public_channel_id": Config.WELCOME_PUBLIC_CHANNEL_ID,
-                "transcript_channel_id": Config.TRANSCRIPT_CHANNEL_ID,
-                "tickets_category_id": Config.TICKETS_CATEGORY_ID,
+                "log_channel_id": str(Config.LOG_CHANNEL_ID) if Config.LOG_CHANNEL_ID else None,
+                "changelog_channel_id": str(Config.CHANGELOG_CHANNEL_ID) if Config.CHANGELOG_CHANNEL_ID else None,
+                "todo_channel_id": str(Config.TODO_CHANNEL_ID) if Config.TODO_CHANNEL_ID else None,
+                "rl_channel_id": str(Config.RL_CHANNEL_ID) if Config.RL_CHANNEL_ID else None,
+                "meme_channel_id": str(Config.MEME_CHANNEL_ID) if Config.MEME_CHANNEL_ID else None,
+                "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID) if Config.SERVER_GUIDE_CHANNEL_ID else None,
+                "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID) if Config.WELCOME_RULES_CHANNEL_ID else None,
+                "welcome_public_channel_id": str(Config.WELCOME_PUBLIC_CHANNEL_ID) if Config.WELCOME_PUBLIC_CHANNEL_ID else None,
+                "transcript_channel_id": str(Config.TRANSCRIPT_CHANNEL_ID) if Config.TRANSCRIPT_CHANNEL_ID else None,
+                "tickets_category_id": str(Config.TICKETS_CATEGORY_ID) if Config.TICKETS_CATEGORY_ID else None,
             }
         )
 
@@ -398,6 +595,7 @@ def config_channels():
 
 @app.route("/api/config/channels/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_channels_config():
     """Reset channels configuration to default values"""
     # Reset to default values from CURRENT_IDS (which is already set based on PROD_MODE)
@@ -420,20 +618,22 @@ def reset_channels_config():
 
 @app.route("/api/config/roles", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 @log_config_action("roles")
 def config_roles():
     """Get or update role configuration"""
     if request.method == "GET":
+        # Return IDs as strings to prevent precision loss in Flutter Web (JavaScript)
         return jsonify(
             {
-                "admin_role_id": Config.ADMIN_ROLE_ID,
-                "moderator_role_id": Config.MODERATOR_ROLE_ID,
-                "normal_role_id": Config.NORMAL_ROLE_ID,
-                "member_role_id": Config.MEMBER_ROLE_ID,
-                "changelog_role_id": Config.CHANGELOG_ROLE_ID,
-                "meme_role_id": Config.MEME_ROLE_ID,
-                "interest_role_ids": Config.INTEREST_ROLE_IDS,
-                "interest_roles": Config.INTEREST_ROLES,
+                "admin_role_id": str(Config.ADMIN_ROLE_ID) if Config.ADMIN_ROLE_ID else None,
+                "moderator_role_id": str(Config.MODERATOR_ROLE_ID) if Config.MODERATOR_ROLE_ID else None,
+                "normal_role_id": str(Config.NORMAL_ROLE_ID) if Config.NORMAL_ROLE_ID else None,
+                "member_role_id": str(Config.MEMBER_ROLE_ID) if Config.MEMBER_ROLE_ID else None,
+                "changelog_role_id": str(Config.CHANGELOG_ROLE_ID) if Config.CHANGELOG_ROLE_ID else None,
+                "meme_role_id": str(Config.MEME_ROLE_ID) if Config.MEME_ROLE_ID else None,
+                "interest_role_ids": [str(rid) for rid in Config.INTEREST_ROLE_IDS] if Config.INTEREST_ROLE_IDS else [],
+                "interest_roles": {k: str(v) if v else None for k, v in Config.INTEREST_ROLES.items()} if Config.INTEREST_ROLES else {},
             }
         )
 
@@ -484,6 +684,7 @@ def config_roles():
 
 @app.route("/api/config/roles/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_roles_config():
     """Reset all role IDs to defaults from CURRENT_IDS"""
     Config.ADMIN_ROLE_ID = Config.CURRENT_IDS["ADMIN_ROLE_ID"]
@@ -501,6 +702,7 @@ def reset_roles_config():
 
 @app.route("/api/config/meme", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 @log_config_action("meme")
 def config_meme():
     """Get or update meme configuration"""
@@ -547,6 +749,7 @@ def config_meme():
 
 @app.route("/api/config/rocket_league", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 @log_config_action("rocket_league")
 def config_rocket_league():
     """Get or update Rocket League configuration"""
@@ -579,6 +782,7 @@ def config_rocket_league():
 
 @app.route("/api/config/rocket_league/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_rocket_league_config():
     """Reset Rocket League configuration to default values"""
     # Reset to default values from Config.py
@@ -593,6 +797,7 @@ def reset_rocket_league_config():
 
 @app.route("/api/rocket-league/accounts", methods=["GET"])
 @token_required
+@require_permission("all")
 def get_rl_accounts():
     """Get all linked Rocket League accounts"""
     try:
@@ -637,6 +842,7 @@ def get_rl_accounts():
 
 @app.route("/api/rocket-league/accounts/<user_id>", methods=["DELETE"])
 @token_required
+@require_permission("all")
 def delete_rl_account(user_id):
     """Delete/unlink a Rocket League account (admin function)"""
     try:
@@ -668,6 +874,7 @@ def delete_rl_account(user_id):
 
 @app.route("/api/rocket-league/check-ranks", methods=["POST"])
 @token_required
+@require_permission("all")
 def trigger_rank_check():
     """Manually trigger rank check for all linked accounts"""
     try:
@@ -705,6 +912,7 @@ def trigger_rank_check():
 
 @app.route("/api/rocket-league/stats/<platform>/<username>", methods=["GET"])
 @token_required
+@require_permission("all")
 def get_rl_stats(platform, username):
     """Get Rocket League stats for a specific player"""
     try:
@@ -760,6 +968,7 @@ def get_rl_stats(platform, username):
 
 @app.route("/api/config/welcome", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 @log_config_action("welcome")
 def config_welcome():
     """Get or update welcome system configuration"""
@@ -787,6 +996,7 @@ def config_welcome():
 
 @app.route("/api/config/welcome/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_welcome_config():
     """Reset welcome configuration to defaults"""
     # Import the original defaults
@@ -814,6 +1024,7 @@ def reset_welcome_config():
 
 @app.route("/api/config/welcome_texts", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 def config_welcome_texts():
     """Get or update welcome text configuration"""
     if request.method == "GET":
@@ -837,6 +1048,7 @@ def config_welcome_texts():
 
 @app.route("/api/config/welcome_texts/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_welcome_texts_config():
     """Reset welcome text configuration to defaults"""
     # Import the original defaults
@@ -862,6 +1074,7 @@ def reset_welcome_texts_config():
 
 @app.route("/api/config/rocket_league_texts", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 def config_rocket_league_texts():
     """Get or update Rocket League text configuration"""
     if request.method == "GET":
@@ -888,6 +1101,7 @@ def config_rocket_league_texts():
 
 @app.route("/api/config/rocket_league_texts/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_rocket_league_texts_config():
     """Reset Rocket League text configuration to defaults"""
     # Import the original defaults
@@ -915,6 +1129,7 @@ def reset_rocket_league_texts_config():
 
 @app.route("/api/config/server_guide", methods=["GET", "PUT"])
 @token_required
+@require_permission("all")
 def config_server_guide():
     """Get or update server guide configuration"""
     if request.method == "GET":
@@ -935,6 +1150,7 @@ def config_server_guide():
 
 @app.route("/api/logs", methods=["GET"])
 @token_required
+@require_permission("all")
 def get_logs():
     """Get bot logs with optional filtering"""
     try:
@@ -1040,6 +1256,7 @@ def get_logs():
 
 @app.route("/api/logs/cogs", methods=["GET"])
 @token_required
+@require_permission("all")
 def get_available_cogs():
     """Get list of available cogs for log filtering"""
     try:
@@ -1093,6 +1310,7 @@ def get_meme_sources():
 
 @app.route("/api/meme-generator/templates", methods=["GET"])
 @token_required
+@require_permission("meme_generator")
 def get_meme_templates():
     """Get available meme templates from Imgflip"""
     try:
@@ -1149,6 +1367,7 @@ def get_meme_templates():
 
 @app.route("/api/meme-generator/templates/refresh", methods=["POST"])
 @token_required
+@require_permission("meme_generator")
 def refresh_meme_templates():
     """Force refresh meme templates from Imgflip API"""
     try:
@@ -1187,6 +1406,7 @@ def refresh_meme_templates():
 
 @app.route("/api/meme-generator/generate", methods=["POST"])
 @token_required
+@require_permission("meme_generator")
 def generate_meme():
     """Generate a meme using Imgflip API"""
     try:
@@ -1237,6 +1457,7 @@ def generate_meme():
 
 @app.route("/api/meme-generator/post-to-discord", methods=["POST"])
 @token_required
+@require_permission("meme_generator")
 def post_generated_meme_to_discord():
     """Post a generated meme to Discord"""
     try:
@@ -1470,6 +1691,44 @@ def test_random_meme():
         return jsonify({"error": f"Failed to get random meme: {str(e)}", "details": traceback.format_exc()}), 500
 
 
+@app.route("/api/proxy/image", methods=["GET"])
+def proxy_image():
+    """Proxy external images to bypass CORS restrictions"""
+    try:
+        # Get the image URL from query parameter
+        image_url = request.args.get("url")
+        if not image_url:
+            return jsonify({"error": "Missing 'url' parameter"}), 400
+        
+        # Validate URL is from allowed domains (security measure)
+        allowed_domains = ["i.redd.it", "i.imgur.com", "preview.redd.it", "external-preview.redd.it", "i.imgflip.com", "imgflip.com"]
+        from urllib.parse import urlparse
+        parsed_url = urlparse(image_url)
+        if not any(domain in parsed_url.netloc for domain in allowed_domains):
+            return jsonify({"error": "URL domain not allowed"}), 403
+        
+        # Fetch the image
+        response = requests.get(image_url, timeout=10, stream=True)
+        response.raise_for_status()
+        
+        # Get content type
+        content_type = response.headers.get('Content-Type', 'image/jpeg')
+        
+        # Return the image with proper CORS headers
+        return app.response_class(
+            response.content,
+            mimetype=content_type,
+            headers={
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
+            }
+        )
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to fetch image: {str(e)}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"Proxy error: {str(e)}"}), 500
+
+
 @app.route("/api/test/daily-meme", methods=["POST"])
 @token_required
 def test_daily_meme():
@@ -1676,6 +1935,7 @@ def save_config_to_file():
 
 @app.route("/api/daily-meme/config", methods=["GET"])
 @token_required
+@require_permission("all")
 def get_daily_meme_config():
     """Get daily meme configuration"""
     try:
@@ -1693,6 +1953,12 @@ def get_daily_meme_config():
             "available_subreddits": daily_meme_cog.meme_subreddits,
             "available_lemmy": daily_meme_cog.meme_lemmy,
         }
+        
+        # Convert Discord IDs to strings to prevent precision loss in Flutter Web
+        if "channel_id" in config_with_sources and config_with_sources["channel_id"]:
+            config_with_sources["channel_id"] = str(config_with_sources["channel_id"])
+        if "role_id" in config_with_sources and config_with_sources["role_id"]:
+            config_with_sources["role_id"] = str(config_with_sources["role_id"])
 
         return jsonify(config_with_sources)
     except Exception as e:
@@ -1701,6 +1967,7 @@ def get_daily_meme_config():
 
 @app.route("/api/daily-meme/config", methods=["POST"])
 @token_required
+@require_permission("all")
 @log_config_action("daily_meme")
 def update_daily_meme_config():
     """Update daily meme configuration"""
@@ -1730,9 +1997,16 @@ def update_daily_meme_config():
 
         # Restart task if needed
         daily_meme_cog.restart_daily_task()
+        
+        # Convert Discord IDs to strings for response
+        response_config = daily_meme_cog.daily_config.copy()
+        if "channel_id" in response_config and response_config["channel_id"]:
+            response_config["channel_id"] = str(response_config["channel_id"])
+        if "role_id" in response_config and response_config["role_id"]:
+            response_config["role_id"] = str(response_config["role_id"])
 
         return jsonify(
-            {"success": True, "message": "Daily meme configuration updated", "config": daily_meme_cog.daily_config}
+            {"success": True, "message": "Daily meme configuration updated", "config": response_config}
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1740,6 +2014,7 @@ def update_daily_meme_config():
 
 @app.route("/api/daily-meme/config/reset", methods=["POST"])
 @token_required
+@require_permission("all")
 def reset_daily_meme_config():
     """Reset daily meme configuration to defaults"""
     try:
@@ -1767,12 +2042,19 @@ def reset_daily_meme_config():
         }
         daily_meme_cog.save_daily_config()
         daily_meme_cog.restart_daily_task()
+        
+        # Convert Discord IDs to strings for response
+        response_config = daily_meme_cog.daily_config.copy()
+        if "channel_id" in response_config and response_config["channel_id"]:
+            response_config["channel_id"] = str(response_config["channel_id"])
+        if "role_id" in response_config and response_config["role_id"]:
+            response_config["role_id"] = str(response_config["role_id"])
 
         return jsonify(
             {
                 "success": True,
                 "message": "Daily meme configuration reset to defaults",
-                "config": daily_meme_cog.daily_config,
+                "config": response_config,
             }
         )
     except Exception as e:
