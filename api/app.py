@@ -129,13 +129,20 @@ def token_required(f):
                 request.session_id = hashlib.sha256(session_data.encode()).hexdigest()[:32]
 
             # Update active session tracking
+            # Get real client IP (handle proxy/forwarded requests)
+            real_ip = (
+                request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                or request.headers.get("X-Real-IP", "").strip()
+                or request.remote_addr
+            )
+
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
                 "role": request.user_role,
                 "permissions": request.user_permissions,
                 "last_seen": datetime.now().isoformat(),
-                "ip": request.remote_addr,
+                "ip": real_ip,
                 "user_agent": request.headers.get("User-Agent", "Unknown"),
                 "endpoint": request.endpoint or "unknown",
             }
@@ -244,6 +251,8 @@ ROLE_PERMISSIONS = {
 def get_user_role_from_discord(member_data, guild_id):
     """Determine user role based on Discord guild roles"""
     role_ids = member_data.get("roles", [])
+    # Ensure all role IDs are strings for comparison
+    role_ids = [str(rid) for rid in role_ids]
 
     # Get bot instance to fetch role IDs from Config
     bot = app.config.get("bot_instance")
@@ -254,12 +263,22 @@ def get_user_role_from_discord(member_data, guild_id):
     admin_role_id = str(Config.ADMIN_ROLE_ID)
     mod_role_id = str(Config.MODERATOR_ROLE_ID)
 
-    # Check for admin/mod roles
+    # Debug logging
+    from Utils.Logger import Logger
+
+    Logger.info(
+        f"🔍 Discord Auth - Checking roles: user_roles={role_ids}, admin_id={admin_role_id}, mod_id={mod_role_id}"
+    )
+
+    # Check for admin/mod roles (mods get same permissions as admins for now)
     if admin_role_id in role_ids:
+        Logger.info("✅ User identified as ADMIN")
         return "admin"
     elif mod_role_id in role_ids:
+        Logger.info("✅ User identified as MOD (with admin permissions)")
         return "mod"
     else:
+        Logger.info("👤 User identified as LOOTLING")
         return "lootling"
 
 
@@ -1067,7 +1086,217 @@ def get_rl_stats(platform, username):
     except Exception as e:
         import traceback
 
+        return jsonify({"error": f"Failed to get stats: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+# User Rocket League Endpoints (for logged-in users to manage their own account)
+@app.route("/api/user/rocket-league/link", methods=["POST"])
+@token_required
+def link_user_rl_account():
+    """Link Rocket League account for the current user"""
+    try:
+        from Cogs.RocketLeague import load_rl_accounts, save_rl_accounts
+        from datetime import datetime, timezone
+        import asyncio
+
+        discord_id = request.discord_id
+        if discord_id == "legacy_user" or discord_id == "unknown":
+            return jsonify({"error": "Discord ID not available"}), 400
+
+        data = request.get_json()
+        platform = data.get("platform", "").lower()
+        username = data.get("username", "").strip()
+
+        if not platform or not username:
+            return jsonify({"error": "Platform and username are required"}), 400
+
+        if platform not in ["steam", "epic", "psn", "xbl", "switch"]:
+            return jsonify({"error": "Invalid platform. Use: steam, epic, psn, xbl, or switch"}), 400
+
+        # Check if user already has an account linked
+        accounts = load_rl_accounts()
+        if str(discord_id) in accounts:
+            return jsonify({"error": "You already have a Rocket League account linked. Unlink it first."}), 400
+
+        # Fetch stats to validate the account exists
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        rl_cog = bot.get_cog("RocketLeague")
+        if not rl_cog:
+            return jsonify({"error": "RocketLeague cog not loaded"}), 503
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(rl_cog.get_player_stats(platform, username), loop)
+        stats = future.result(timeout=30)
+
+        if not stats:
+            return jsonify({"error": "Player not found. Please check your platform and username."}), 404
+
+        # Save the account
+        accounts[str(discord_id)] = {
+            "platform": platform,
+            "username": stats["username"],  # Use verified username from API
+            "ranks": stats.get("tier_names", {}),
+            "rank_display": stats.get("rank_display", {}),
+            "icon_urls": stats.get("icon_urls", {}),
+            "last_fetched": datetime.now(timezone.utc).isoformat(),
+        }
+        save_rl_accounts(accounts)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Successfully linked Rocket League account: {stats['username']}",
+                "account": {
+                    "platform": platform,
+                    "username": stats["username"],
+                    "ranks": stats.get("tier_names", {}),
+                },
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to link account: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/user/rocket-league/unlink", methods=["DELETE"])
+@token_required
+def unlink_user_rl_account():
+    """Unlink Rocket League account for the current user"""
+    try:
+        from Cogs.RocketLeague import load_rl_accounts, save_rl_accounts
+
+        discord_id = request.discord_id
+        if discord_id == "legacy_user" or discord_id == "unknown":
+            return jsonify({"error": "Discord ID not available"}), 400
+
+        accounts = load_rl_accounts()
+        
+        if str(discord_id) not in accounts:
+            return jsonify({"error": "No Rocket League account linked"}), 404
+
+        # Get username for response
+        rl_username = accounts[str(discord_id)].get("username", "Unknown")
+
+        # Delete the account
+        del accounts[str(discord_id)]
+        save_rl_accounts(accounts)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Successfully unlinked Rocket League account: {rl_username}",
+            }
+        )
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": f"Failed to unlink account: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/user/rocket-league/account", methods=["GET"])
+@token_required
+def get_user_rl_account():
+    """Get current user's linked Rocket League account"""
+    try:
+        from Cogs.RocketLeague import load_rl_accounts
+
+        discord_id = request.discord_id
+        if discord_id == "legacy_user" or discord_id == "unknown":
+            return jsonify({"error": "Discord ID not available"}), 400
+
+        accounts = load_rl_accounts()
+        
+        if str(discord_id) not in accounts:
+            return jsonify({"linked": False})
+
+        account = accounts[str(discord_id)]
+        return jsonify(
+            {
+                "linked": True,
+                "account": {
+                    "platform": account.get("platform"),
+                    "username": account.get("username"),
+                    "ranks": account.get("ranks", {}),
+                    "rank_display": account.get("rank_display", {}),
+                    "icon_urls": account.get("icon_urls", {}),
+                    "last_fetched": account.get("last_fetched"),
+                },
+            }
+        )
+    except Exception as e:
+        import traceback
+
         return jsonify({"error": f"Failed to fetch RL stats: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/user/preferences", methods=["PUT"])
+@token_required
+def update_user_preferences():
+    """Update current user's notification preferences"""
+    try:
+        import asyncio
+        
+        discord_id = request.discord_id
+        if discord_id == "legacy_user" or discord_id == "unknown":
+            return jsonify({"error": "Discord ID not available"}), 400
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get guild
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        # Get member
+        member = guild.get_member(int(discord_id))
+        if not member:
+            return jsonify({"error": "Member not found in guild"}), 404
+
+        # Handle changelog opt-in/out
+        if "changelog_opt_in" in data:
+            changelog_role = guild.get_role(Config.CHANGELOG_ROLE_ID)
+            if changelog_role:
+                if data["changelog_opt_in"]:
+                    if changelog_role not in member.roles:
+                        asyncio.run_coroutine_threadsafe(
+                            member.add_roles(changelog_role), bot.loop
+                        ).result(timeout=5)
+                else:
+                    if changelog_role in member.roles:
+                        asyncio.run_coroutine_threadsafe(
+                            member.remove_roles(changelog_role), bot.loop
+                        ).result(timeout=5)
+
+        # Handle meme opt-in/out
+        if "meme_opt_in" in data:
+            meme_role = guild.get_role(Config.MEME_ROLE_ID)
+            if meme_role:
+                if data["meme_opt_in"]:
+                    if meme_role not in member.roles:
+                        asyncio.run_coroutine_threadsafe(
+                            member.add_roles(meme_role), bot.loop
+                        ).result(timeout=5)
+                else:
+                    if meme_role in member.roles:
+                        asyncio.run_coroutine_threadsafe(
+                            member.remove_roles(meme_role), bot.loop
+                        ).result(timeout=5)
+
+        return jsonify({"message": "Preferences updated successfully"})
+    except Exception as e:
+        import traceback
+        return jsonify({"error": f"Failed to update preferences: {str(e)}", "details": traceback.format_exc()}), 500
 
 
 @app.route("/api/config/welcome", methods=["GET", "PUT"])
@@ -2312,25 +2541,36 @@ def get_user_profile():
         # Get Rocket League rank (if available)
         rl_rank = None
         try:
-            from Cogs.RocketLeague import load_rl_accounts, get_highest_rl_rank, RANK_EMOJIS
+            from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
+            from Config import RL_TIER_ORDER
 
             rl_accounts = load_rl_accounts()
             if str(discord_id) in rl_accounts:
                 account = rl_accounts[str(discord_id)]
-                highest_rank = get_highest_rl_rank(account.get("ranks", {}))
-                if highest_rank and highest_rank != "Unranked":
-                    # Get the rank emoji/icon
-                    rank_emoji = RANK_EMOJIS.get(highest_rank, "")
-                    icon_url = account.get("icon_urls", {}).get(highest_rank)
+                ranks = account.get("ranks", {})  # This contains tier names like "Champion II"
+                icon_urls = account.get("icon_urls", {})
+                
+                # Calculate highest rank from ranks dict
+                highest_tier = "Unranked"
+                highest_playlist = None
+                for playlist, tier in ranks.items():
+                    if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
+                        highest_tier = tier
+                        highest_playlist = playlist
+                
+                if highest_tier and highest_tier != "Unranked" and highest_playlist:
+                    # Get the rank emoji and icon URL for the highest playlist
+                    rank_emoji = RANK_EMOJIS.get(highest_tier, "")
+                    icon_url = icon_urls.get(highest_playlist)
 
                     rl_rank = {
-                        "rank": highest_rank,
+                        "rank": highest_tier,
                         "emoji": rank_emoji,
                         "icon_url": icon_url,
                         "platform": account.get("platform"),
                         "username": account.get("username"),
                     }
-        except Exception:
+        except Exception as e:
             # RL data is optional, don't fail if not available
             pass
 
