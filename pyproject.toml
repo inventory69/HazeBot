@@ -100,3 +100,4 @@ ban-relative-imports = "all"
 "Cogs/TicketSystem.py" = ["E501"]
 "Cogs/Welcome.py" = ["E501"]
 "Main.py" = ["E402"]  # Imports after logging setup
+"start_with_api.py" = ["E402"]  # Imports after logging setup

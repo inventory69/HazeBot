@@ -24,6 +24,9 @@ from Utils.ConfigLoader import load_config_from_file
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 
+# Active sessions tracking
+active_sessions = {}  # {session_id: {username, discord_id, roles, last_seen, ip, user_agent}}
+
 
 # Configure logging - suppress 200 OK responses
 class NoSuccessRequestsFilter(logging.Filter):
@@ -112,6 +115,22 @@ def token_required(f):
             request.username = data.get("user", "unknown")
             request.user_role = data.get("role", "admin")
             request.user_permissions = data.get("permissions", ["all"])
+            request.discord_id = data.get("discord_id", "unknown")
+            request.session_id = data.get("session_id", token[:16])
+
+            # Update active session tracking
+            session_info = {
+                "username": request.username,
+                "discord_id": request.discord_id,
+                "role": request.user_role,
+                "permissions": request.user_permissions,
+                "last_seen": datetime.now().isoformat(),
+                "ip": request.remote_addr,
+                "user_agent": request.headers.get("User-Agent", "Unknown"),
+                "endpoint": request.endpoint or "unknown",
+            }
+            active_sessions[request.session_id] = session_info
+
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token has expired"}), 401
         except jwt.InvalidTokenError:
@@ -175,13 +194,19 @@ def login():
                 valid_users[user.strip()] = pwd.strip()
 
     if username in valid_users and password == valid_users[username]:
+        import secrets
+
+        session_id = secrets.token_hex(16)
+
         token = jwt.encode(
             {
                 "user": username,
+                "discord_id": "legacy_user",
                 "exp": datetime.utcnow() + timedelta(hours=24),
                 "role": "admin",
                 "permissions": ["all"],
                 "auth_type": "legacy",
+                "session_id": session_id,
             },
             app.config["SECRET_KEY"],
             algorithm="HS256",
@@ -277,11 +302,10 @@ def discord_callback():
     user_data = user_response.json()
 
     # Get guild member info to check roles
-    guild_id = os.getenv("DISCORD_GUILD_ID") if os.getenv("PROD_MODE", "false").lower() == "true" else os.getenv("DISCORD_TEST_GUILD_ID")
+    prod_mode = os.getenv("PROD_MODE", "false").lower() == "true"
+    guild_id = os.getenv("DISCORD_GUILD_ID") if prod_mode else os.getenv("DISCORD_TEST_GUILD_ID")
 
-    member_response = requests.get(
-        f"{DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member", headers=user_headers
-    )
+    member_response = requests.get(f"{DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member", headers=user_headers)
 
     if member_response.status_code != 200:
         return jsonify({"error": "User is not a member of the guild"}), 403
@@ -293,6 +317,10 @@ def discord_callback():
     permissions = ROLE_PERMISSIONS.get(role, ["meme_generator"])
 
     # Create JWT token
+    import secrets
+
+    session_id = secrets.token_hex(16)
+
     token = jwt.encode(
         {
             "user": user_data["username"],
@@ -301,6 +329,7 @@ def discord_callback():
             "role": role,
             "permissions": permissions,
             "auth_type": "discord",
+            "session_id": session_id,
         },
         app.config["SECRET_KEY"],
         algorithm="HS256",
@@ -341,8 +370,61 @@ def get_current_user():
                 "auth_type": data.get("auth_type", "legacy"),
             }
         )
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Invalid token"}), 401
+
+
+@app.route("/api/admin/active-sessions", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_active_sessions():
+    """Get all active API sessions (Admin/Mod only)"""
+    # Clean up old sessions (older than 5 minutes)
+    current_time = datetime.now()
+    expired_sessions = []
+
+    for session_id, session_data in list(active_sessions.items()):
+        try:
+            last_seen = datetime.fromisoformat(session_data["last_seen"])
+            if (current_time - last_seen).total_seconds() > 300:  # 5 minutes
+                expired_sessions.append(session_id)
+        except Exception:
+            expired_sessions.append(session_id)
+
+    # Remove expired sessions
+    for session_id in expired_sessions:
+        del active_sessions[session_id]
+
+    # Format response
+    sessions_list = []
+    for session_id, session_data in active_sessions.items():
+        try:
+            last_seen = datetime.fromisoformat(session_data["last_seen"])
+            seconds_ago = int((current_time - last_seen).total_seconds())
+
+            sessions_list.append(
+                {
+                    "session_id": session_id,
+                    "username": session_data.get("username", "Unknown"),
+                    "discord_id": session_data.get("discord_id", "Unknown"),
+                    "role": session_data.get("role", "unknown"),
+                    "permissions": session_data.get("permissions", []),
+                    "last_seen": session_data["last_seen"],
+                    "seconds_ago": seconds_ago,
+                    "ip": session_data.get("ip", "Unknown"),
+                    "user_agent": session_data.get("user_agent", "Unknown"),
+                    "last_endpoint": session_data.get("endpoint", "unknown"),
+                }
+            )
+        except Exception:
+            continue
+
+    # Sort by last_seen (most recent first)
+    sessions_list.sort(key=lambda x: x["last_seen"], reverse=True)
+
+    return jsonify(
+        {"total_active": len(sessions_list), "sessions": sessions_list, "checked_at": current_time.isoformat()}
+    )
 
 
 @app.route("/api/config", methods=["GET"])
@@ -404,8 +486,12 @@ def get_config():
             "rl_channel_id": str(Config.RL_CHANNEL_ID) if Config.RL_CHANNEL_ID else None,
             "meme_channel_id": str(Config.MEME_CHANNEL_ID) if Config.MEME_CHANNEL_ID else None,
             "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID) if Config.SERVER_GUIDE_CHANNEL_ID else None,
-            "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID) if Config.WELCOME_RULES_CHANNEL_ID else None,
-            "welcome_public_channel_id": str(Config.WELCOME_PUBLIC_CHANNEL_ID) if Config.WELCOME_PUBLIC_CHANNEL_ID else None,
+            "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID)
+            if Config.WELCOME_RULES_CHANNEL_ID
+            else None,
+            "welcome_public_channel_id": str(Config.WELCOME_PUBLIC_CHANNEL_ID)
+            if Config.WELCOME_PUBLIC_CHANNEL_ID
+            else None,
             "transcript_channel_id": str(Config.TRANSCRIPT_CHANNEL_ID) if Config.TRANSCRIPT_CHANNEL_ID else None,
             "tickets_category_id": str(Config.TICKETS_CATEGORY_ID) if Config.TICKETS_CATEGORY_ID else None,
         },
@@ -561,9 +647,15 @@ def config_channels():
                 "todo_channel_id": str(Config.TODO_CHANNEL_ID) if Config.TODO_CHANNEL_ID else None,
                 "rl_channel_id": str(Config.RL_CHANNEL_ID) if Config.RL_CHANNEL_ID else None,
                 "meme_channel_id": str(Config.MEME_CHANNEL_ID) if Config.MEME_CHANNEL_ID else None,
-                "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID) if Config.SERVER_GUIDE_CHANNEL_ID else None,
-                "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID) if Config.WELCOME_RULES_CHANNEL_ID else None,
-                "welcome_public_channel_id": str(Config.WELCOME_PUBLIC_CHANNEL_ID) if Config.WELCOME_PUBLIC_CHANNEL_ID else None,
+                "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID)
+                if Config.SERVER_GUIDE_CHANNEL_ID
+                else None,
+                "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID)
+                if Config.WELCOME_RULES_CHANNEL_ID
+                else None,
+                "welcome_public_channel_id": str(Config.WELCOME_PUBLIC_CHANNEL_ID)
+                if Config.WELCOME_PUBLIC_CHANNEL_ID
+                else None,
                 "transcript_channel_id": str(Config.TRANSCRIPT_CHANNEL_ID) if Config.TRANSCRIPT_CHANNEL_ID else None,
                 "tickets_category_id": str(Config.TICKETS_CATEGORY_ID) if Config.TICKETS_CATEGORY_ID else None,
             }
@@ -633,7 +725,9 @@ def config_roles():
                 "changelog_role_id": str(Config.CHANGELOG_ROLE_ID) if Config.CHANGELOG_ROLE_ID else None,
                 "meme_role_id": str(Config.MEME_ROLE_ID) if Config.MEME_ROLE_ID else None,
                 "interest_role_ids": [str(rid) for rid in Config.INTEREST_ROLE_IDS] if Config.INTEREST_ROLE_IDS else [],
-                "interest_roles": {k: str(v) if v else None for k, v in Config.INTEREST_ROLES.items()} if Config.INTEREST_ROLES else {},
+                "interest_roles": {k: str(v) if v else None for k, v in Config.INTEREST_ROLES.items()}
+                if Config.INTEREST_ROLES
+                else {},
             }
         )
 
@@ -1699,29 +1793,37 @@ def proxy_image():
         image_url = request.args.get("url")
         if not image_url:
             return jsonify({"error": "Missing 'url' parameter"}), 400
-        
+
         # Validate URL is from allowed domains (security measure)
-        allowed_domains = ["i.redd.it", "i.imgur.com", "preview.redd.it", "external-preview.redd.it", "i.imgflip.com", "imgflip.com"]
+        allowed_domains = [
+            "i.redd.it",
+            "i.imgur.com",
+            "preview.redd.it",
+            "external-preview.redd.it",
+            "i.imgflip.com",
+            "imgflip.com",
+        ]
         from urllib.parse import urlparse
+
         parsed_url = urlparse(image_url)
         if not any(domain in parsed_url.netloc for domain in allowed_domains):
             return jsonify({"error": "URL domain not allowed"}), 403
-        
+
         # Fetch the image
         response = requests.get(image_url, timeout=10, stream=True)
         response.raise_for_status()
-        
+
         # Get content type
-        content_type = response.headers.get('Content-Type', 'image/jpeg')
-        
+        content_type = response.headers.get("Content-Type", "image/jpeg")
+
         # Return the image with proper CORS headers
         return app.response_class(
             response.content,
             mimetype=content_type,
             headers={
-                'Access-Control-Allow-Origin': '*',
-                'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
-            }
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+            },
         )
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch image: {str(e)}"}), 502
@@ -1953,7 +2055,7 @@ def get_daily_meme_config():
             "available_subreddits": daily_meme_cog.meme_subreddits,
             "available_lemmy": daily_meme_cog.meme_lemmy,
         }
-        
+
         # Convert Discord IDs to strings to prevent precision loss in Flutter Web
         if "channel_id" in config_with_sources and config_with_sources["channel_id"]:
             config_with_sources["channel_id"] = str(config_with_sources["channel_id"])
@@ -1997,7 +2099,7 @@ def update_daily_meme_config():
 
         # Restart task if needed
         daily_meme_cog.restart_daily_task()
-        
+
         # Convert Discord IDs to strings for response
         response_config = daily_meme_cog.daily_config.copy()
         if "channel_id" in response_config and response_config["channel_id"]:
@@ -2005,9 +2107,7 @@ def update_daily_meme_config():
         if "role_id" in response_config and response_config["role_id"]:
             response_config["role_id"] = str(response_config["role_id"])
 
-        return jsonify(
-            {"success": True, "message": "Daily meme configuration updated", "config": response_config}
-        )
+        return jsonify({"success": True, "message": "Daily meme configuration updated", "config": response_config})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2042,7 +2142,7 @@ def reset_daily_meme_config():
         }
         daily_meme_cog.save_daily_config()
         daily_meme_cog.restart_daily_task()
-        
+
         # Convert Discord IDs to strings for response
         response_config = daily_meme_cog.daily_config.copy()
         if "channel_id" in response_config and response_config["channel_id"]:
