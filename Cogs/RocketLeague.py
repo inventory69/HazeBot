@@ -321,6 +321,7 @@ class ConfirmLinkView(discord.ui.View):
             "username": self.username,
             "ranks": self.stats["tier_names"],  # Keep for compatibility
             "rank_display": self.stats["rank_display"],  # Add full display with emojis
+            "icon_urls": self.stats.get("icon_urls", {}),  # Add icon URLs
         }
         save_rl_accounts(accounts)
         await self.message.edit(

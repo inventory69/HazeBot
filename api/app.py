@@ -20,6 +20,7 @@ from urllib.parse import urlencode
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import Config
 from Utils.ConfigLoader import load_config_from_file
+from Utils.Logger import Logger as logger
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
@@ -1053,6 +1054,9 @@ def get_rl_stats(platform, username):
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             return jsonify({"error": "Invalid platform. Use: steam, epic, psn, xbl, or switch"}), 400
 
+        # Log the request
+        logger.info(f"🔍 Fetching RL stats for {username} on {platform.upper()} (via API by {request.username})")
+
         # Use the bot's existing event loop
         loop = bot.loop
 
@@ -1063,7 +1067,12 @@ def get_rl_stats(platform, username):
         stats = future.result(timeout=90)
 
         if not stats:
+            logger.warning(f"❌ Player {username} not found on {platform.upper()}")
             return jsonify({"error": "Player not found or error fetching stats"}), 404
+
+        # Log success with ranks
+        ranks_str = ", ".join([f"{k}: {v}" for k, v in stats.get("tier_names", {}).items()])
+        logger.info(f"✅ Fetched RL stats for {stats['username']}: [{ranks_str}]")
 
         return jsonify(
             {
@@ -1113,6 +1122,8 @@ def link_user_rl_account():
         if platform not in ["steam", "epic", "psn", "xbl", "switch"]:
             return jsonify({"error": "Invalid platform. Use: steam, epic, psn, xbl, or switch"}), 400
 
+        logger.info(f"🔗 User {request.username} attempting to link RL account: {username} on {platform.upper()}")
+
         # Check if user already has an account linked
         accounts = load_rl_accounts()
         if str(discord_id) in accounts:
@@ -1145,6 +1156,12 @@ def link_user_rl_account():
         }
         save_rl_accounts(accounts)
 
+        # Log success
+        ranks_str = ", ".join([f"{k}: {v}" for k, v in stats.get("tier_names", {}).items()])
+        logger.info(
+            f"✅ Successfully linked RL account for {request.username}: {stats['username']} ({platform.upper()}) - [{ranks_str}]"
+        )
+
         return jsonify(
             {
                 "success": True,
@@ -1174,16 +1191,19 @@ def unlink_user_rl_account():
             return jsonify({"error": "Discord ID not available"}), 400
 
         accounts = load_rl_accounts()
-        
+
         if str(discord_id) not in accounts:
             return jsonify({"error": "No Rocket League account linked"}), 404
 
         # Get username for response
         rl_username = accounts[str(discord_id)].get("username", "Unknown")
+        rl_platform = accounts[str(discord_id)].get("platform", "Unknown")
 
         # Delete the account
         del accounts[str(discord_id)]
         save_rl_accounts(accounts)
+
+        logger.info(f"🔓 User {request.username} unlinked RL account: {rl_username} ({rl_platform.upper()})")
 
         return jsonify(
             {
@@ -1209,7 +1229,7 @@ def get_user_rl_account():
             return jsonify({"error": "Discord ID not available"}), 400
 
         accounts = load_rl_accounts()
-        
+
         if str(discord_id) not in accounts:
             return jsonify({"linked": False})
 
@@ -1239,7 +1259,7 @@ def update_user_preferences():
     """Update current user's notification preferences"""
     try:
         import asyncio
-        
+
         discord_id = request.discord_id
         if discord_id == "legacy_user" or discord_id == "unknown":
             return jsonify({"error": "Discord ID not available"}), 400
@@ -1269,14 +1289,12 @@ def update_user_preferences():
             if changelog_role:
                 if data["changelog_opt_in"]:
                     if changelog_role not in member.roles:
-                        asyncio.run_coroutine_threadsafe(
-                            member.add_roles(changelog_role), bot.loop
-                        ).result(timeout=5)
+                        asyncio.run_coroutine_threadsafe(member.add_roles(changelog_role), bot.loop).result(timeout=5)
                 else:
                     if changelog_role in member.roles:
-                        asyncio.run_coroutine_threadsafe(
-                            member.remove_roles(changelog_role), bot.loop
-                        ).result(timeout=5)
+                        asyncio.run_coroutine_threadsafe(member.remove_roles(changelog_role), bot.loop).result(
+                            timeout=5
+                        )
 
         # Handle meme opt-in/out
         if "meme_opt_in" in data:
@@ -1284,18 +1302,15 @@ def update_user_preferences():
             if meme_role:
                 if data["meme_opt_in"]:
                     if meme_role not in member.roles:
-                        asyncio.run_coroutine_threadsafe(
-                            member.add_roles(meme_role), bot.loop
-                        ).result(timeout=5)
+                        asyncio.run_coroutine_threadsafe(member.add_roles(meme_role), bot.loop).result(timeout=5)
                 else:
                     if meme_role in member.roles:
-                        asyncio.run_coroutine_threadsafe(
-                            member.remove_roles(meme_role), bot.loop
-                        ).result(timeout=5)
+                        asyncio.run_coroutine_threadsafe(member.remove_roles(meme_role), bot.loop).result(timeout=5)
 
         return jsonify({"message": "Preferences updated successfully"})
     except Exception as e:
         import traceback
+
         return jsonify({"error": f"Failed to update preferences: {str(e)}", "details": traceback.format_exc()}), 500
 
 
@@ -2549,7 +2564,7 @@ def get_user_profile():
                 account = rl_accounts[str(discord_id)]
                 ranks = account.get("ranks", {})  # This contains tier names like "Champion II"
                 icon_urls = account.get("icon_urls", {})
-                
+
                 # Calculate highest rank from ranks dict
                 highest_tier = "Unranked"
                 highest_playlist = None
@@ -2557,7 +2572,7 @@ def get_user_profile():
                     if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
                         highest_tier = tier
                         highest_playlist = playlist
-                
+
                 if highest_tier and highest_tier != "Unranked" and highest_playlist:
                     # Get the rank emoji and icon URL for the highest playlist
                     rank_emoji = RANK_EMOJIS.get(highest_tier, "")
