@@ -1145,10 +1145,10 @@ def link_user_rl_account():
         if not stats:
             return jsonify({"error": "Player not found. Please check your platform and username."}), 404
 
-        # Save the account
+        # Save the account with ORIGINAL input username (like the bot does)
         accounts[str(discord_id)] = {
             "platform": platform,
-            "username": stats["username"],  # Use verified username from API
+            "username": username,  # Use input username (not stats["username"]) - same as bot
             "ranks": stats.get("tier_names", {}),
             "rank_display": stats.get("rank_display", {}),
             "icon_urls": stats.get("icon_urls", {}),
@@ -1156,10 +1156,10 @@ def link_user_rl_account():
         }
         save_rl_accounts(accounts)
 
-        # Log success
+        # Log success with display name from API but save input username
         ranks_str = ", ".join([f"{k}: {v}" for k, v in stats.get("tier_names", {}).items()])
         logger.info(
-            f"✅ Successfully linked RL account for {request.username}: {stats['username']} ({platform.upper()}) - [{ranks_str}]"
+            f"✅ Successfully linked RL account for {request.username}: {username} (displays as {stats['username']}) ({platform.upper()}) - [{ranks_str}]"
         )
 
         return jsonify(
@@ -1168,7 +1168,7 @@ def link_user_rl_account():
                 "message": f"Successfully linked Rocket League account: {stats['username']}",
                 "account": {
                     "platform": platform,
-                    "username": stats["username"],
+                    "username": username,  # Return the saved username
                     "ranks": stats.get("tier_names", {}),
                 },
             }
@@ -1251,6 +1251,47 @@ def get_user_rl_account():
         import traceback
 
         return jsonify({"error": f"Failed to fetch RL stats: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+@app.route("/api/user/rocket-league/post-stats", methods=["POST"])
+@token_required
+def post_user_rl_stats():
+    """Post current user's RL stats to a Discord channel"""
+    try:
+        import asyncio
+
+        discord_id = request.discord_id
+        if discord_id == "legacy_user" or discord_id == "unknown":
+            return jsonify({"error": "Discord ID not available"}), 400
+
+        # Get RocketLeague cog
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        rl_cog = bot.get_cog("RocketLeague")
+        if not rl_cog:
+            return jsonify({"error": "Rocket League system not available"}), 503
+
+        logger.info(f"📊 User {discord_id} posting RL stats to configured RL channel...")
+
+        # Use the bot's existing event loop (same as /rlstats)
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(rl_cog.post_stats_to_channel(int(discord_id)), loop)
+        result = future.result(timeout=30)
+
+        if result["success"]:
+            logger.info(f"✅ RL stats posted successfully: {result['message']}")
+            return jsonify(result), 200
+        else:
+            logger.warning(f"❌ Failed to post RL stats: {result['message']}")
+            return jsonify(result), 400
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error posting RL stats: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to post RL stats: {str(e)}", "details": traceback.format_exc()}), 500
 
 
 @app.route("/api/user/preferences", methods=["PUT"])

@@ -703,6 +703,9 @@ class RocketLeague(commands.Cog):
                 last_fetched_str = data.get("last_fetched")
                 if last_fetched_str:
                     last_fetched = datetime.fromisoformat(last_fetched_str)
+                    # Remove timezone info to make comparison work
+                    if last_fetched.tzinfo is not None:
+                        last_fetched = last_fetched.replace(tzinfo=None)
                     time_since_last = now - last_fetched
                     if time_since_last < timedelta(hours=Config.RL_RANK_CHECK_INTERVAL_HOURS):
                         logger.debug(
@@ -1174,6 +1177,53 @@ class RocketLeague(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Error restoring view: {e}")
             logger.error(f"Error restoring congrats view: {e}")
+
+    async def post_stats_to_channel(self, user_id: int) -> Dict[str, Any]:
+        """
+        Post RL stats to the configured RL channel (used by API).
+        Uses the same logic as /rlstats command.
+        Returns dict with success status and message.
+        """
+        try:
+            # Get user
+            user = self.bot.get_user(user_id)
+            if not user:
+                return {"success": False, "message": "User not found"}
+
+            # Get configured RL channel
+            guild = self.bot.get_guild(get_guild_id())
+            if not guild:
+                return {"success": False, "message": "Guild not found"}
+
+            channel = guild.get_channel(RL_CHANNEL_ID)
+            if not channel:
+                return {"success": False, "message": "Rocket League channel not configured"}
+
+            # Check permissions
+            if not channel.permissions_for(guild.me).send_messages:
+                return {"success": False, "message": "Bot has no permission to send messages in RL channel"}
+
+            # Get platform and username from linked account
+            try:
+                platform, username = await self._get_rl_account(user_id, None, None)
+            except ValueError as e:
+                return {"success": False, "message": str(e)}
+
+            # Fetch stats (uses cache like /rlstats)
+            stats = await self.get_player_stats(platform, username)
+            if not stats:
+                return {"success": False, "message": "Player not found or error fetching stats"}
+
+            # Create and send embed (exactly like /rlstats)
+            embed = await self._create_rl_embed(stats, platform)
+            message = await channel.send(embed=embed)
+            logger.info(f"RL stats posted to RL channel for {username} by user {user_id} via API")
+
+            return {"success": True, "message": "Stats posted successfully", "message_id": message.id}
+
+        except Exception as e:
+            logger.error(f"Error posting RL stats to channel: {e}")
+            return {"success": False, "message": f"Error: {str(e)}"}
 
 
 async def setup(bot: commands.Bot) -> None:
