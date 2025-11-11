@@ -391,13 +391,41 @@ def get_current_user():
 
     try:
         data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+
+        # Get avatar URL and role name from Discord if we have discord_id
+        avatar_url = None
+        role_name = None
+        discord_id = data.get("discord_id")
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            try:
+                bot = app.config.get("bot_instance")
+                if bot:
+                    guild = bot.get_guild(Config.GUILD_ID)
+                    if guild:
+                        member = guild.get_member(int(discord_id))
+                        if member:
+                            if member.avatar:
+                                avatar_url = str(member.avatar.url)
+                            # Get role name from Discord
+                            for role in member.roles:
+                                if role.id == Config.ADMIN_ROLE_ID:
+                                    role_name = role.name
+                                    break
+                                elif role.id == Config.MODERATOR_ROLE_ID:
+                                    role_name = role.name
+                                    break
+            except Exception:
+                pass  # Avatar and role name are optional
+
         return jsonify(
             {
                 "user": data.get("user"),
                 "discord_id": data.get("discord_id"),
                 "role": data.get("role", "admin"),
+                "role_name": role_name,
                 "permissions": data.get("permissions", ["all"]),
                 "auth_type": data.get("auth_type", "legacy"),
+                "avatar_url": avatar_url,
             }
         )
     except Exception:
@@ -2164,6 +2192,9 @@ def post_generated_meme_to_discord():
                     label = labels[i] if i < len(labels) else f"📝 Text {i + 1}"
                     embed.add_field(name=label, value=text[:1024], inline=True)
 
+            # Add source field for custom memes
+            embed.add_field(name="📍 Source", value="Meme Generator", inline=False)
+
             # Add creator field
             if member:
                 embed.add_field(name="👤 Created by", value=member.mention, inline=False)
@@ -2861,6 +2892,19 @@ def get_user_profile():
         if not member:
             return jsonify({"error": "Member not found in guild"}), 404
 
+        # Determine role (Admin, Moderator, or Lootling) and get actual role name
+        user_role = "lootling"
+        user_role_name = "Lootling"
+        for role in member.roles:
+            if role.id == Config.ADMIN_ROLE_ID:
+                user_role = "admin"
+                user_role_name = role.name
+                break
+            elif role.id == Config.MODERATOR_ROLE_ID:
+                user_role = "mod"
+                user_role_name = role.name
+                break
+
         # Get opt-in roles (interest roles)
         opt_in_roles = []
         for role in member.roles:
@@ -2989,6 +3033,8 @@ def get_user_profile():
                     "discord_id": str(discord_id),
                     "username": member.name,
                     "display_name": member.display_name,
+                    "role": user_role,
+                    "role_name": user_role_name,
                     "avatar_url": str(member.avatar.url) if member.avatar else None,
                     "joined_at": member.joined_at.isoformat() if member.joined_at else None,
                     "created_at": member.created_at.isoformat() if member.created_at else None,
@@ -3055,6 +3101,14 @@ def get_latest_memes():
                         "color": embed.color.value if embed.color else None,
                     }
 
+                    # Get Discord reactions (upvotes)
+                    upvotes = 0
+                    for reaction in message.reactions:
+                        if str(reaction.emoji) == "👍":
+                            upvotes = reaction.count
+                            break
+                    meme_data["upvotes"] = upvotes
+
                     # Parse fields for upvotes, source, author, creator
                     if embed.fields:
                         for field in embed.fields:
@@ -3106,7 +3160,11 @@ def get_latest_memes():
                     if "author" not in meme_data:
                         meme_data["author"] = "Unknown"
                     if "source" not in meme_data:
-                        meme_data["source"] = "Unknown"
+                        # For custom memes, set source to "Meme Generator"
+                        if meme_data.get("is_custom"):
+                            meme_data["source"] = "Meme Generator"
+                        else:
+                            meme_data["source"] = "Unknown"
 
                     memes.append(meme_data)
 
@@ -3185,7 +3243,8 @@ def get_latest_rankups():
                         for keyword in ["rank promotion", "promotion", "rank has improved", "congratulations"]
                     )
 
-                if is_rankup:
+                # Only process rank-ups that have embeds (real rank-up messages)
+                if is_rankup and message.embeds:
                     import re
 
                     # Build rankup data
@@ -3193,12 +3252,6 @@ def get_latest_rankups():
                         "message_id": str(message.id),
                         "timestamp": message.created_at.isoformat(),
                     }
-
-                    # Extract data from embed (rank-ups always have embeds)
-                    if not message.embeds:
-                        logger.warning(f"⚠️ Rank-up message has no embeds! Content: {message.content[:100]}")
-                        # Skip this message
-                        continue
 
                     if message.embeds:
                         embed = message.embeds[0]
@@ -3291,6 +3344,163 @@ def get_latest_rankups():
 
         logger.error(f"Error fetching latest rank-ups: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch rank-ups: {str(e)}"}), 500
+
+
+@app.route("/api/memes/<message_id>/upvote", methods=["POST"])
+@token_required
+def toggle_upvote_meme(message_id):
+    """Toggle upvote reaction on a meme (Discord message) - add if not present, remove if present"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+
+        discord_id = request.discord_id
+        if discord_id in ["legacy_user", "unknown"]:
+            return jsonify({"error": "Discord authentication required"}), 401
+
+        # Get meme channel
+        meme_channel_id = Config.MEME_CHANNEL_ID
+        if not meme_channel_id:
+            return jsonify({"error": "Meme channel not configured"}), 400
+
+        async def toggle_upvote_reaction():
+            channel = bot.get_channel(meme_channel_id)
+            if not channel:
+                return {"error": "Meme channel not found"}
+
+            try:
+                message = await channel.fetch_message(int(message_id))
+            except Exception:
+                return {"error": "Message not found"}
+
+            # Get the user who is toggling upvote
+            guild = bot.get_guild(Config.get_guild_id())
+            if not guild:
+                return {"error": "Guild not found"}
+
+            member = guild.get_member(int(discord_id))
+            if not member:
+                return {"error": "Member not found"}
+
+            # Check if user has already upvoted
+            has_upvoted = False
+            for reaction in message.reactions:
+                if str(reaction.emoji) == "👍":
+                    users = [user async for user in reaction.users()]
+                    if any(user.id == int(discord_id) for user in users):
+                        has_upvoted = True
+                        break
+
+            # Toggle the upvote
+            if has_upvoted:
+                # Remove upvote
+                await message.remove_reaction("👍", member)
+                action = "removed"
+            else:
+                # Add upvote
+                await message.add_reaction("👍")
+                action = "added"
+
+            # Get current reaction count after toggle
+            upvotes = 0
+            has_upvoted_now = False
+            for reaction in message.reactions:
+                if str(reaction.emoji) == "👍":
+                    upvotes = reaction.count
+                    users = [user async for user in reaction.users()]
+                    if any(user.id == int(discord_id) for user in users):
+                        has_upvoted_now = True
+                    break
+
+            return {
+                "success": True,
+                "upvotes": upvotes,
+                "has_upvoted": has_upvoted_now,
+                "action": action,
+                "message_id": message_id,
+            }
+
+        # Run async function
+        import asyncio
+
+        result = asyncio.run_coroutine_threadsafe(toggle_upvote_reaction(), bot.loop).result(timeout=10)
+
+        if "error" in result:
+            return jsonify(result), 404
+
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error toggling upvote: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to toggle upvote: {str(e)}"}), 500
+
+
+@app.route("/api/memes/<message_id>/reactions", methods=["GET"])
+@token_required
+def get_meme_reactions(message_id):
+    """Get reaction counts for a meme"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+
+        # Get meme channel
+        meme_channel_id = Config.MEME_CHANNEL_ID
+        if not meme_channel_id:
+            return jsonify({"error": "Meme channel not configured"}), 400
+
+        async def fetch_reactions():
+            channel = bot.get_channel(meme_channel_id)
+            if not channel:
+                return {"error": "Meme channel not found"}
+
+            try:
+                message = await channel.fetch_message(int(message_id))
+            except Exception:
+                return {"error": "Message not found"}
+
+            # Get all reactions
+            reactions_data = {}
+            for reaction in message.reactions:
+                reactions_data[str(reaction.emoji)] = reaction.count
+
+            # Check if current user has upvoted
+            has_upvoted = False
+            discord_id = request.discord_id
+            if discord_id not in ["legacy_user", "unknown"]:
+                for reaction in message.reactions:
+                    if str(reaction.emoji) == "👍":
+                        users = [user async for user in reaction.users()]
+                        if any(user.id == int(discord_id) for user in users):
+                            has_upvoted = True
+                            break
+
+            return {
+                "success": True,
+                "message_id": message_id,
+                "reactions": reactions_data,
+                "upvotes": reactions_data.get("👍", 0),
+                "has_upvoted": has_upvoted,
+            }
+
+        # Run async function
+        import asyncio
+
+        result = asyncio.run_coroutine_threadsafe(fetch_reactions(), bot.loop).result(timeout=10)
+
+        if "error" in result:
+            return jsonify(result), 404
+
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching meme reactions: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch reactions: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
