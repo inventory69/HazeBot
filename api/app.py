@@ -676,6 +676,7 @@ def config_channels():
                 "changelog_channel_id": str(Config.CHANGELOG_CHANNEL_ID) if Config.CHANGELOG_CHANNEL_ID else None,
                 "todo_channel_id": str(Config.TODO_CHANNEL_ID) if Config.TODO_CHANNEL_ID else None,
                 "rl_channel_id": str(Config.RL_CHANNEL_ID) if Config.RL_CHANNEL_ID else None,
+                "gaming_channel_id": str(Config.GAMING_CHANNEL_ID) if Config.GAMING_CHANNEL_ID else None,
                 "meme_channel_id": str(Config.MEME_CHANNEL_ID) if Config.MEME_CHANNEL_ID else None,
                 "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID)
                 if Config.SERVER_GUIDE_CHANNEL_ID
@@ -725,6 +726,7 @@ def reset_channels_config():
     Config.CHANGELOG_CHANNEL_ID = Config.CURRENT_IDS["CHANGELOG_CHANNEL_ID"]
     Config.TODO_CHANNEL_ID = Config.CURRENT_IDS["TODO_CHANNEL_ID"]
     Config.RL_CHANNEL_ID = Config.CURRENT_IDS["RL_CHANNEL_ID"]
+    Config.GAMING_CHANNEL_ID = Config.CURRENT_IDS.get("GAMING_CHANNEL_ID")
     Config.MEME_CHANNEL_ID = Config.CURRENT_IDS.get("MEME_CHANNEL_ID")
     Config.SERVER_GUIDE_CHANNEL_ID = Config.CURRENT_IDS.get("SERVER_GUIDE_CHANNEL_ID")
     Config.WELCOME_RULES_CHANNEL_ID = Config.CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
@@ -1355,6 +1357,268 @@ def update_user_preferences():
         return jsonify({"error": f"Failed to update preferences: {str(e)}", "details": traceback.format_exc()}), 500
 
 
+@app.route("/api/gaming/members", methods=["GET"])
+@token_required
+def get_gaming_members():
+    """Get all server members with their presence/activity data"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        members_data = []
+        for member in guild.members:
+            if member.bot:
+                continue  # Skip bots
+
+            # Get member status and activity
+            status = str(member.status) if member.status else "offline"
+            activity_data = None
+
+            if member.activities:
+                # Get the first activity (usually the most relevant)
+                activity = member.activities[0]
+                activity_type = str(activity.type).replace("ActivityType.", "").lower()
+
+                activity_data = {
+                    "type": activity_type,
+                    "name": activity.name,
+                }
+
+                # Add game-specific details
+                if hasattr(activity, "details") and activity.details:
+                    activity_data["details"] = activity.details
+                if hasattr(activity, "state") and activity.state:
+                    activity_data["state"] = activity.state
+                if hasattr(activity, "large_image_url") and activity.large_image_url:
+                    activity_data["image_url"] = activity.large_image_url
+                elif hasattr(activity, "small_image_url") and activity.small_image_url:
+                    activity_data["image_url"] = activity.small_image_url
+
+            members_data.append(
+                {
+                    "id": str(member.id),
+                    "username": member.name,
+                    "display_name": member.display_name,
+                    "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
+                    "status": status,
+                    "activity": activity_data,
+                }
+            )
+
+        # Sort: online users first, then by username
+        members_data.sort(key=lambda m: (m["status"] == "offline", m["display_name"].lower()))
+
+        return jsonify({"members": members_data, "total": len(members_data)})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching gaming members: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch members: {str(e)}"}), 500
+
+
+@app.route("/api/gaming/request", methods=["POST"])
+@token_required
+def post_game_request():
+    """Post a game request to the gaming channel"""
+    try:
+        import asyncio
+        import discord
+
+        discord_id = request.discord_id
+        if discord_id == "legacy_user" or discord_id == "unknown":
+            return jsonify({"error": "Discord ID not available"}), 400
+
+        data = request.get_json()
+        if not data or "target_user_id" not in data or "game_name" not in data:
+            return jsonify({"error": "Missing required fields: target_user_id, game_name"}), 400
+
+        target_user_id = data["target_user_id"]
+        game_name = data["game_name"]
+        message_text = data.get("message", "")
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        # Get gaming channel
+        gaming_channel_id = Config.GAMING_CHANNEL_ID
+        if not gaming_channel_id:
+            return jsonify({"error": "Gaming channel not configured"}), 500
+
+        channel = guild.get_channel(gaming_channel_id)
+        if not channel:
+            return jsonify({"error": "Gaming channel not found"}), 404
+
+        # Get users
+        requester = guild.get_member(int(discord_id))
+        target = guild.get_member(int(target_user_id))
+
+        if not requester:
+            return jsonify({"error": "Requester not found in guild"}), 404
+        if not target:
+            return jsonify({"error": "Target user not found in guild"}), 404
+
+        # Create embed
+        embed = discord.Embed(
+            title="🎮 Game Request",
+            description=f"{requester.mention} wants to play **{game_name}** with {target.mention}!",
+            color=discord.Color.green(),
+            timestamp=datetime.utcnow(),
+        )
+
+        if message_text:
+            embed.add_field(name="Message", value=message_text, inline=False)
+
+        embed.set_thumbnail(url=requester.display_avatar.url)
+        embed.set_footer(text="Respond with the buttons below")
+
+        # Create buttons view
+        class GameRequestView(discord.ui.View):
+            def __init__(self, requester_id: int, target_id: int):
+                super().__init__(timeout=None)  # No timeout - buttons stay active
+                self.requester_id = requester_id
+                self.target_id = target_id
+
+            @discord.ui.button(label="Accept", style=discord.ButtonStyle.success, emoji="✅")
+            async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                # Only target can accept
+                if interaction.user.id != self.target_id:
+                    await interaction.response.send_message("This request is not for you!", ephemeral=True)
+                    return
+
+                # Update embed
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.green()
+                embed.add_field(
+                    name="✅ Accepted!",
+                    value=f"{interaction.user.mention} accepted the game request!",
+                    inline=False,
+                )
+
+                # Disable all buttons
+                for item in self.children:
+                    item.disabled = True
+
+                await interaction.response.edit_message(embed=embed, view=self)
+
+                # Notify requester
+                requester = interaction.guild.get_member(self.requester_id)
+                if requester:
+                    try:
+                        await requester.send(
+                            f"🎮 **{interaction.user.display_name}** accepted your game request!\n"
+                            f"Game: **{game_name}**\n"
+                            f"Jump to message: {interaction.message.jump_url}"
+                        )
+                    except:
+                        pass  # User has DMs disabled
+
+            @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger, emoji="❌")
+            async def decline_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                # Only target can decline
+                if interaction.user.id != self.target_id:
+                    await interaction.response.send_message("This request is not for you!", ephemeral=True)
+                    return
+
+                # Update embed
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.red()
+                embed.add_field(
+                    name="❌ Declined",
+                    value=f"{interaction.user.mention} declined the game request.",
+                    inline=False,
+                )
+
+                # Disable all buttons
+                for item in self.children:
+                    item.disabled = True
+
+                await interaction.response.edit_message(embed=embed, view=self)
+
+                # Notify requester
+                requester = interaction.guild.get_member(self.requester_id)
+                if requester:
+                    try:
+                        await requester.send(
+                            f"🎮 **{interaction.user.display_name}** declined your game request.\n"
+                            f"Game: **{game_name}**\n"
+                            f"Maybe they're busy right now. Try again later!"
+                        )
+                    except:
+                        pass  # User has DMs disabled
+
+            @discord.ui.button(label="Maybe Later", style=discord.ButtonStyle.secondary, emoji="⏰")
+            async def maybe_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+                # Only target can respond
+                if interaction.user.id != self.target_id:
+                    await interaction.response.send_message("This request is not for you!", ephemeral=True)
+                    return
+
+                # Update embed
+                embed = interaction.message.embeds[0]
+                embed.color = discord.Color.orange()
+                embed.add_field(
+                    name="⏰ Maybe Later",
+                    value=f"{interaction.user.mention} might be interested later!",
+                    inline=False,
+                )
+
+                # Disable all buttons
+                for item in self.children:
+                    item.disabled = True
+
+                await interaction.response.edit_message(embed=embed, view=self)
+
+                # Notify requester
+                requester = interaction.guild.get_member(self.requester_id)
+                if requester:
+                    try:
+                        await requester.send(
+                            f"🎮 **{interaction.user.display_name}** might be interested later!\n"
+                            f"Game: **{game_name}**\n"
+                            f"Check back with them soon!"
+                        )
+                    except:
+                        pass  # User has DMs disabled
+
+        # Send message with buttons
+        async def send_request():
+            view = GameRequestView(int(discord_id), int(target_user_id))
+            msg = await channel.send(content=f"🎮 {target.mention}", embed=embed, view=view)
+            return msg
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(send_request(), loop)
+        message = future.result(timeout=10)
+
+        logger.info(f"🎮 Game request posted: {requester.name} -> {target.name} for {game_name}")
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Game request posted successfully",
+                "message_id": str(message.id),
+                "channel_id": str(channel.id),
+            }
+        )
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error posting game request: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to post game request: {str(e)}"}), 500
+
+
 @app.route("/api/config/welcome", methods=["GET", "PUT"])
 @token_required
 @require_permission("all")
@@ -1873,6 +2137,13 @@ def post_generated_meme_to_discord():
 
         loop = bot.loop
 
+        # Get Discord user from JWT token
+        discord_id = request.discord_id
+        guild = bot.get_guild(Config.get_guild_id())
+        member = None
+        if guild and discord_id:
+            member = guild.get_member(int(discord_id))
+
         # Post the meme to Discord
         async def post_meme():
             import discord
@@ -1893,11 +2164,19 @@ def post_generated_meme_to_discord():
                     label = labels[i] if i < len(labels) else f"📝 Text {i + 1}"
                     embed.add_field(name=label, value=text[:1024], inline=True)
 
-            embed.add_field(name="🖥️ Created via", value="Admin Panel", inline=False)
+            # Add creator field
+            if member:
+                embed.add_field(name="👤 Created by", value=member.mention, inline=False)
+            else:
+                embed.add_field(name="🖥️ Created via", value="Admin Panel", inline=False)
 
             set_pink_footer(embed, bot=bot.user)
 
-            await channel.send("🎨 New custom meme generated!", embed=embed)
+            # Send with mention if we have member
+            if member:
+                await channel.send(f"🎨 Custom meme created by {member.mention}!", embed=embed)
+            else:
+                await channel.send("🎨 New custom meme generated!", embed=embed)
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
@@ -2626,7 +2905,7 @@ def get_user_profile():
                         "platform": account.get("platform"),
                         "username": account.get("username"),
                     }
-        except Exception as e:
+        except Exception:
             # RL data is optional, don't fail if not available
             pass
 
@@ -2726,6 +3005,292 @@ def get_user_profile():
         import traceback
 
         return jsonify({"error": f"Failed to get user profile: {str(e)}", "details": traceback.format_exc()}), 500
+
+
+# =====================================
+# HazeHub Endpoints
+# =====================================
+
+
+@app.route("/api/hazehub/latest-memes", methods=["GET"])
+@token_required
+def get_latest_memes():
+    """Get latest memes posted in the meme channel"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+
+        limit = request.args.get("limit", 10, type=int)
+        limit = min(limit, 50)  # Max 50 memes
+
+        # Get meme channel
+        meme_channel_id = Config.MEME_CHANNEL_ID
+        if not meme_channel_id:
+            return jsonify({"error": "Meme channel not configured"}), 400
+
+        async def fetch_memes():
+            channel = bot.get_channel(meme_channel_id)
+            if not channel:
+                return None
+
+            memes = []
+            async for message in channel.history(limit=limit * 2):  # Fetch more to ensure we have enough memes
+                # Only include messages with embeds (memes posted by bot)
+                if message.embeds:
+                    embed = message.embeds[0]
+
+                    # Meme structure based on DailyMeme.post_meme():
+                    # - title: embed.title
+                    # - url/permalink: embed.url
+                    # - image: embed.image.url
+                    # - Fields: "👍 Upvotes", "📍 Source", "👤 Author"
+
+                    meme_data = {
+                        "message_id": str(message.id),
+                        "timestamp": message.created_at.isoformat(),
+                        "title": embed.title or "Untitled Meme",
+                        "image_url": embed.image.url if embed.image else None,
+                        "url": embed.url or None,  # This is the permalink to reddit/lemmy
+                        "color": embed.color.value if embed.color else None,
+                    }
+
+                    # Parse fields for upvotes, source, author, creator
+                    if embed.fields:
+                        for field in embed.fields:
+                            field_name = field.name.lower()
+
+                            # Upvotes field: "👍 Upvotes"
+                            if "upvote" in field_name or "👍" in field_name:
+                                try:
+                                    # Remove commas and convert to int
+                                    score_str = field.value.replace(",", "").strip()
+                                    meme_data["score"] = int("".join(filter(str.isdigit, score_str)))
+                                except:
+                                    meme_data["score"] = 0
+
+                            # Source field: "📍 Source" (e.g., "r/memes" or "lemmy.world/c/memes")
+                            elif "source" in field_name or "📍" in field_name:
+                                meme_data["source"] = field.value
+
+                            # Author field: "👤 Author" (e.g., "u/username") OR "👤 Created by" for custom memes
+                            elif "author" in field_name or "created by" in field_name or "👤" in field_name:
+                                # Remove "u/" prefix if present
+                                author = field.value
+                                if author.startswith("u/"):
+                                    author = author[2:]
+                                # For custom memes with mentions like <@123456>, extract Discord username
+                                import re
+
+                                mention_match = re.search(r"<@!?(\d+)>", author)
+                                if mention_match:
+                                    user_id = mention_match.group(1)
+                                    try:
+                                        guild = bot.get_guild(Config.get_guild_id())
+                                        if guild:
+                                            member = guild.get_member(int(user_id))
+                                            if member:
+                                                author = member.display_name or member.name
+                                                meme_data["is_custom"] = True
+                                            else:
+                                                author = f"User {user_id}"
+                                        else:
+                                            author = f"User {user_id}"
+                                    except:
+                                        author = f"User {user_id}"
+                                meme_data["author"] = author
+
+                    # Set defaults if not found
+                    if "score" not in meme_data:
+                        meme_data["score"] = 0
+                    if "author" not in meme_data:
+                        meme_data["author"] = "Unknown"
+                    if "source" not in meme_data:
+                        meme_data["source"] = "Unknown"
+
+                    memes.append(meme_data)
+
+                    # Stop if we have enough
+                    if len(memes) >= limit:
+                        break
+
+            return memes
+
+        # Run async function
+        import asyncio
+
+        memes = asyncio.run_coroutine_threadsafe(fetch_memes(), bot.loop).result(timeout=10)
+
+        if memes is None:
+            return jsonify({"error": "Meme channel not found"}), 404
+
+        return jsonify({"success": True, "memes": memes, "count": len(memes)})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching latest memes: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch memes: {str(e)}"}), 500
+
+
+@app.route("/api/hazehub/latest-rankups", methods=["GET"])
+@token_required
+def get_latest_rankups():
+    """Get latest rank-up announcements from RL channel"""
+    try:
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+
+        limit = request.args.get("limit", 10, type=int)
+        limit = min(limit, 50)  # Max 50 rank-ups
+
+        # Get RL channel
+        rl_channel_id = Config.RL_CHANNEL_ID
+        if not rl_channel_id:
+            return jsonify({"error": "Rocket League channel not configured"}), 400
+
+        async def fetch_rankups():
+            channel = bot.get_channel(rl_channel_id)
+            if not channel:
+                return None
+
+            rankups = []
+            checked_count = 0
+            async for message in channel.history(limit=100):  # Fetch more messages to find rank-ups
+                checked_count += 1
+
+                # Check message content and embeds for rank-up keywords
+                message_text = message.content.lower()
+
+                # Check if it's a rank-up message by looking at content
+                is_rankup = any(
+                    keyword in message_text
+                    for keyword in [
+                        "rank promotion",
+                        "🚀 rank promotion",
+                        "promotion notification",
+                        "rank has improved",
+                    ]
+                )
+
+                # Also check embeds
+                if not is_rankup and message.embeds:
+                    embed = message.embeds[0]
+                    title = (embed.title or "").lower()
+                    description = (embed.description or "").lower()
+
+                    is_rankup = any(
+                        keyword in title or keyword in description
+                        for keyword in ["rank promotion", "promotion", "rank has improved", "congratulations"]
+                    )
+
+                if is_rankup:
+                    import re
+
+                    # Build rankup data
+                    rankup_data = {
+                        "message_id": str(message.id),
+                        "timestamp": message.created_at.isoformat(),
+                    }
+
+                    # Extract data from embed (rank-ups always have embeds)
+                    if not message.embeds:
+                        logger.warning(f"⚠️ Rank-up message has no embeds! Content: {message.content[:100]}")
+                        # Skip this message
+                        continue
+
+                    if message.embeds:
+                        embed = message.embeds[0]
+                        rankup_data["title"] = embed.title or ""
+                        rankup_data["description"] = embed.description or ""
+                        rankup_data["thumbnail"] = embed.thumbnail.url if embed.thumbnail else None
+                        rankup_data["image_url"] = embed.image.url if embed.image else None
+                        rankup_data["color"] = embed.color.value if embed.color else None
+
+                        # Parse from description - Format: "Congratulations {user}! Your {playlist} rank has improved to {emoji} {rank}!"
+                        if embed.description:
+                            # Extract user mention (e.g., <@283733417575710721>)
+                            user_match = re.search(r"<@!?(\d+)>", embed.description)
+                            if user_match:
+                                user_id = user_match.group(1)
+                                # Try to get member object to get username
+                                try:
+                                    guild = bot.get_guild(Config.get_guild_id())
+                                    if guild:
+                                        member = guild.get_member(int(user_id))
+                                        if member:
+                                            rankup_data["user"] = member.display_name or member.name
+                                        else:
+                                            rankup_data["user"] = f"User {user_id}"
+                                    else:
+                                        rankup_data["user"] = f"User {user_id}"
+                                except:
+                                    rankup_data["user"] = f"User {user_id}"
+
+                            # Extract mode/playlist (e.g., "Your 2v2 rank" or "Your 4v4 rank")
+                            mode_match = re.search(r"Your (\d+v\d+) rank", embed.description)
+                            if mode_match:
+                                rankup_data["mode"] = mode_match.group(1)
+
+                            # Extract rank - Format: "improved to {emoji} {rank}!"
+                            # Emoji can be custom Discord emoji like <:c2:id> or unicode, followed by rank name
+                            # Match everything after "improved to" until "!"
+                            rank_match = re.search(r"improved to (.+?)!", embed.description)
+                            if rank_match:
+                                rank_text = rank_match.group(1).strip()
+
+                                # Remove Discord emoji codes (e.g., <:c2:123456789>)
+                                rank_text = re.sub(r"<:\w+:\d+>", "", rank_text).strip()
+                                # Remove emoji text codes (e.g., :c2:, :p2:)
+                                rank_text = re.sub(r":\w+:", "", rank_text).strip()
+
+                                rankup_data["new_rank"] = rank_text
+                                # Fallback: Set a default value
+                                rankup_data["new_rank"] = "New Rank"
+
+                    # Extract user from message content if not found in embed
+                    if message.content and not rankup_data.get("user"):
+                        # Format: "<@283733417575710721> 🚀 Rank Promotion Notification!"
+                        user_match = re.search(r"<@!?(\d+)>", message.content)
+                        if user_match:
+                            user_id = user_match.group(1)
+                            try:
+                                guild = bot.get_guild(Config.get_guild_id())
+                                if guild:
+                                    member = guild.get_member(int(user_id))
+                                    if member:
+                                        rankup_data["user"] = member.display_name or member.name
+                                    else:
+                                        rankup_data["user"] = f"User {user_id}"
+                                else:
+                                    rankup_data["user"] = f"User {user_id}"
+                            except:
+                                rankup_data["user"] = f"User {user_id}"
+
+                    rankups.append(rankup_data)
+
+                    # Stop if we have enough
+                    if len(rankups) >= limit:
+                        break
+
+            return rankups
+
+        # Run async function
+        import asyncio
+
+        rankups = asyncio.run_coroutine_threadsafe(fetch_rankups(), bot.loop).result(timeout=10)
+
+        if rankups is None:
+            return jsonify({"error": "Rocket League channel not found"}), 404
+
+        return jsonify({"success": True, "rankups": rankups, "count": len(rankups)})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching latest rank-ups: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch rank-ups: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
