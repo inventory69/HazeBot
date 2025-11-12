@@ -32,8 +32,19 @@ active_sessions = {}  # {session_id: {username, discord_id, roles, last_seen, ip
 recent_activity = []  # List of {timestamp, username, discord_id, action, endpoint, details}
 MAX_ACTIVITY_LOG = 100
 
-# Upvotes storage path
-UPVOTES_FILE = Path(__file__).parent.parent / "Data" / "meme_upvotes.json"
+# Upvotes storage path (uses DATA_DIR from Config for test/prod mode)
+UPVOTES_FILE = Path(__file__).parent.parent / Config.DATA_DIR / "meme_upvotes.json"
+
+# App usage tracking path (uses DATA_DIR from Config for test/prod mode)
+APP_USAGE_FILE = Path(__file__).parent.parent / Config.DATA_DIR / "app_usage.json"
+APP_USAGE_EXPIRY_DAYS = 30  # Remove badge after 30 days of inactivity
+
+# Negative emojis that should NOT count as upvotes
+NEGATIVE_EMOJIS = {
+    "👎", "😠", "😡", "🤬", "💩", "🖕", 
+    "❌", "⛔", "🚫", "💔", "😤", "😒",
+    "🙄", "😑", "😐", "😶", "🤐", "😬"
+}
 
 
 def load_upvotes():
@@ -49,6 +60,54 @@ def save_upvotes(upvotes):
     UPVOTES_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(UPVOTES_FILE, "w", encoding="utf-8") as f:
         json.dump(upvotes, f, indent=2)
+
+
+def load_app_usage():
+    """Load app usage data from file"""
+    if APP_USAGE_FILE.exists():
+        with open(APP_USAGE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}  # {discord_id: last_seen_timestamp}
+
+
+def save_app_usage(app_usage):
+    """Save app usage data to file"""
+    APP_USAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(APP_USAGE_FILE, "w", encoding="utf-8") as f:
+        json.dump(app_usage, f, indent=2)
+
+
+def update_app_usage(discord_id):
+    """Update last seen timestamp for a user"""
+    if discord_id and discord_id not in ["legacy_user", "unknown"]:
+        app_usage = load_app_usage()
+        app_usage[discord_id] = datetime.utcnow().isoformat()
+        save_app_usage(app_usage)
+
+
+def get_active_app_users():
+    """Get list of discord IDs who have used the app within the expiry period"""
+    app_usage = load_app_usage()
+    current_time = datetime.utcnow()
+    active_users = set()
+    
+    for discord_id, last_seen_str in list(app_usage.items()):
+        try:
+            last_seen = datetime.fromisoformat(last_seen_str)
+            days_inactive = (current_time - last_seen).days
+            
+            if days_inactive <= APP_USAGE_EXPIRY_DAYS:
+                active_users.add(discord_id)
+            else:
+                # Clean up old entries
+                del app_usage[discord_id]
+        except (ValueError, TypeError):
+            # Invalid timestamp, remove it
+            del app_usage[discord_id]
+    
+    # Save cleaned up data
+    save_app_usage(app_usage)
+    return active_users
 
 
 # Configure logging - suppress 200 OK responses
@@ -123,11 +182,45 @@ def log_config_action(config_name):
 
 # Helper function to log activity
 def log_user_activity(username, discord_id, action, endpoint, details=None):
-    """Log user activity for recent interactions tracking"""
+    """Log user activity for recent interactions tracking - only relevant endpoints"""
     global recent_activity
     
+    # Only log meaningful actions - filter out read-only monitoring endpoints
+    # These endpoints are too frequent and not interesting for activity tracking
+    ignored_endpoints = {
+        "get_active_sessions",  # Admin monitoring (auto-refresh every 5s)
+        "get_gaming_members",   # Gaming hub auto-refresh
+        "get_latest_memes",     # Meme feed auto-refresh
+        "health",               # Health checks
+        "ping",                 # Ping checks
+    }
+    
+    if endpoint in ignored_endpoints:
+        return  # Don't log these frequent read operations
+    
+    # Aggressive deduplication: check if similar entry exists in last 5 minutes
+    # This prevents the same action from appearing multiple times
+    now = datetime.utcnow()
+    cutoff_time = now - timedelta(minutes=5)
+    
+    for entry in reversed(recent_activity[-20:]):  # Check last 20 entries
+        try:
+            entry_time = datetime.fromisoformat(entry.get("timestamp", ""))
+            if entry_time < cutoff_time:
+                break  # Stop checking older entries
+                
+            # If same user did same action on same endpoint recently, skip
+            if (entry.get("username") == username and
+                entry.get("discord_id") == discord_id and
+                entry.get("action") == action and
+                entry.get("endpoint") == endpoint):
+                return  # Skip duplicate within 5 minutes
+        except (ValueError, TypeError):
+            continue
+    
+    # Log this new activity
     activity_entry = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now.isoformat(),
         "username": username,
         "discord_id": discord_id,
         "action": action,
@@ -192,16 +285,18 @@ def token_required(f):
             }
             active_sessions[request.session_id] = session_info
             
-            # Log activity for non-health-check endpoints
+            # Update app usage tracking (persistent)
+            update_app_usage(request.discord_id)
+            
+            # Log activity (filtering is done inside log_user_activity)
             endpoint_name = request.endpoint or "unknown"
-            if endpoint_name not in ["health", "ping"]:
-                log_user_activity(
-                    request.username,
-                    request.discord_id,
-                    request.method,
-                    endpoint_name,
-                    {"path": request.path}
-                )
+            log_user_activity(
+                request.username,
+                request.discord_id,
+                request.method,
+                endpoint_name,
+                {"path": request.path}
+            )
 
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token has expired"}), 401
@@ -1477,12 +1572,8 @@ def get_gaming_members():
         if not guild:
             return jsonify({"error": "Guild not found"}), 500
 
-        # Get list of users currently using the app (from active sessions)
-        app_users = set()
-        for session_data in active_sessions.values():
-            discord_id = session_data.get("discord_id")
-            if discord_id and discord_id not in ["legacy_user", "unknown"]:
-                app_users.add(discord_id)
+        # Get list of users who have used the app within the last 30 days
+        app_users = get_active_app_users()
 
         members_data = []
         for member in guild.members:
@@ -3213,18 +3304,23 @@ def get_latest_memes():
                     # Get custom upvotes from our system
                     custom_count = len(custom_upvotes.get(message_id_str, []))
                     
-                    # Get Discord reactions (👍) count - use reaction.count for speed
+                    # Get Discord reactions count (all positive reactions)
+                    # Count all reactions EXCEPT negative ones
                     # reaction.count includes all users (including bots)
                     # We check if bot reacted (reaction.me = True means bot reacted)
                     discord_count = 0
                     for reaction in message.reactions:
-                        if str(reaction.emoji) == "👍":
-                            # reaction.count is fast (cached, no API call)
-                            # Subtract 1 if bot reacted (reaction.me indicates bot reacted)
-                            discord_count = reaction.count
-                            if reaction.me:
-                                discord_count = max(0, discord_count - 1)
-                            break
+                        emoji_str = str(reaction.emoji)
+                        
+                        # Skip negative emojis
+                        if emoji_str in NEGATIVE_EMOJIS:
+                            continue
+                        
+                        # Count this reaction (subtract 1 if bot reacted)
+                        count = reaction.count
+                        if reaction.me:
+                            count = max(0, count - 1)
+                        discord_count += count
                     
                     # Combine both counts
                     total_upvotes = custom_count + discord_count
@@ -3556,14 +3652,22 @@ def get_meme_reactions(message_id):
                     
                     try:
                         message = await channel.fetch_message(int(message_id))
-                        # Count all 👍 reactions from non-bot users
+                        # Count all positive reactions (exclude negative emojis and bots)
+                        total_count = 0
                         for reaction in message.reactions:
-                            if str(reaction.emoji) == "👍":
-                                users = [user async for user in reaction.users()]
-                                return sum(1 for user in users if not user.bot)
+                            emoji_str = str(reaction.emoji)
+                            
+                            # Skip negative emojis
+                            if emoji_str in NEGATIVE_EMOJIS:
+                                continue
+                            
+                            # Count reactions from non-bot users
+                            users = [user async for user in reaction.users()]
+                            total_count += sum(1 for user in users if not user.bot)
+                        
+                        return total_count
                     except Exception:
                         return 0
-                    return 0
                 
                 import asyncio
                 try:
