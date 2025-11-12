@@ -28,6 +28,28 @@ CORS(app)  # Enable CORS for Flutter web
 # Active sessions tracking
 active_sessions = {}  # {session_id: {username, discord_id, roles, last_seen, ip, user_agent}}
 
+# Recent activity tracking (last 100 interactions)
+recent_activity = []  # List of {timestamp, username, discord_id, action, endpoint, details}
+MAX_ACTIVITY_LOG = 100
+
+# Upvotes storage path
+UPVOTES_FILE = Path(__file__).parent.parent / "Data" / "meme_upvotes.json"
+
+
+def load_upvotes():
+    """Load upvotes from file"""
+    if UPVOTES_FILE.exists():
+        with open(UPVOTES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}  # {message_id: [discord_id1, discord_id2, ...]}
+
+
+def save_upvotes(upvotes):
+    """Save upvotes to file"""
+    UPVOTES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(UPVOTES_FILE, "w", encoding="utf-8") as f:
+        json.dump(upvotes, f, indent=2)
+
 
 # Configure logging - suppress 200 OK responses
 class NoSuccessRequestsFilter(logging.Filter):
@@ -99,6 +121,27 @@ def log_config_action(config_name):
     return decorator
 
 
+# Helper function to log activity
+def log_user_activity(username, discord_id, action, endpoint, details=None):
+    """Log user activity for recent interactions tracking"""
+    global recent_activity
+    
+    activity_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "username": username,
+        "discord_id": discord_id,
+        "action": action,
+        "endpoint": endpoint,
+        "details": details or {},
+    }
+    
+    recent_activity.append(activity_entry)
+    
+    # Keep only last MAX_ACTIVITY_LOG entries
+    if len(recent_activity) > MAX_ACTIVITY_LOG:
+        recent_activity = recent_activity[-MAX_ACTIVITY_LOG:]
+
+
 # Simple authentication decorator
 def token_required(f):
     @wraps(f)
@@ -148,6 +191,17 @@ def token_required(f):
                 "endpoint": request.endpoint or "unknown",
             }
             active_sessions[request.session_id] = session_info
+            
+            # Log activity for non-health-check endpoints
+            endpoint_name = request.endpoint or "unknown"
+            if endpoint_name not in ["health", "ping"]:
+                log_user_activity(
+                    request.username,
+                    request.discord_id,
+                    request.method,
+                    endpoint_name,
+                    {"path": request.path}
+                )
 
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token has expired"}), 401
@@ -436,7 +490,7 @@ def get_current_user():
 @token_required
 @require_permission("all")
 def get_active_sessions():
-    """Get all active API sessions (Admin/Mod only)"""
+    """Get all active API sessions + recent activity (Admin/Mod only)"""
     # Clean up old sessions (older than 5 minutes)
     current_time = datetime.now()
     expired_sessions = []
@@ -453,7 +507,7 @@ def get_active_sessions():
     for session_id in expired_sessions:
         del active_sessions[session_id]
 
-    # Format response
+    # Format active sessions
     sessions_list = []
     for session_id, session_data in active_sessions.items():
         try:
@@ -479,9 +533,32 @@ def get_active_sessions():
 
     # Sort by last_seen (most recent first)
     sessions_list.sort(key=lambda x: x["last_seen"], reverse=True)
+    
+    # Get recent activity (already sorted by timestamp, most recent first)
+    recent_activity_list = list(reversed(recent_activity[-50:]))  # Last 50 activities
+    
+    # Enrich activity with Discord user info
+    bot = app.config.get("bot_instance")
+    for activity in recent_activity_list:
+        discord_id = activity.get("discord_id")
+        if bot and discord_id and discord_id not in ["legacy_user", "unknown"]:
+            try:
+                guild = bot.get_guild(Config.GUILD_ID)
+                if guild:
+                    member = guild.get_member(int(discord_id))
+                    if member:
+                        activity["display_name"] = member.display_name
+                        activity["avatar_url"] = str(member.display_avatar.url) if member.display_avatar else None
+            except Exception:
+                pass  # Silently fail if user not found
 
     return jsonify(
-        {"total_active": len(sessions_list), "sessions": sessions_list, "checked_at": current_time.isoformat()}
+        {
+            "total_active": len(sessions_list), 
+            "sessions": sessions_list, 
+            "recent_activity": recent_activity_list,
+            "checked_at": current_time.isoformat()
+        }
     )
 
 
@@ -1388,8 +1465,10 @@ def update_user_preferences():
 @app.route("/api/gaming/members", methods=["GET"])
 @token_required
 def get_gaming_members():
-    """Get all server members with their presence/activity data"""
+    """Get all server members with their presence/activity data + app usage status"""
     try:
+        import discord
+        
         bot = app.config.get("bot_instance")
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
@@ -1397,6 +1476,13 @@ def get_gaming_members():
         guild = bot.get_guild(Config.GUILD_ID)
         if not guild:
             return jsonify({"error": "Guild not found"}), 500
+
+        # Get list of users currently using the app (from active sessions)
+        app_users = set()
+        for session_data in active_sessions.values():
+            discord_id = session_data.get("discord_id")
+            if discord_id and discord_id not in ["legacy_user", "unknown"]:
+                app_users.add(discord_id)
 
         members_data = []
         for member in guild.members:
@@ -1408,24 +1494,38 @@ def get_gaming_members():
             activity_data = None
 
             if member.activities:
-                # Get the first activity (usually the most relevant)
-                activity = member.activities[0]
-                activity_type = str(activity.type).replace("ActivityType.", "").lower()
+                # Filter out custom status (ActivityType.custom = 4)
+                # Get first non-custom activity (game/streaming/etc)
+                for activity in member.activities:
+                    activity_type = activity.type
+                    
+                    # Skip custom status activities
+                    if activity_type == discord.ActivityType.custom:
+                        continue
+                    
+                    # Found a real activity (game, streaming, etc)
+                    activity_type_str = str(activity_type).replace("ActivityType.", "").lower()
 
-                activity_data = {
-                    "type": activity_type,
-                    "name": activity.name,
-                }
+                    activity_data = {
+                        "type": activity_type_str,
+                        "name": activity.name,
+                    }
 
-                # Add game-specific details
-                if hasattr(activity, "details") and activity.details:
-                    activity_data["details"] = activity.details
-                if hasattr(activity, "state") and activity.state:
-                    activity_data["state"] = activity.state
-                if hasattr(activity, "large_image_url") and activity.large_image_url:
-                    activity_data["image_url"] = activity.large_image_url
-                elif hasattr(activity, "small_image_url") and activity.small_image_url:
-                    activity_data["image_url"] = activity.small_image_url
+                    # Add game-specific details
+                    if hasattr(activity, "details") and activity.details:
+                        activity_data["details"] = activity.details
+                    if hasattr(activity, "state") and activity.state:
+                        activity_data["state"] = activity.state
+                    if hasattr(activity, "large_image_url") and activity.large_image_url:
+                        activity_data["image_url"] = activity.large_image_url
+                    elif hasattr(activity, "small_image_url") and activity.small_image_url:
+                        activity_data["image_url"] = activity.small_image_url
+                    
+                    # Found valid activity, stop searching
+                    break
+
+            # Check if user is using the app
+            is_using_app = str(member.id) in app_users
 
             members_data.append(
                 {
@@ -1435,13 +1535,18 @@ def get_gaming_members():
                     "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
                     "status": status,
                     "activity": activity_data,
+                    "using_app": is_using_app,
                 }
             )
 
         # Sort: online users first, then by username
         members_data.sort(key=lambda m: (m["status"] == "offline", m["display_name"].lower()))
 
-        return jsonify({"members": members_data, "total": len(members_data)})
+        return jsonify({
+            "members": members_data, 
+            "total": len(members_data),
+            "app_users_count": len(app_users)
+        })
 
     except Exception as e:
         import traceback
@@ -3075,6 +3180,9 @@ def get_latest_memes():
         if not meme_channel_id:
             return jsonify({"error": "Meme channel not configured"}), 400
 
+        # Load custom upvotes
+        custom_upvotes = load_upvotes()
+        
         async def fetch_memes():
             channel = bot.get_channel(meme_channel_id)
             if not channel:
@@ -3092,8 +3200,9 @@ def get_latest_memes():
                     # - image: embed.image.url
                     # - Fields: "👍 Upvotes", "📍 Source", "👤 Author"
 
+                    message_id_str = str(message.id)
                     meme_data = {
-                        "message_id": str(message.id),
+                        "message_id": message_id_str,
                         "timestamp": message.created_at.isoformat(),
                         "title": embed.title or "Untitled Meme",
                         "image_url": embed.image.url if embed.image else None,
@@ -3101,13 +3210,27 @@ def get_latest_memes():
                         "color": embed.color.value if embed.color else None,
                     }
 
-                    # Get Discord reactions (upvotes)
-                    upvotes = 0
+                    # Get custom upvotes from our system
+                    custom_count = len(custom_upvotes.get(message_id_str, []))
+                    
+                    # Get Discord reactions (👍) count - use reaction.count for speed
+                    # reaction.count includes all users (including bots)
+                    # We check if bot reacted (reaction.me = True means bot reacted)
+                    discord_count = 0
                     for reaction in message.reactions:
                         if str(reaction.emoji) == "👍":
-                            upvotes = reaction.count
+                            # reaction.count is fast (cached, no API call)
+                            # Subtract 1 if bot reacted (reaction.me indicates bot reacted)
+                            discord_count = reaction.count
+                            if reaction.me:
+                                discord_count = max(0, discord_count - 1)
                             break
-                    meme_data["upvotes"] = upvotes
+                    
+                    # Combine both counts
+                    total_upvotes = custom_count + discord_count
+                    meme_data["upvotes"] = total_upvotes
+                    meme_data["custom_upvotes"] = custom_count
+                    meme_data["discord_upvotes"] = discord_count
 
                     # Parse fields for upvotes, source, author, creator
                     if embed.fields:
@@ -3349,87 +3472,52 @@ def get_latest_rankups():
 @app.route("/api/memes/<message_id>/upvote", methods=["POST"])
 @token_required
 def toggle_upvote_meme(message_id):
-    """Toggle upvote reaction on a meme (Discord message) - add if not present, remove if present"""
+    """Toggle upvote on a meme - custom system (not Discord reactions)"""
     try:
-        bot = app.config.get("bot_instance")
-        if not bot:
-            return jsonify({"error": "Bot not available"}), 503
-
         discord_id = request.discord_id
         if discord_id in ["legacy_user", "unknown"]:
             return jsonify({"error": "Discord authentication required"}), 401
 
-        # Get meme channel
-        meme_channel_id = Config.MEME_CHANNEL_ID
-        if not meme_channel_id:
-            return jsonify({"error": "Meme channel not configured"}), 400
-
-        async def toggle_upvote_reaction():
-            channel = bot.get_channel(meme_channel_id)
-            if not channel:
-                return {"error": "Meme channel not found"}
-
-            try:
-                message = await channel.fetch_message(int(message_id))
-            except Exception:
-                return {"error": "Message not found"}
-
-            # Get the user who is toggling upvote
-            guild = bot.get_guild(Config.get_guild_id())
-            if not guild:
-                return {"error": "Guild not found"}
-
-            member = guild.get_member(int(discord_id))
-            if not member:
-                return {"error": "Member not found"}
-
-            # Check if user has already upvoted
-            has_upvoted = False
-            for reaction in message.reactions:
-                if str(reaction.emoji) == "👍":
-                    users = [user async for user in reaction.users()]
-                    if any(user.id == int(discord_id) for user in users):
-                        has_upvoted = True
-                        break
-
-            # Toggle the upvote
-            if has_upvoted:
-                # Remove upvote
-                await message.remove_reaction("👍", member)
-                action = "removed"
-            else:
-                # Add upvote
-                await message.add_reaction("👍")
-                action = "added"
-
-            # Get current reaction count after toggle
-            upvotes = 0
-            has_upvoted_now = False
-            for reaction in message.reactions:
-                if str(reaction.emoji) == "👍":
-                    upvotes = reaction.count
-                    users = [user async for user in reaction.users()]
-                    if any(user.id == int(discord_id) for user in users):
-                        has_upvoted_now = True
-                    break
-
-            return {
-                "success": True,
-                "upvotes": upvotes,
-                "has_upvoted": has_upvoted_now,
-                "action": action,
-                "message_id": message_id,
-            }
-
-        # Run async function
-        import asyncio
-
-        result = asyncio.run_coroutine_threadsafe(toggle_upvote_reaction(), bot.loop).result(timeout=10)
-
-        if "error" in result:
-            return jsonify(result), 404
-
-        return jsonify(result)
+        # Load current upvotes
+        upvotes = load_upvotes()
+        
+        # Initialize message upvotes if not exists
+        if message_id not in upvotes:
+            upvotes[message_id] = []
+        
+        # Check if user has already upvoted
+        user_upvotes = upvotes[message_id]
+        has_upvoted = discord_id in user_upvotes
+        
+        # Toggle the upvote
+        if has_upvoted:
+            # Remove upvote
+            user_upvotes.remove(discord_id)
+            action = "removed"
+        else:
+            # Add upvote
+            user_upvotes.append(discord_id)
+            action = "added"
+        
+        # Save updated upvotes
+        save_upvotes(upvotes)
+        
+        # Get current counts
+        upvote_count = len(user_upvotes)
+        has_upvoted_now = discord_id in user_upvotes
+        
+        logger.info(
+            f"{'➖' if action == 'removed' else '➕'} Upvote {action} by {request.username} "
+            f"on meme {message_id} (total: {upvote_count})"
+        )
+        
+        return jsonify({
+            "success": True,
+            "upvotes": upvote_count,
+            "has_upvoted": has_upvoted_now,
+            "action": action,
+            "message_id": message_id,
+        })
 
     except Exception as e:
         import traceback
@@ -3441,58 +3529,67 @@ def toggle_upvote_meme(message_id):
 @app.route("/api/memes/<message_id>/reactions", methods=["GET"])
 @token_required
 def get_meme_reactions(message_id):
-    """Get reaction counts for a meme"""
+    """Get upvote counts for a meme (custom + Discord reactions combined)"""
     try:
+        discord_id = request.discord_id
+        
+        # Load custom upvotes
+        custom_upvotes = load_upvotes()
+        user_upvotes = custom_upvotes.get(message_id, [])
+        custom_count = len(user_upvotes)
+        
+        # Check if current user has custom upvoted
+        has_custom_upvoted = False
+        if discord_id not in ["legacy_user", "unknown"]:
+            has_custom_upvoted = discord_id in user_upvotes
+        
+        # Get Discord reactions count
+        discord_count = 0
         bot = app.config.get("bot_instance")
-        if not bot:
-            return jsonify({"error": "Bot not available"}), 503
+        if bot:
+            meme_channel_id = Config.MEME_CHANNEL_ID
+            if meme_channel_id:
+                async def fetch_discord_reactions():
+                    channel = bot.get_channel(meme_channel_id)
+                    if not channel:
+                        return 0
+                    
+                    try:
+                        message = await channel.fetch_message(int(message_id))
+                        # Count all 👍 reactions from non-bot users
+                        for reaction in message.reactions:
+                            if str(reaction.emoji) == "👍":
+                                users = [user async for user in reaction.users()]
+                                return sum(1 for user in users if not user.bot)
+                    except Exception:
+                        return 0
+                    return 0
+                
+                import asyncio
+                try:
+                    discord_count = asyncio.run_coroutine_threadsafe(
+                        fetch_discord_reactions(), bot.loop
+                    ).result(timeout=5)
+                except Exception:
+                    pass  # Silently fail, use custom count only
+        
+        # Combine both counts
+        total_upvotes = custom_count + discord_count
+        
+        return jsonify({
+            "success": True,
+            "message_id": message_id,
+            "upvotes": total_upvotes,
+            "custom_upvotes": custom_count,
+            "discord_upvotes": discord_count,
+            "has_upvoted": has_custom_upvoted,
+        })
 
-        # Get meme channel
-        meme_channel_id = Config.MEME_CHANNEL_ID
-        if not meme_channel_id:
-            return jsonify({"error": "Meme channel not configured"}), 400
+    except Exception as e:
+        import traceback
 
-        async def fetch_reactions():
-            channel = bot.get_channel(meme_channel_id)
-            if not channel:
-                return {"error": "Meme channel not found"}
-
-            try:
-                message = await channel.fetch_message(int(message_id))
-            except Exception:
-                return {"error": "Message not found"}
-
-            # Get all reactions
-            reactions_data = {}
-            for reaction in message.reactions:
-                reactions_data[str(reaction.emoji)] = reaction.count
-
-            # Check if current user has upvoted
-            has_upvoted = False
-            discord_id = request.discord_id
-            if discord_id not in ["legacy_user", "unknown"]:
-                for reaction in message.reactions:
-                    if str(reaction.emoji) == "👍":
-                        users = [user async for user in reaction.users()]
-                        if any(user.id == int(discord_id) for user in users):
-                            has_upvoted = True
-                            break
-
-            return {
-                "success": True,
-                "message_id": message_id,
-                "reactions": reactions_data,
-                "upvotes": reactions_data.get("👍", 0),
-                "has_upvoted": has_upvoted,
-            }
-
-        # Run async function
-        import asyncio
-
-        result = asyncio.run_coroutine_threadsafe(fetch_reactions(), bot.loop).result(timeout=10)
-
-        if "error" in result:
-            return jsonify(result), 404
+        logger.error(f"Error fetching reactions: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch reactions: {str(e)}"}), 500
 
         return jsonify(result)
 
