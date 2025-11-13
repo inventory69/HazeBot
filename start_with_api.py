@@ -268,8 +268,8 @@ class HazeWorldBot(commands.Bot):
 
 
 def start_api(bot):
-    """Start the Flask API server in a separate thread"""
-    Logger.info("🌐 Starting API server...")
+    """Start the Flask API server with Waitress (production-ready WSGI server)"""
+    Logger.info("🌐 Starting API server with Waitress...")
 
     # Import API app
     sys.path.insert(0, str(Path(__file__).parent / "api"))
@@ -280,12 +280,12 @@ def start_api(bot):
 
     # Get port from environment
     port = int(os.getenv("API_PORT", 5070))
-    debug_mode = os.getenv("API_DEBUG", "false").lower() == "true"
 
-    Logger.info(f"🌐 API server starting on port {port}")
+    Logger.info(f"🌐 API server starting on port {port} (Waitress WSGI)")
 
-    # Run Flask app
-    app.run(host="0.0.0.0", port=port, debug=debug_mode, use_reloader=False)
+    # Use Waitress (production-ready, thread-safe WSGI server)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=port, threads=8)
 
 
 def main():

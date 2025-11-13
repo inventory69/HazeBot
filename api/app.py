@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 import requests
 from urllib.parse import urlencode
+import threading
 
 # Add parent directory to path to import Config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -22,8 +23,14 @@ import Config
 from Utils.ConfigLoader import load_config_from_file
 from Utils.Logger import Logger as logger
 
+# Import cache system
+from api.cache import cache, cached, invalidate_cache, get_cache_stats, clear_cache
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
+
+# Thread lock for JWT decode (prevents race conditions)
+jwt_decode_lock = threading.Lock()
 
 # Active sessions tracking
 active_sessions = {}  # {session_id: {username, discord_id, roles, last_seen, ip, user_agent}}
@@ -242,12 +249,26 @@ def token_required(f):
         token = request.headers.get("Authorization")
 
         if not token:
+            logger.warning(f"❌ No Authorization header | Endpoint: {request.endpoint}")
             return jsonify({"error": "Token is missing"}), 401
 
         try:
             if token.startswith("Bearer "):
                 token = token[7:]
-            data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            
+            if not token or token.strip() == "":
+                logger.warning(f"❌ Empty token after Bearer strip | Endpoint: {request.endpoint}")
+                return jsonify({"error": "Token is empty"}), 401
+            
+            # Validate JWT structure before decoding (prevents "Expecting value" error)
+            if token.count('.') != 2:
+                logger.warning(f"❌ Malformed token (invalid JWT structure) | Endpoint: {request.endpoint}")
+                return jsonify({"error": "token_invalid"}), 401
+            
+            # Thread-safe JWT decode (prevents race conditions during parallel requests)
+            with jwt_decode_lock:
+                data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            
             # Store username and permissions in request context
             request.username = data.get("user", "unknown")
             request.user_role = data.get("role", "admin")
@@ -299,12 +320,19 @@ def token_required(f):
             )
 
         except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Token has expired"}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"error": "Token is invalid"}), 401
-        except Exception:
-            # Don't expose internal error details to avoid information leakage
-            return jsonify({"error": "Token validation failed"}), 401
+            logger.warning(f"❌ Token expired | Endpoint: {request.endpoint}")
+            return jsonify({"error": "token_expired"}), 401
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"❌ Token invalid: {str(e)} | Endpoint: {request.endpoint}")
+            return jsonify({"error": "token_invalid"}), 401
+        except json.JSONDecodeError as e:
+            # This catches "Expecting value" errors when token is not valid JSON/JWT
+            logger.warning(f"❌ Token is not valid JSON/JWT: {str(e)} | Endpoint: {request.endpoint}")
+            return jsonify({"error": "token_invalid"}), 401
+        except Exception as e:
+            # Catch-all for other unexpected errors
+            logger.error(f"❌ Token validation failed: {str(e)} | Endpoint: {request.endpoint}")
+            return jsonify({"error": "token_validation_failed"}), 401
 
         return f(*args, **kwargs)
 
@@ -369,7 +397,7 @@ def login():
             {
                 "user": username,
                 "discord_id": "legacy_user",
-                "exp": datetime.utcnow() + timedelta(hours=24),
+                "exp": datetime.utcnow() + timedelta(days=7),  # 7 days instead of 24 hours
                 "role": "admin",
                 "permissions": ["all"],
                 "auth_type": "legacy",
@@ -504,7 +532,7 @@ def discord_callback():
         {
             "user": user_data["username"],
             "discord_id": user_data["id"],
-            "exp": datetime.utcnow() + timedelta(hours=24),
+            "exp": datetime.utcnow() + timedelta(days=7),  # 7 days instead of 24 hours
             "role": role,
             "permissions": permissions,
             "auth_type": "discord",
@@ -581,19 +609,56 @@ def get_current_user():
         return jsonify({"error": "Invalid token"}), 401
 
 
+@app.route("/api/auth/refresh", methods=["POST"])
+@token_required
+def refresh_token():
+    """Refresh JWT token with new expiry date (keeps same session_id)"""
+    try:
+        # Get current token data from request context (set by @token_required)
+        import secrets
+        
+        # Create new token with extended expiry but keep same session_id
+        new_token = jwt.encode(
+            {
+                "user": request.username,
+                "discord_id": request.discord_id,
+                "exp": datetime.utcnow() + timedelta(days=7),  # 7 days
+                "role": request.user_role,
+                "permissions": request.user_permissions,
+                "auth_type": "refreshed",
+                "session_id": request.session_id,  # Keep same session
+            },
+            app.config["SECRET_KEY"],
+            algorithm="HS256",
+        )
+        
+        logger.info(f"✅ Token refreshed for user: {request.username}")
+        
+        return jsonify({
+            "token": new_token,
+            "user": request.username,
+            "discord_id": request.discord_id,
+            "role": request.user_role,
+            "permissions": request.user_permissions,
+        })
+    except Exception as e:
+        logger.error(f"❌ Token refresh failed: {e}")
+        return jsonify({"error": "Token refresh failed"}), 500
+
+
 @app.route("/api/admin/active-sessions", methods=["GET"])
 @token_required
 @require_permission("all")
 def get_active_sessions():
     """Get all active API sessions + recent activity (Admin/Mod only)"""
-    # Clean up old sessions (older than 5 minutes)
+    # Clean up old sessions (older than 30 minutes - increased from 5 min)
     current_time = datetime.now()
     expired_sessions = []
 
     for session_id, session_data in list(active_sessions.items()):
         try:
             last_seen = datetime.fromisoformat(session_data["last_seen"])
-            if (current_time - last_seen).total_seconds() > 300:  # 5 minutes
+            if (current_time - last_seen).total_seconds() > 1800:  # 30 minutes
                 expired_sessions.append(session_id)
         except Exception:
             expired_sessions.append(session_id)
@@ -655,6 +720,42 @@ def get_active_sessions():
             "checked_at": current_time.isoformat()
         }
     )
+
+
+@app.route("/api/admin/cache/stats", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_cache_stats_endpoint():
+    """Get cache statistics (Admin only)"""
+    stats = get_cache_stats()
+    return jsonify(stats)
+
+
+@app.route("/api/admin/cache/clear", methods=["POST"])
+@token_required
+@require_permission("all")
+def clear_cache_endpoint():
+    """Clear entire cache (Admin only)"""
+    clear_cache()
+    log_action(request.username, "clear_cache", {"status": "success"})
+    return jsonify({"success": True, "message": "Cache cleared"})
+
+
+@app.route("/api/admin/cache/invalidate", methods=["POST"])
+@token_required
+@require_permission("all")
+def invalidate_cache_endpoint():
+    """Invalidate cache entries by pattern (Admin only)"""
+    data = request.get_json()
+    pattern = data.get("pattern")
+    
+    if not pattern:
+        return jsonify({"error": "Pattern is required"}), 400
+    
+    count = invalidate_cache(pattern)
+    log_action(request.username, "invalidate_cache", {"pattern": pattern, "count": count})
+    
+    return jsonify({"success": True, "invalidated": count, "pattern": pattern})
 
 
 @app.route("/api/config", methods=["GET"])
@@ -1560,8 +1661,14 @@ def update_user_preferences():
 @app.route("/api/gaming/members", methods=["GET"])
 @token_required
 def get_gaming_members():
-    """Get all server members with their presence/activity data + app usage status"""
+    """Get all server members with their presence/activity data + app usage status (with cache)"""
     try:
+        # Check cache first (30 second TTL - users change status frequently)
+        cache_key = "gaming:members"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return jsonify(cached_result)
+        
         import discord
         
         bot = app.config.get("bot_instance")
@@ -1633,11 +1740,16 @@ def get_gaming_members():
         # Sort: online users first, then by username
         members_data.sort(key=lambda m: (m["status"] == "offline", m["display_name"].lower()))
 
-        return jsonify({
+        result = {
             "members": members_data, 
             "total": len(members_data),
             "app_users_count": len(app_users)
-        })
+        }
+        
+        # Cache result for 30 seconds (users change status frequently)
+        cache.set(cache_key, result, ttl=30)
+        
+        return jsonify(result)
 
     except Exception as e:
         import traceback
@@ -3257,14 +3369,20 @@ def get_user_profile():
 @app.route("/api/hazehub/latest-memes", methods=["GET"])
 @token_required
 def get_latest_memes():
-    """Get latest memes posted in the meme channel"""
+    """Get latest memes posted in the meme channel (with cache)"""
     try:
+        limit = request.args.get("limit", 10, type=int)
+        limit = min(limit, 50)  # Max 50 memes
+        
+        # Check cache first (60 second TTL)
+        cache_key = f"hazehub:latest_memes:{limit}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return jsonify(cached_result)
+        
         bot = app.config.get("bot_instance")
         if not bot:
             return jsonify({"error": "Bot not available"}), 503
-
-        limit = request.args.get("limit", 10, type=int)
-        limit = min(limit, 50)  # Max 50 memes
 
         # Get meme channel
         meme_channel_id = Config.MEME_CHANNEL_ID
@@ -3401,7 +3519,12 @@ def get_latest_memes():
         if memes is None:
             return jsonify({"error": "Meme channel not found"}), 404
 
-        return jsonify({"success": True, "memes": memes, "count": len(memes)})
+        result = {"success": True, "memes": memes, "count": len(memes)}
+        
+        # Cache result for 60 seconds
+        cache.set(cache_key, result, ttl=60)
+        
+        return jsonify(result)
 
     except Exception as e:
         import traceback
@@ -3413,14 +3536,20 @@ def get_latest_memes():
 @app.route("/api/hazehub/latest-rankups", methods=["GET"])
 @token_required
 def get_latest_rankups():
-    """Get latest rank-up announcements from RL channel"""
+    """Get latest rank-up announcements from RL channel (with cache)"""
     try:
+        limit = request.args.get("limit", 10, type=int)
+        limit = min(limit, 50)  # Max 50 rank-ups
+        
+        # Check cache first (60 second TTL)
+        cache_key = f"hazehub:latest_rankups:{limit}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return jsonify(cached_result)
+        
         bot = app.config.get("bot_instance")
         if not bot:
             return jsonify({"error": "Bot not available"}), 503
-
-        limit = request.args.get("limit", 10, type=int)
-        limit = min(limit, 50)  # Max 50 rank-ups
 
         # Get RL channel
         rl_channel_id = Config.RL_CHANNEL_ID
@@ -3556,7 +3685,12 @@ def get_latest_rankups():
         if rankups is None:
             return jsonify({"error": "Rocket League channel not found"}), 404
 
-        return jsonify({"success": True, "rankups": rankups, "count": len(rankups)})
+        result = {"success": True, "rankups": rankups, "count": len(rankups)}
+        
+        # Cache result for 60 seconds
+        cache.set(cache_key, result, ttl=60)
+        
+        return jsonify(result)
 
     except Exception as e:
         import traceback
