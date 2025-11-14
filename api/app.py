@@ -253,25 +253,33 @@ def token_required(f):
             return jsonify({"error": "Token is missing"}), 401
 
         try:
+            # Strip "Bearer " prefix if present
             if token.startswith("Bearer "):
                 token = token[7:]
             
+            # Validate token is not empty
             if not token or token.strip() == "":
-                logger.warning(f"❌ Empty token after Bearer strip | Endpoint: {request.endpoint}")
+                logger.warning(f"❌ Empty token | Endpoint: {request.endpoint}")
                 return jsonify({"error": "Token is empty"}), 401
             
-            # Validate JWT structure before decoding (prevents "Expecting value" error)
-            if token.count('.') != 2:
-                logger.warning(f"❌ Malformed token (invalid JWT structure) | Endpoint: {request.endpoint}")
+            # Validate JWT structure (must have header.payload.signature format)
+            parts = token.split('.')
+            if len(parts) != 3 or not all(parts):
+                logger.warning(f"❌ Malformed token structure | Endpoint: {request.endpoint}")
                 return jsonify({"error": "token_invalid"}), 401
             
             # Thread-safe JWT decode (prevents race conditions during parallel requests)
             with jwt_decode_lock:
                 data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
             
+            # DEBUG: Log token validation success with auth_type
+            auth_type = data.get("auth_type", "unknown")
+            logger.debug(f"✅ Token validated | User: {data.get('user')} | Auth: {auth_type} | Endpoint: {request.endpoint}")
+            
             # Store username and permissions in request context
             request.username = data.get("user", "unknown")
             request.user_role = data.get("role", "admin")
+            request.role_name = data.get("role_name")
             request.user_permissions = data.get("permissions", ["all"])
             request.discord_id = data.get("discord_id", "unknown")
 
@@ -320,18 +328,32 @@ def token_required(f):
             )
 
         except jwt.ExpiredSignatureError:
-            logger.warning(f"❌ Token expired | Endpoint: {request.endpoint}")
+            # Token is expired - this is EXPECTED during token refresh
+            logger.debug(f"⏱️ Token expired | Endpoint: {request.endpoint}")
             return jsonify({"error": "token_expired"}), 401
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"❌ Token invalid: {str(e)} | Endpoint: {request.endpoint}")
-            return jsonify({"error": "token_invalid"}), 401
-        except json.JSONDecodeError as e:
-            # This catches "Expecting value" errors when token is not valid JSON/JWT
-            logger.warning(f"❌ Token is not valid JSON/JWT: {str(e)} | Endpoint: {request.endpoint}")
+        except (jwt.DecodeError, jwt.InvalidTokenError) as e:
+            # PyJWT errors: DecodeError (malformed/corrupted payload), InvalidTokenError (wrong signature)
+            # DecodeError can include JSON decode errors ("Expecting value: line 1 column 1")
+            error_msg = str(e)
+            
+            # During token refresh, old tokens may fail decoding - treat as expired
+            if "Expecting value" in error_msg or "JSON" in error_msg.lower():
+                logger.debug(f"⏱️ Token decode failed (likely during refresh): {error_msg} | Endpoint: {request.endpoint}")
+                return jsonify({"error": "token_expired"}), 401
+            
+            # Other token errors (wrong signature, etc.)
+            logger.warning(f"❌ Token invalid: {error_msg} | Endpoint: {request.endpoint}")
             return jsonify({"error": "token_invalid"}), 401
         except Exception as e:
-            # Catch-all for other unexpected errors
-            logger.error(f"❌ Token validation failed: {str(e)} | Endpoint: {request.endpoint}")
+            # Catch-all for unexpected errors (should rarely happen)
+            error_msg = str(e)
+            
+            # Check if it's a JSON decode error that escaped PyJWT exception handling
+            if "Expecting value" in error_msg or "JSONDecodeError" in str(type(e)):
+                logger.debug(f"⏱️ Unexpected JSON decode error (treating as expired): {error_msg} | Endpoint: {request.endpoint}")
+                return jsonify({"error": "token_expired"}), 401
+            
+            logger.error(f"❌ Token validation error: {error_msg} | Type: {type(e).__name__} | Endpoint: {request.endpoint}")
             return jsonify({"error": "token_validation_failed"}), 401
 
         return f(*args, **kwargs)
@@ -523,6 +545,25 @@ def discord_callback():
     role = get_user_role_from_discord(member_data, guild_id)
     permissions = ROLE_PERMISSIONS.get(role, ["meme_generator"])
 
+    # Get role name from Discord for display purposes
+    role_name = None
+    try:
+        bot = app.config.get("bot_instance")
+        if bot:
+            guild = bot.get_guild(Config.GUILD_ID)
+            if guild:
+                member = guild.get_member(int(user_data["id"]))
+                if member:
+                    for discord_role in member.roles:
+                        if discord_role.id == Config.ADMIN_ROLE_ID:
+                            role_name = discord_role.name
+                            break
+                        elif discord_role.id == Config.MODERATOR_ROLE_ID:
+                            role_name = discord_role.name
+                            break
+    except Exception:
+        pass  # role_name is optional
+
     # Create JWT token
     import secrets
 
@@ -534,6 +575,7 @@ def discord_callback():
             "discord_id": user_data["id"],
             "exp": datetime.utcnow() + timedelta(days=7),  # 7 days instead of 24 hours
             "role": role,
+            "role_name": role_name,
             "permissions": permissions,
             "auth_type": "discord",
             "session_id": session_id,
@@ -571,7 +613,7 @@ def get_current_user():
 
         # Get avatar URL and role name from Discord if we have discord_id
         avatar_url = None
-        role_name = None
+        role_name = data.get("role_name")  # Try to get from token first
         discord_id = data.get("discord_id")
         if discord_id and discord_id not in ["legacy_user", "unknown"]:
             try:
@@ -583,14 +625,15 @@ def get_current_user():
                         if member:
                             if member.avatar:
                                 avatar_url = str(member.avatar.url)
-                            # Get role name from Discord
-                            for role in member.roles:
-                                if role.id == Config.ADMIN_ROLE_ID:
-                                    role_name = role.name
-                                    break
-                                elif role.id == Config.MODERATOR_ROLE_ID:
-                                    role_name = role.name
-                                    break
+                            # Get role name from Discord (fallback if not in token)
+                            if not role_name:
+                                for role in member.roles:
+                                    if role.id == Config.ADMIN_ROLE_ID:
+                                        role_name = role.name
+                                        break
+                                    elif role.id == Config.MODERATOR_ROLE_ID:
+                                        role_name = role.name
+                                        break
             except Exception:
                 pass  # Avatar and role name are optional
 
@@ -614,33 +657,48 @@ def get_current_user():
 def refresh_token():
     """Refresh JWT token with new expiry date (keeps same session_id)"""
     try:
-        # Get current token data from request context (set by @token_required)
-        import secrets
+        # Build token payload (only include role_name if it exists and is not None)
+        token_payload = {
+            "user": request.username,
+            "discord_id": request.discord_id,
+            "exp": datetime.utcnow() + timedelta(days=7),  # 7 days
+            "role": request.user_role,
+            "permissions": request.user_permissions,
+            "auth_type": "refreshed",
+            "session_id": request.session_id,  # Keep same session
+        }
+        
+        # Only add role_name if it exists and is not None
+        if hasattr(request, "role_name") and request.role_name:
+            token_payload["role_name"] = request.role_name
         
         # Create new token with extended expiry but keep same session_id
-        new_token = jwt.encode(
-            {
-                "user": request.username,
-                "discord_id": request.discord_id,
-                "exp": datetime.utcnow() + timedelta(days=7),  # 7 days
-                "role": request.user_role,
-                "permissions": request.user_permissions,
-                "auth_type": "refreshed",
-                "session_id": request.session_id,  # Keep same session
-            },
-            app.config["SECRET_KEY"],
-            algorithm="HS256",
-        )
+        new_token = jwt.encode(token_payload, app.config["SECRET_KEY"], algorithm="HS256")
         
-        logger.info(f"✅ Token refreshed for user: {request.username}")
+        # DEBUG: Log token refresh details and validate it works
+        logger.info(f"🔄 Token refreshed | User: {request.username} | Session: {request.session_id[:8]}... | New token length: {len(new_token)}")
         
-        return jsonify({
+        # VALIDATION: Try to decode the new token immediately to ensure it's valid
+        try:
+            decoded = jwt.decode(new_token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            logger.debug(f"✅ New token validated successfully | Payload keys: {list(decoded.keys())}")
+        except Exception as e:
+            logger.error(f"❌ NEW TOKEN IS INVALID! Error: {e}")
+            return jsonify({"error": "Token refresh produced invalid token"}), 500
+        
+        # Build response (include role_name if available)
+        response_data = {
             "token": new_token,
             "user": request.username,
             "discord_id": request.discord_id,
             "role": request.user_role,
             "permissions": request.user_permissions,
-        })
+        }
+        
+        if hasattr(request, "role_name") and request.role_name:
+            response_data["role_name"] = request.role_name
+        
+        return jsonify(response_data)
     except Exception as e:
         logger.error(f"❌ Token refresh failed: {e}")
         return jsonify({"error": "Token refresh failed"}), 500
