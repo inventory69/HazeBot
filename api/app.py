@@ -272,6 +272,15 @@ def token_required(f):
             with jwt_decode_lock:
                 data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
             
+            # Check token expiry
+            exp_timestamp = data.get("exp")
+            if exp_timestamp:
+                exp_date = datetime.utcfromtimestamp(exp_timestamp)
+                time_until_expiry = exp_date - datetime.utcnow()
+                if time_until_expiry.total_seconds() < 0:
+                    logger.warning(f"❌ Token expired | User: {data.get('user')} | Expired: {exp_date}")
+                    return jsonify({"error": "Token expired"}), 401
+            
             # DEBUG: Log token validation success with auth_type
             auth_type = data.get("auth_type", "unknown")
             logger.debug(f"✅ Token validated | User: {data.get('user')} | Auth: {auth_type} | Endpoint: {request.endpoint}")
