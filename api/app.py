@@ -1894,119 +1894,23 @@ def post_game_request():
         embed.set_thumbnail(url=requester.display_avatar.url)
         embed.set_footer(text="Respond with the buttons below")
 
-        # Create buttons view
-        class GameRequestView(discord.ui.View):
-            def __init__(self, requester_id: int, target_id: int):
-                super().__init__(timeout=None)  # No timeout - buttons stay active
-                self.requester_id = requester_id
-                self.target_id = target_id
-
-            @discord.ui.button(label="Accept", style=discord.ButtonStyle.success, emoji="✅")
-            async def accept_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                # Only target can accept
-                if interaction.user.id != self.target_id:
-                    await interaction.response.send_message("This request is not for you!", ephemeral=True)
-                    return
-
-                # Update embed
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.green()
-                embed.add_field(
-                    name="✅ Accepted!",
-                    value=f"{interaction.user.mention} accepted the game request!",
-                    inline=False,
-                )
-
-                # Disable all buttons
-                for item in self.children:
-                    item.disabled = True
-
-                await interaction.response.edit_message(embed=embed, view=self)
-
-                # Notify requester
-                requester = interaction.guild.get_member(self.requester_id)
-                if requester:
-                    try:
-                        await requester.send(
-                            f"🎮 **{interaction.user.display_name}** accepted your game request!\n"
-                            f"Game: **{game_name}**\n"
-                            f"Jump to message: {interaction.message.jump_url}"
-                        )
-                    except:
-                        pass  # User has DMs disabled
-
-            @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger, emoji="❌")
-            async def decline_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                # Only target can decline
-                if interaction.user.id != self.target_id:
-                    await interaction.response.send_message("This request is not for you!", ephemeral=True)
-                    return
-
-                # Update embed
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.red()
-                embed.add_field(
-                    name="❌ Declined",
-                    value=f"{interaction.user.mention} declined the game request.",
-                    inline=False,
-                )
-
-                # Disable all buttons
-                for item in self.children:
-                    item.disabled = True
-
-                await interaction.response.edit_message(embed=embed, view=self)
-
-                # Notify requester
-                requester = interaction.guild.get_member(self.requester_id)
-                if requester:
-                    try:
-                        await requester.send(
-                            f"🎮 **{interaction.user.display_name}** declined your game request.\n"
-                            f"Game: **{game_name}**\n"
-                            f"Maybe they're busy right now. Try again later!"
-                        )
-                    except:
-                        pass  # User has DMs disabled
-
-            @discord.ui.button(label="Maybe Later", style=discord.ButtonStyle.secondary, emoji="⏰")
-            async def maybe_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-                # Only target can respond
-                if interaction.user.id != self.target_id:
-                    await interaction.response.send_message("This request is not for you!", ephemeral=True)
-                    return
-
-                # Update embed
-                embed = interaction.message.embeds[0]
-                embed.color = discord.Color.orange()
-                embed.add_field(
-                    name="⏰ Maybe Later",
-                    value=f"{interaction.user.mention} might be interested later!",
-                    inline=False,
-                )
-
-                # Disable all buttons
-                for item in self.children:
-                    item.disabled = True
-
-                await interaction.response.edit_message(embed=embed, view=self)
-
-                # Notify requester
-                requester = interaction.guild.get_member(self.requester_id)
-                if requester:
-                    try:
-                        await requester.send(
-                            f"🎮 **{interaction.user.display_name}** might be interested later!\n"
-                            f"Game: **{game_name}**\n"
-                            f"Check back with them soon!"
-                        )
-                    except:
-                        pass  # User has DMs disabled
-
-        # Send message with buttons
+        # Send message with buttons using persistent GameRequestView from GamingHub cog
         async def send_request():
-            view = GameRequestView(int(discord_id), int(target_user_id))
+            # Import the persistent view from GamingHub cog
+            from datetime import datetime
+
+            from Cogs.GamingHub import GameRequestView
+
+            view = GameRequestView(int(discord_id), int(target_user_id), game_name, datetime.now().timestamp())
             msg = await channel.send(content=f"🎮 {target.mention}", embed=embed, view=view)
+
+            # Save to persistent storage
+            gaming_hub_cog = bot.get_cog("GamingHub")
+            if gaming_hub_cog:
+                gaming_hub_cog.save_game_request(channel.id, msg.id, int(discord_id), int(target_user_id), game_name)
+            else:
+                logger.warning("GamingHub cog not loaded, game request view will not persist")
+
             return msg
 
         loop = bot.loop
