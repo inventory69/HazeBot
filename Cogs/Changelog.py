@@ -1,12 +1,14 @@
-import discord
-from discord.ext import commands
-import openai
+import logging
 import os
 from datetime import datetime
+
+import discord
+import openai
+from discord.ext import commands
+
 import Config
-from Config import CHANGELOG_ROLE_ID, CHANGELOG_CHANNEL_ID
+from Config import CHANGELOG_CHANNEL_ID, CHANGELOG_ROLE_ID
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 

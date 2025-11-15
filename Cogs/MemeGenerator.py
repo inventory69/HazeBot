@@ -1,21 +1,22 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import aiohttp
 import json
-import os
 import logging
+import os
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
+import aiohttp
+import discord
+from discord import app_commands
+from discord.ext import commands
 
 import Config
 from Config import (
-    get_guild_id,
-    get_data_dir,
-    IMGFLIP_USERNAME,
     IMGFLIP_PASSWORD,
-    MEME_TEMPLATES_CACHE_FILE,
+    IMGFLIP_USERNAME,
     MEME_TEMPLATES_CACHE_DURATION,
+    MEME_TEMPLATES_CACHE_FILE,
+    get_data_dir,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
 

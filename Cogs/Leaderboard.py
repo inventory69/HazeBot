@@ -1,16 +1,18 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import os
 import json
-from typing import Dict, List, Callable, Any
-import Config
-from Config import RL_TIER_ORDER, ACTIVITY_FILE, get_guild_id, get_data_dir
-from Utils.EmbedUtils import set_pink_footer
-from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
-from Utils.CacheUtils import cache
-from Cogs.TicketSystem import load_tickets
 import logging
+import os
+from typing import Any, Callable, Dict, List
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import Config
+from Cogs.RocketLeague import RANK_EMOJIS, load_rl_accounts
+from Cogs.TicketSystem import load_tickets
+from Config import ACTIVITY_FILE, RL_TIER_ORDER, get_data_dir, get_guild_id
+from Utils.CacheUtils import cache
+from Utils.EmbedUtils import set_pink_footer
 
 # Configure logger
 logging.basicConfig(level=logging.INFO)

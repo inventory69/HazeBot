@@ -5,10 +5,11 @@
 # cogs and modules. Settings are organized by category for easy maintenance.
 # ============================================================================
 
-import discord
 import logging
-from dotenv import load_dotenv
 import os
+
+import discord
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()

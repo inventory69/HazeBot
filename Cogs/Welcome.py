@@ -1,26 +1,28 @@
-import random
 import asyncio
-import os
 import json
+import logging
+import os
+import random
 from datetime import datetime
-from discord.ext import commands
+from typing import Any, Optional
+
 import discord
-from typing import Optional, Any
+from discord.ext import commands
+
 import Config
 from Config import (
+    ACTIVE_RULES_VIEWS_FILE,
     INTEREST_ROLES,
-    WELCOME_RULES_CHANNEL_ID,
-    WELCOME_PUBLIC_CHANNEL_ID,
     MEMBER_ROLE_ID,
     PERSISTENT_VIEWS_FILE,
-    ACTIVE_RULES_VIEWS_FILE,
-    SERVER_GUIDE_CHANNEL_ID,
     RULES_TEXT,
-    WELCOME_MESSAGES,
+    SERVER_GUIDE_CHANNEL_ID,
     WELCOME_BUTTON_REPLIES,
+    WELCOME_MESSAGES,
+    WELCOME_PUBLIC_CHANNEL_ID,
+    WELCOME_RULES_CHANNEL_ID,
 )
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 

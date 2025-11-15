@@ -1,26 +1,28 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
+import asyncio
 import json
+import logging
 import os
+import re
+import smtplib
 import uuid
 from datetime import datetime, timedelta
 from email.message import EmailMessage
-import smtplib
-import asyncio
-import re
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 import Config
 from Config import (
     ADMIN_ROLE_ID,
     MODERATOR_ROLE_ID,
     TICKETS_CATEGORY_ID,
     TRANSCRIPT_CHANNEL_ID,
-    get_guild_id,
     get_data_dir,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 

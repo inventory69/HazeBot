@@ -1,15 +1,15 @@
 # 📦 Built-in modules
+# 📥 Custom modules
+import logging
 import random
+
+import discord
 
 # 👾 Discord modules
 from discord.ext import commands, tasks
-import discord
 
 # ⚙️ Settings
-from Config import PresenceUpdateInterval, PROD_MODE
-
-# 📥 Custom modules
-import logging
+from Config import PROD_MODE, PresenceUpdateInterval
 
 logger = logging.getLogger(__name__)
 

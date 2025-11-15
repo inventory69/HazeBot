@@ -4,19 +4,20 @@ Contains all Discord UI components (Views, Buttons, Modals) for the DailyMeme Co
 Separated from main cog for better organization and maintainability.
 """
 
-import discord
-import random
 import logging
+import random
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import discord
+
 import Config
 from Config import (
-    MEME_CHANNEL_ID,
-    DEFAULT_MEME_SUBREDDITS,
-    DEFAULT_MEME_LEMMY,
-    MEME_SOURCES,
     ADMIN_ROLE_ID,
+    DEFAULT_MEME_LEMMY,
+    DEFAULT_MEME_SUBREDDITS,
+    MEME_CHANNEL_ID,
+    MEME_SOURCES,
     MODERATOR_ROLE_ID,
 )
 from Utils.EmbedUtils import set_pink_footer

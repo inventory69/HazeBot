@@ -3,28 +3,29 @@ Flask API for HazeBot Configuration
 Provides REST endpoints to read and update bot configuration
 """
 
-import os
 import json
-import sys
 import logging
-from pathlib import Path
-from flask import Flask, jsonify, request, redirect
-from flask_cors import CORS
-import jwt
+import os
+import sys
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
-import requests
+from pathlib import Path
 from urllib.parse import urlencode
-import threading
+
+import jwt
+import requests
+from flask import Flask, jsonify, redirect, request
+from flask_cors import CORS
 
 # Add parent directory to path to import Config
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import Config
-from Utils.ConfigLoader import load_config_from_file
-from Utils.Logger import Logger as logger
 
 # Import cache system
-from api.cache import cache, cached, invalidate_cache, get_cache_stats, clear_cache
+from api.cache import cache, clear_cache, get_cache_stats, invalidate_cache
+from Utils.ConfigLoader import load_config_from_file
+from Utils.Logger import Logger as logger
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
@@ -48,9 +49,24 @@ APP_USAGE_EXPIRY_DAYS = 30  # Remove badge after 30 days of inactivity
 
 # Negative emojis that should NOT count as upvotes
 NEGATIVE_EMOJIS = {
-    "👎", "😠", "😡", "🤬", "💩", "🖕", 
-    "❌", "⛔", "🚫", "💔", "😤", "😒",
-    "🙄", "😑", "😐", "😶", "🤐", "😬"
+    "👎",
+    "😠",
+    "😡",
+    "🤬",
+    "💩",
+    "🖕",
+    "❌",
+    "⛔",
+    "🚫",
+    "💔",
+    "😤",
+    "😒",
+    "🙄",
+    "😑",
+    "😐",
+    "😶",
+    "🤐",
+    "😬",
 }
 
 
@@ -97,12 +113,12 @@ def get_active_app_users():
     app_usage = load_app_usage()
     current_time = datetime.utcnow()
     active_users = set()
-    
+
     for discord_id, last_seen_str in list(app_usage.items()):
         try:
             last_seen = datetime.fromisoformat(last_seen_str)
             days_inactive = (current_time - last_seen).days
-            
+
             if days_inactive <= APP_USAGE_EXPIRY_DAYS:
                 active_users.add(discord_id)
             else:
@@ -111,7 +127,7 @@ def get_active_app_users():
         except (ValueError, TypeError):
             # Invalid timestamp, remove it
             del app_usage[discord_id]
-    
+
     # Save cleaned up data
     save_app_usage(app_usage)
     return active_users
@@ -191,40 +207,42 @@ def log_config_action(config_name):
 def log_user_activity(username, discord_id, action, endpoint, details=None):
     """Log user activity for recent interactions tracking - only relevant endpoints"""
     global recent_activity
-    
+
     # Only log meaningful actions - filter out read-only monitoring endpoints
     # These endpoints are too frequent and not interesting for activity tracking
     ignored_endpoints = {
         "get_active_sessions",  # Admin monitoring (auto-refresh every 5s)
-        "get_gaming_members",   # Gaming hub auto-refresh
-        "get_latest_memes",     # Meme feed auto-refresh
-        "health",               # Health checks
-        "ping",                 # Ping checks
+        "get_gaming_members",  # Gaming hub auto-refresh
+        "get_latest_memes",  # Meme feed auto-refresh
+        "health",  # Health checks
+        "ping",  # Ping checks
     }
-    
+
     if endpoint in ignored_endpoints:
         return  # Don't log these frequent read operations
-    
+
     # Aggressive deduplication: check if similar entry exists in last 5 minutes
     # This prevents the same action from appearing multiple times
     now = datetime.utcnow()
     cutoff_time = now - timedelta(minutes=5)
-    
+
     for entry in reversed(recent_activity[-20:]):  # Check last 20 entries
         try:
             entry_time = datetime.fromisoformat(entry.get("timestamp", ""))
             if entry_time < cutoff_time:
                 break  # Stop checking older entries
-                
+
             # If same user did same action on same endpoint recently, skip
-            if (entry.get("username") == username and
-                entry.get("discord_id") == discord_id and
-                entry.get("action") == action and
-                entry.get("endpoint") == endpoint):
+            if (
+                entry.get("username") == username
+                and entry.get("discord_id") == discord_id
+                and entry.get("action") == action
+                and entry.get("endpoint") == endpoint
+            ):
                 return  # Skip duplicate within 5 minutes
         except (ValueError, TypeError):
             continue
-    
+
     # Log this new activity
     activity_entry = {
         "timestamp": now.isoformat(),
@@ -234,9 +252,9 @@ def log_user_activity(username, discord_id, action, endpoint, details=None):
         "endpoint": endpoint,
         "details": details or {},
     }
-    
+
     recent_activity.append(activity_entry)
-    
+
     # Keep only last MAX_ACTIVITY_LOG entries
     if len(recent_activity) > MAX_ACTIVITY_LOG:
         recent_activity = recent_activity[-MAX_ACTIVITY_LOG:]
@@ -256,22 +274,22 @@ def token_required(f):
             # Strip "Bearer " prefix if present
             if token.startswith("Bearer "):
                 token = token[7:]
-            
+
             # Validate token is not empty
             if not token or token.strip() == "":
                 logger.warning(f"❌ Empty token | Endpoint: {request.endpoint}")
                 return jsonify({"error": "Token is empty"}), 401
-            
+
             # Validate JWT structure (must have header.payload.signature format)
-            parts = token.split('.')
+            parts = token.split(".")
             if len(parts) != 3 or not all(parts):
                 logger.warning(f"❌ Malformed token structure | Endpoint: {request.endpoint}")
                 return jsonify({"error": "token_invalid"}), 401
-            
+
             # Thread-safe JWT decode (prevents race conditions during parallel requests)
             with jwt_decode_lock:
                 data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
-            
+
             # Check token expiry
             exp_timestamp = data.get("exp")
             if exp_timestamp:
@@ -280,11 +298,13 @@ def token_required(f):
                 if time_until_expiry.total_seconds() < 0:
                     logger.warning(f"❌ Token expired | User: {data.get('user')} | Expired: {exp_date}")
                     return jsonify({"error": "Token expired"}), 401
-            
+
             # DEBUG: Log token validation success with auth_type
             auth_type = data.get("auth_type", "unknown")
-            logger.debug(f"✅ Token validated | User: {data.get('user')} | Auth: {auth_type} | Endpoint: {request.endpoint}")
-            
+            logger.debug(
+                f"✅ Token validated | User: {data.get('user')} | Auth: {auth_type} | Endpoint: {request.endpoint}"
+            )
+
             # Store username and permissions in request context
             request.username = data.get("user", "unknown")
             request.user_role = data.get("role", "admin")
@@ -322,18 +342,14 @@ def token_required(f):
                 "endpoint": request.endpoint or "unknown",
             }
             active_sessions[request.session_id] = session_info
-            
+
             # Update app usage tracking (persistent)
             update_app_usage(request.discord_id)
-            
+
             # Log activity (filtering is done inside log_user_activity)
             endpoint_name = request.endpoint or "unknown"
             log_user_activity(
-                request.username,
-                request.discord_id,
-                request.method,
-                endpoint_name,
-                {"path": request.path}
+                request.username, request.discord_id, request.method, endpoint_name, {"path": request.path}
             )
 
         except jwt.ExpiredSignatureError:
@@ -344,25 +360,31 @@ def token_required(f):
             # PyJWT errors: DecodeError (malformed/corrupted payload), InvalidTokenError (wrong signature)
             # DecodeError can include JSON decode errors ("Expecting value: line 1 column 1")
             error_msg = str(e)
-            
+
             # During token refresh, old tokens may fail decoding - treat as expired
             if "Expecting value" in error_msg or "JSON" in error_msg.lower():
-                logger.debug(f"⏱️ Token decode failed (likely during refresh): {error_msg} | Endpoint: {request.endpoint}")
+                logger.debug(
+                    f"⏱️ Token decode failed (likely during refresh): {error_msg} | Endpoint: {request.endpoint}"
+                )
                 return jsonify({"error": "token_expired"}), 401
-            
+
             # Other token errors (wrong signature, etc.)
             logger.warning(f"❌ Token invalid: {error_msg} | Endpoint: {request.endpoint}")
             return jsonify({"error": "token_invalid"}), 401
         except Exception as e:
             # Catch-all for unexpected errors (should rarely happen)
             error_msg = str(e)
-            
+
             # Check if it's a JSON decode error that escaped PyJWT exception handling
             if "Expecting value" in error_msg or "JSONDecodeError" in str(type(e)):
-                logger.debug(f"⏱️ Unexpected JSON decode error (treating as expired): {error_msg} | Endpoint: {request.endpoint}")
+                logger.debug(
+                    f"⏱️ Unexpected JSON decode error (treating as expired): {error_msg} | Endpoint: {request.endpoint}"
+                )
                 return jsonify({"error": "token_expired"}), 401
-            
-            logger.error(f"❌ Token validation error: {error_msg} | Type: {type(e).__name__} | Endpoint: {request.endpoint}")
+
+            logger.error(
+                f"❌ Token validation error: {error_msg} | Type: {type(e).__name__} | Endpoint: {request.endpoint}"
+            )
             return jsonify({"error": "token_validation_failed"}), 401
 
         return f(*args, **kwargs)
@@ -676,14 +698,14 @@ def refresh_token():
             "auth_type": "refreshed",
             "session_id": request.session_id,  # Keep same session
         }
-        
+
         # Only add role_name if it exists and is not None
         if hasattr(request, "role_name") and request.role_name:
             token_payload["role_name"] = request.role_name
-        
+
         # Create new token with extended expiry but keep same session_id
         new_token = jwt.encode(token_payload, app.config["SECRET_KEY"], algorithm="HS256")
-        
+
         # Build response (include role_name if available)
         response_data = {
             "token": new_token,
@@ -692,10 +714,10 @@ def refresh_token():
             "role": request.user_role,
             "permissions": request.user_permissions,
         }
-        
+
         if hasattr(request, "role_name") and request.role_name:
             response_data["role_name"] = request.role_name
-        
+
         return jsonify(response_data)
     except Exception as e:
         logger.error(f"❌ Token refresh failed: {e}")
@@ -749,10 +771,10 @@ def get_active_sessions():
 
     # Sort by last_seen (most recent first)
     sessions_list.sort(key=lambda x: x["last_seen"], reverse=True)
-    
+
     # Get recent activity (already sorted by timestamp, most recent first)
     recent_activity_list = list(reversed(recent_activity[-50:]))  # Last 50 activities
-    
+
     # Enrich activity with Discord user info
     bot = app.config.get("bot_instance")
     for activity in recent_activity_list:
@@ -770,10 +792,10 @@ def get_active_sessions():
 
     return jsonify(
         {
-            "total_active": len(sessions_list), 
-            "sessions": sessions_list, 
+            "total_active": len(sessions_list),
+            "sessions": sessions_list,
             "recent_activity": recent_activity_list,
-            "checked_at": current_time.isoformat()
+            "checked_at": current_time.isoformat(),
         }
     )
 
@@ -804,13 +826,13 @@ def invalidate_cache_endpoint():
     """Invalidate cache entries by pattern (Admin only)"""
     data = request.get_json()
     pattern = data.get("pattern")
-    
+
     if not pattern:
         return jsonify({"error": "Pattern is required"}), 400
-    
+
     count = invalidate_cache(pattern)
     log_action(request.username, "invalidate_cache", {"pattern": pattern, "count": count})
-    
+
     return jsonify({"success": True, "invalidated": count, "pattern": pattern})
 
 
@@ -1463,9 +1485,10 @@ def get_rl_stats(platform, username):
 def link_user_rl_account():
     """Link Rocket League account for the current user"""
     try:
-        from Cogs.RocketLeague import load_rl_accounts, save_rl_accounts
-        from datetime import datetime, timezone
         import asyncio
+        from datetime import datetime, timezone
+
+        from Cogs.RocketLeague import load_rl_accounts, save_rl_accounts
 
         discord_id = request.discord_id
         if discord_id == "legacy_user" or discord_id == "unknown":
@@ -1724,9 +1747,9 @@ def get_gaming_members():
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return jsonify(cached_result)
-        
+
         import discord
-        
+
         bot = app.config.get("bot_instance")
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
@@ -1752,11 +1775,11 @@ def get_gaming_members():
                 # Get first non-custom activity (game/streaming/etc)
                 for activity in member.activities:
                     activity_type = activity.type
-                    
+
                     # Skip custom status activities
                     if activity_type == discord.ActivityType.custom:
                         continue
-                    
+
                     # Found a real activity (game, streaming, etc)
                     activity_type_str = str(activity_type).replace("ActivityType.", "").lower()
 
@@ -1774,7 +1797,7 @@ def get_gaming_members():
                         activity_data["image_url"] = activity.large_image_url
                     elif hasattr(activity, "small_image_url") and activity.small_image_url:
                         activity_data["image_url"] = activity.small_image_url
-                    
+
                     # Found valid activity, stop searching
                     break
 
@@ -1796,15 +1819,11 @@ def get_gaming_members():
         # Sort: online users first, then by username
         members_data.sort(key=lambda m: (m["status"] == "offline", m["display_name"].lower()))
 
-        result = {
-            "members": members_data, 
-            "total": len(members_data),
-            "app_users_count": len(app_users)
-        }
-        
+        result = {"members": members_data, "total": len(members_data), "app_users_count": len(app_users)}
+
         # Cache result for 30 seconds (users change status frequently)
         cache.set(cache_key, result, ttl=30)
-        
+
         return jsonify(result)
 
     except Exception as e:
@@ -1820,6 +1839,7 @@ def post_game_request():
     """Post a game request to the gaming channel"""
     try:
         import asyncio
+
         import discord
 
         discord_id = request.discord_id
@@ -2046,6 +2066,7 @@ def reset_welcome_config():
     """Reset welcome configuration to defaults"""
     # Import the original defaults
     import importlib
+
     import Config as OriginalConfig
 
     importlib.reload(OriginalConfig)
@@ -2098,6 +2119,7 @@ def reset_welcome_texts_config():
     """Reset welcome text configuration to defaults"""
     # Import the original defaults
     import importlib
+
     import Config as OriginalConfig
 
     importlib.reload(OriginalConfig)
@@ -2151,6 +2173,7 @@ def reset_rocket_league_texts_config():
     """Reset Rocket League text configuration to defaults"""
     # Import the original defaults
     import importlib
+
     import Config as OriginalConfig
 
     importlib.reload(OriginalConfig)
@@ -2372,7 +2395,7 @@ def get_meme_templates():
             return jsonify({"error": "MemeGenerator cog not loaded"}), 503
 
         # Check if credentials are configured
-        from Config import IMGFLIP_USERNAME, IMGFLIP_PASSWORD
+        from Config import IMGFLIP_PASSWORD, IMGFLIP_USERNAME
 
         if not IMGFLIP_USERNAME or not IMGFLIP_PASSWORD:
             return (
@@ -2538,8 +2561,10 @@ def post_generated_meme_to_discord():
 
         # Post the meme to Discord
         async def post_meme():
-            import discord
             from datetime import datetime
+
+            import discord
+
             from Utils.EmbedUtils import set_pink_footer
 
             embed = discord.Embed(
@@ -2880,8 +2905,10 @@ def send_meme_to_discord():
 
         # Post the meme to Discord with custom message
         async def post_meme():
-            import discord
             from datetime import datetime
+
+            import discord
+
             from Utils.EmbedUtils import set_pink_footer
 
             # Create embed manually (same as post_meme but with custom message)
@@ -3284,7 +3311,7 @@ def get_user_profile():
         # Get Rocket League rank (if available)
         rl_rank = None
         try:
-            from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
+            from Cogs.RocketLeague import RANK_EMOJIS, load_rl_accounts
             from Config import RL_TIER_ORDER
 
             rl_accounts = load_rl_accounts()
@@ -3429,13 +3456,13 @@ def get_latest_memes():
     try:
         limit = request.args.get("limit", 10, type=int)
         limit = min(limit, 50)  # Max 50 memes
-        
+
         # Check cache first (60 second TTL)
         cache_key = f"hazehub:latest_memes:{limit}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return jsonify(cached_result)
-        
+
         bot = app.config.get("bot_instance")
         if not bot:
             return jsonify({"error": "Bot not available"}), 503
@@ -3447,7 +3474,7 @@ def get_latest_memes():
 
         # Load custom upvotes
         custom_upvotes = load_upvotes()
-        
+
         async def fetch_memes():
             channel = bot.get_channel(meme_channel_id)
             if not channel:
@@ -3477,7 +3504,7 @@ def get_latest_memes():
 
                     # Get custom upvotes from our system
                     custom_count = len(custom_upvotes.get(message_id_str, []))
-                    
+
                     # Get Discord reactions count (all positive reactions)
                     # Count all reactions EXCEPT negative ones
                     # reaction.count includes all users (including bots)
@@ -3485,17 +3512,17 @@ def get_latest_memes():
                     discord_count = 0
                     for reaction in message.reactions:
                         emoji_str = str(reaction.emoji)
-                        
+
                         # Skip negative emojis
                         if emoji_str in NEGATIVE_EMOJIS:
                             continue
-                        
+
                         # Count this reaction (subtract 1 if bot reacted)
                         count = reaction.count
                         if reaction.me:
                             count = max(0, count - 1)
                         discord_count += count
-                    
+
                     # Combine both counts
                     total_upvotes = custom_count + discord_count
                     meme_data["upvotes"] = total_upvotes
@@ -3576,10 +3603,10 @@ def get_latest_memes():
             return jsonify({"error": "Meme channel not found"}), 404
 
         result = {"success": True, "memes": memes, "count": len(memes)}
-        
+
         # Cache result for 60 seconds
         cache.set(cache_key, result, ttl=60)
-        
+
         return jsonify(result)
 
     except Exception as e:
@@ -3596,13 +3623,13 @@ def get_latest_rankups():
     try:
         limit = request.args.get("limit", 10, type=int)
         limit = min(limit, 50)  # Max 50 rank-ups
-        
+
         # Check cache first (60 second TTL)
         cache_key = f"hazehub:latest_rankups:{limit}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return jsonify(cached_result)
-        
+
         bot = app.config.get("bot_instance")
         if not bot:
             return jsonify({"error": "Bot not available"}), 503
@@ -3742,10 +3769,10 @@ def get_latest_rankups():
             return jsonify({"error": "Rocket League channel not found"}), 404
 
         result = {"success": True, "rankups": rankups, "count": len(rankups)}
-        
+
         # Cache result for 60 seconds
         cache.set(cache_key, result, ttl=60)
-        
+
         return jsonify(result)
 
     except Exception as e:
@@ -3766,15 +3793,15 @@ def toggle_upvote_meme(message_id):
 
         # Load current upvotes
         upvotes = load_upvotes()
-        
+
         # Initialize message upvotes if not exists
         if message_id not in upvotes:
             upvotes[message_id] = []
-        
+
         # Check if user has already upvoted
         user_upvotes = upvotes[message_id]
         has_upvoted = discord_id in user_upvotes
-        
+
         # Toggle the upvote
         if has_upvoted:
             # Remove upvote
@@ -3784,26 +3811,28 @@ def toggle_upvote_meme(message_id):
             # Add upvote
             user_upvotes.append(discord_id)
             action = "added"
-        
+
         # Save updated upvotes
         save_upvotes(upvotes)
-        
+
         # Get current counts
         upvote_count = len(user_upvotes)
         has_upvoted_now = discord_id in user_upvotes
-        
+
         logger.info(
             f"{'➖' if action == 'removed' else '➕'} Upvote {action} by {request.username} "
             f"on meme {message_id} (total: {upvote_count})"
         )
-        
-        return jsonify({
-            "success": True,
-            "upvotes": upvote_count,
-            "has_upvoted": has_upvoted_now,
-            "action": action,
-            "message_id": message_id,
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "upvotes": upvote_count,
+                "has_upvoted": has_upvoted_now,
+                "action": action,
+                "message_id": message_id,
+            }
+        )
 
     except Exception as e:
         import traceback
@@ -3818,66 +3847,70 @@ def get_meme_reactions(message_id):
     """Get upvote counts for a meme (custom + Discord reactions combined)"""
     try:
         discord_id = request.discord_id
-        
+
         # Load custom upvotes
         custom_upvotes = load_upvotes()
         user_upvotes = custom_upvotes.get(message_id, [])
         custom_count = len(user_upvotes)
-        
+
         # Check if current user has custom upvoted
         has_custom_upvoted = False
         if discord_id not in ["legacy_user", "unknown"]:
             has_custom_upvoted = discord_id in user_upvotes
-        
+
         # Get Discord reactions count
         discord_count = 0
         bot = app.config.get("bot_instance")
         if bot:
             meme_channel_id = Config.MEME_CHANNEL_ID
             if meme_channel_id:
+
                 async def fetch_discord_reactions():
                     channel = bot.get_channel(meme_channel_id)
                     if not channel:
                         return 0
-                    
+
                     try:
                         message = await channel.fetch_message(int(message_id))
                         # Count all positive reactions (exclude negative emojis and bots)
                         total_count = 0
                         for reaction in message.reactions:
                             emoji_str = str(reaction.emoji)
-                            
+
                             # Skip negative emojis
                             if emoji_str in NEGATIVE_EMOJIS:
                                 continue
-                            
+
                             # Count reactions from non-bot users
                             users = [user async for user in reaction.users()]
                             total_count += sum(1 for user in users if not user.bot)
-                        
+
                         return total_count
                     except Exception:
                         return 0
-                
+
                 import asyncio
+
                 try:
-                    discord_count = asyncio.run_coroutine_threadsafe(
-                        fetch_discord_reactions(), bot.loop
-                    ).result(timeout=5)
+                    discord_count = asyncio.run_coroutine_threadsafe(fetch_discord_reactions(), bot.loop).result(
+                        timeout=5
+                    )
                 except Exception:
                     pass  # Silently fail, use custom count only
-        
+
         # Combine both counts
         total_upvotes = custom_count + discord_count
-        
-        return jsonify({
-            "success": True,
-            "message_id": message_id,
-            "upvotes": total_upvotes,
-            "custom_upvotes": custom_count,
-            "discord_upvotes": discord_count,
-            "has_upvoted": has_custom_upvoted,
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "message_id": message_id,
+                "upvotes": total_upvotes,
+                "custom_upvotes": custom_count,
+                "discord_upvotes": discord_count,
+                "has_upvoted": has_custom_upvoted,
+            }
+        )
 
     except Exception as e:
         import traceback

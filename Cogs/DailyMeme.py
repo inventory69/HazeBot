@@ -1,26 +1,27 @@
-import discord
-from discord.ext import commands, tasks
-from discord import app_commands
-import aiohttp
-import os
+import asyncio
 import json
+import logging
+import os
 import random
 from datetime import datetime, time
-import logging
-import asyncio
+
+import aiohttp
+import discord
 from bs4 import BeautifulSoup
+from discord import app_commands
+from discord.ext import commands, tasks
 
 import Config
 from Config import (
-    get_guild_id,
-    get_data_dir,
-    MEME_CHANNEL_ID,
-    MEME_ROLE_ID,
-    MEME_SUBREDDITS_FILE,
-    DEFAULT_MEME_SUBREDDITS,
-    MEME_LEMMY_FILE,
     DEFAULT_MEME_LEMMY,
+    DEFAULT_MEME_SUBREDDITS,
+    MEME_CHANNEL_ID,
+    MEME_LEMMY_FILE,
+    MEME_ROLE_ID,
     MEME_SOURCES,
+    MEME_SUBREDDITS_FILE,
+    get_data_dir,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
 

@@ -1,12 +1,14 @@
+import hashlib
+import json
+import logging
+import os
+
 import discord
 from discord.ext import commands
+
 import Config
-from Config import ADMIN_ROLE_ID, MEME_CHANNEL_ID, SERVER_GUIDE_CHANNEL_ID, SERVER_GUIDE_CONFIG, DATA_DIR
+from Config import ADMIN_ROLE_ID, DATA_DIR, MEME_CHANNEL_ID, SERVER_GUIDE_CHANNEL_ID, SERVER_GUIDE_CONFIG
 from Utils.EmbedUtils import set_pink_footer
-import logging
-import json
-import hashlib
-import os
 
 logger = logging.getLogger(__name__)
 

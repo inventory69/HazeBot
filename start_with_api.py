@@ -4,8 +4,8 @@ Runs both the Discord bot and the Flask API in separate threads
 """
 
 import logging
-import threading
 import sys
+import threading
 from pathlib import Path
 
 # Setup logging first
@@ -17,6 +17,7 @@ logging.basicConfig(
 )
 logging.getLogger("discord").handlers.clear()
 logging.getLogger("discord").propagate = False
+logging.getLogger("discord").setLevel(logging.ERROR)  # Suppress discord.py warnings
 
 # Set root logger
 root_logger = logging.getLogger()
@@ -24,31 +25,33 @@ root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
 # Now imports
+import asyncio
+import difflib
+import os
 import pathlib
+
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
+
 import Config
 from Config import (
-    CommandPrefix,
-    Intents,
-    BotName,
+    BOT_TOKEN,
+    DATA_DIR,
+    GUILD_ID,
+    PROD_MODE,
     SLASH_COMMANDS,
+    BotName,
+    CommandPrefix,
     FuzzyMatchingThreshold,
+    Intents,
     MessageCooldown,
     get_guild_id,
-    PROD_MODE,
-    GUILD_ID,
-    DATA_DIR,
-    BOT_TOKEN,
 )
-from Utils.Logger import Logger
-from dotenv import load_dotenv
-from Utils.Env import LoadEnv
 from Utils.ConfigLoader import load_config_from_file
-import difflib
 from Utils.EmbedUtils import set_pink_footer
-import asyncio
-import os
+from Utils.Env import LoadEnv
+from Utils.Logger import Logger
 
 # Load environment
 load_dotenv()
@@ -285,6 +288,7 @@ def start_api(bot):
 
     # Use Waitress (production-ready, thread-safe WSGI server)
     from waitress import serve
+
     serve(app, host="0.0.0.0", port=port, threads=8)
 
 

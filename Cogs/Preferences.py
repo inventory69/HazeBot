@@ -1,11 +1,13 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
+import logging
 from typing import Any
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 import Config
 from Config import CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 
