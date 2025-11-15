@@ -568,14 +568,14 @@ def discord_callback():
     member_response = requests.get(f"{DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member", headers=user_headers)
 
     if member_response.status_code != 200:
-        logger.error(f"❌ Discord member check failed:")
+        logger.error("❌ Discord member check failed:")
         logger.error(f"   Status: {member_response.status_code}")
         logger.error(f"   Response: {member_response.text[:500]}")  # Limit response length
         logger.error(f"   User: {user_data.get('username')}#{user_data.get('discriminator')}")
         logger.error(f"   User ID: {user_data.get('id')}")
         logger.error(f"   Guild ID: {guild_id}")
         logger.error(f"   API URL: {DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member")
-        
+
         # Fallback: Try to check via bot instead
         logger.info("🔄 Attempting fallback via bot instance...")
         bot = app.config.get("bot_instance")
@@ -584,17 +584,17 @@ def discord_callback():
             if guild:
                 member = guild.get_member(int(user_data["id"]))
                 if member:
-                    logger.info(f"✅ User found in guild via bot, proceeding with authentication")
+                    logger.info("✅ User found in guild via bot, proceeding with authentication")
                     # Create member_data dict from bot member
                     member_data = {
                         "roles": [str(role.id) for role in member.roles],
                         "user": {
                             "id": str(member.id),
                             "username": member.name,
-                        }
+                        },
                     }
                 else:
-                    logger.error(f"❌ User not found in guild via bot either")
+                    logger.error("❌ User not found in guild via bot either")
                     return jsonify({"error": "User is not a member of the guild"}), 403
             else:
                 logger.error(f"❌ Guild {guild_id} not found via bot")
@@ -1574,7 +1574,8 @@ def link_user_rl_account():
         # Log success with display name from API but save input username
         ranks_str = ", ".join([f"{k}: {v}" for k, v in stats.get("tier_names", {}).items()])
         logger.info(
-            f"✅ Successfully linked RL account for {request.username}: {username} (displays as {stats['username']}) ({platform.upper()}) - [{ranks_str}]"
+            f"✅ Successfully linked RL account for {request.username}: {username} "
+            f"(displays as {stats['username']}) ({platform.upper()}) - [{ranks_str}]"
         )
 
         return jsonify(
@@ -3477,7 +3478,7 @@ def get_latest_memes():
                                     # Remove commas and convert to int
                                     score_str = field.value.replace(",", "").strip()
                                     meme_data["score"] = int("".join(filter(str.isdigit, score_str)))
-                                except:
+                                except (ValueError, AttributeError):
                                     meme_data["score"] = 0
 
                             # Source field: "📍 Source" (e.g., "r/memes" or "lemmy.world/c/memes")
@@ -3507,7 +3508,7 @@ def get_latest_memes():
                                                 author = f"User {user_id}"
                                         else:
                                             author = f"User {user_id}"
-                                    except:
+                                    except (ValueError, AttributeError):
                                         author = f"User {user_id}"
                                 meme_data["author"] = author
 
@@ -3629,7 +3630,8 @@ def get_latest_rankups():
                         rankup_data["image_url"] = embed.image.url if embed.image else None
                         rankup_data["color"] = embed.color.value if embed.color else None
 
-                        # Parse from description - Format: "Congratulations {user}! Your {playlist} rank has improved to {emoji} {rank}!"
+                        # Parse from description
+                        # Format: "Congratulations {user}! Your {playlist} rank has improved to {emoji} {rank}!"
                         if embed.description:
                             # Extract user mention (e.g., <@283733417575710721>)
                             user_match = re.search(r"<@!?(\d+)>", embed.description)
@@ -3646,7 +3648,7 @@ def get_latest_rankups():
                                             rankup_data["user"] = f"User {user_id}"
                                     else:
                                         rankup_data["user"] = f"User {user_id}"
-                                except:
+                                except (ValueError, AttributeError):
                                     rankup_data["user"] = f"User {user_id}"
 
                             # Extract mode/playlist (e.g., "Your 2v2 rank" or "Your 4v4 rank")
@@ -3686,7 +3688,7 @@ def get_latest_rankups():
                                         rankup_data["user"] = f"User {user_id}"
                                 else:
                                     rankup_data["user"] = f"User {user_id}"
-                            except:
+                            except (ValueError, AttributeError):
                                 rankup_data["user"] = f"User {user_id}"
 
                     rankups.append(rankup_data)
@@ -3854,8 +3856,6 @@ def get_meme_reactions(message_id):
 
         logger.error(f"Error fetching reactions: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch reactions: {str(e)}"}), 500
-
-        return jsonify(result)
 
     except Exception as e:
         import traceback

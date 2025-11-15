@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import discord
 from discord.ext import commands, tasks
@@ -59,7 +59,7 @@ class GameRequestView(discord.ui.View):
                     f"Game: **{self.game_name}**\n"
                     f"Jump to message: {interaction.message.jump_url}"
                 )
-            except:
+            except Exception:
                 pass  # User has DMs disabled
 
         # Remove from persistent storage
@@ -98,7 +98,7 @@ class GameRequestView(discord.ui.View):
                     f"Game: **{self.game_name}**\n"
                     f"Maybe they're busy right now. Try again later!"
                 )
-            except:
+            except Exception:
                 pass  # User has DMs disabled
 
         # Remove from persistent storage
@@ -139,7 +139,7 @@ class GameRequestView(discord.ui.View):
                     f"Game: **{self.game_name}**\n"
                     f"Check back with them soon!"
                 )
-            except:
+            except Exception:
                 pass  # User has DMs disabled
 
         # Remove from persistent storage
