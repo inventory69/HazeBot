@@ -568,9 +568,42 @@ def discord_callback():
     member_response = requests.get(f"{DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member", headers=user_headers)
 
     if member_response.status_code != 200:
-        return jsonify({"error": "User is not a member of the guild"}), 403
-
-    member_data = member_response.json()
+        logger.error(f"❌ Discord member check failed:")
+        logger.error(f"   Status: {member_response.status_code}")
+        logger.error(f"   Response: {member_response.text[:500]}")  # Limit response length
+        logger.error(f"   User: {user_data.get('username')}#{user_data.get('discriminator')}")
+        logger.error(f"   User ID: {user_data.get('id')}")
+        logger.error(f"   Guild ID: {guild_id}")
+        logger.error(f"   API URL: {DISCORD_API_ENDPOINT}/users/@me/guilds/{guild_id}/member")
+        
+        # Fallback: Try to check via bot instead
+        logger.info("🔄 Attempting fallback via bot instance...")
+        bot = app.config.get("bot_instance")
+        if bot:
+            guild = bot.get_guild(int(guild_id))
+            if guild:
+                member = guild.get_member(int(user_data["id"]))
+                if member:
+                    logger.info(f"✅ User found in guild via bot, proceeding with authentication")
+                    # Create member_data dict from bot member
+                    member_data = {
+                        "roles": [str(role.id) for role in member.roles],
+                        "user": {
+                            "id": str(member.id),
+                            "username": member.name,
+                        }
+                    }
+                else:
+                    logger.error(f"❌ User not found in guild via bot either")
+                    return jsonify({"error": "User is not a member of the guild"}), 403
+            else:
+                logger.error(f"❌ Guild {guild_id} not found via bot")
+                return jsonify({"error": "Guild not found"}), 500
+        else:
+            logger.error("❌ Bot instance not available for fallback")
+            return jsonify({"error": "User is not a member of the guild"}), 403
+    else:
+        member_data = member_response.json()
 
     # Determine role and permissions
     role = get_user_role_from_discord(member_data, guild_id)
@@ -581,7 +614,7 @@ def discord_callback():
     try:
         bot = app.config.get("bot_instance")
         if bot:
-            guild = bot.get_guild(Config.GUILD_ID)
+            guild = bot.get_guild(int(guild_id))
             if guild:
                 member = guild.get_member(int(user_data["id"]))
                 if member:
