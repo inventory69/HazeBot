@@ -684,17 +684,6 @@ def refresh_token():
         # Create new token with extended expiry but keep same session_id
         new_token = jwt.encode(token_payload, app.config["SECRET_KEY"], algorithm="HS256")
         
-        # DEBUG: Log token refresh details and validate it works
-        logger.info(f"🔄 Token refreshed | User: {request.username} | Session: {request.session_id[:8]}... | New token length: {len(new_token)}")
-        
-        # VALIDATION: Try to decode the new token immediately to ensure it's valid
-        try:
-            decoded = jwt.decode(new_token, app.config["SECRET_KEY"], algorithms=["HS256"])
-            logger.debug(f"✅ New token validated successfully | Payload keys: {list(decoded.keys())}")
-        except Exception as e:
-            logger.error(f"❌ NEW TOKEN IS INVALID! Error: {e}")
-            return jsonify({"error": "Token refresh produced invalid token"}), 500
-        
         # Build response (include role_name if available)
         response_data = {
             "token": new_token,
