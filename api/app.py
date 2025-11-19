@@ -2872,8 +2872,16 @@ def send_meme_to_discord():
 
             set_pink_footer(embed, bot=bot.user)
 
-            # Send with custom message
-            await channel.send("🎭 Meme sent from Admin Panel", embed=embed)
+            # Get requester Discord ID from token
+            requester_id = request.discord_id if hasattr(request, 'discord_id') and request.discord_id != "unknown" else None
+            
+            # Send with custom message including requester mention
+            if requester_id:
+                message_text = f"🎭 Meme sent from Admin Panel by <@{requester_id}>"
+            else:
+                message_text = "🎭 Meme sent from Admin Panel"
+            
+            await channel.send(message_text, embed=embed)
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
