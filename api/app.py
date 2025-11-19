@@ -3737,7 +3737,48 @@ def toggle_upvote_meme(message_id):
         if message_id not in upvotes:
             upvotes[message_id] = []
 
-        # Check if user has already upvoted
+
+        # Check if user has already upvoted via Discord
+        # (reuse logic from get_meme_reactions)
+        has_discord_upvoted = False
+        bot = app.config.get("bot_instance")
+        if bot:
+            meme_channel_id = Config.MEME_CHANNEL_ID
+            if meme_channel_id:
+                async def fetch_discord_user_reacted():
+                    channel = bot.get_channel(meme_channel_id)
+                    if not channel:
+                        return False
+                    try:
+                        message = await channel.fetch_message(int(message_id))
+                        for reaction in message.reactions:
+                            emoji_str = str(reaction.emoji)
+                            if emoji_str in NEGATIVE_EMOJIS:
+                                continue
+                            users = [user async for user in reaction.users()]
+                            non_bot_users = [user for user in users if not user.bot]
+                            if any(str(user.id) == str(discord_id) for user in non_bot_users):
+                                return True
+                        return False
+                    except Exception:
+                        return False
+                import asyncio
+                try:
+                    has_discord_upvoted = asyncio.run_coroutine_threadsafe(
+                        fetch_discord_user_reacted(), bot.loop
+                    ).result(timeout=5)
+                except Exception:
+                    pass
+
+        if has_discord_upvoted:
+            return jsonify({
+                "error": "User has already upvoted via Discord. Cannot upvote again.",
+                "has_discord_upvoted": True,
+                "success": False,
+                "message_id": message_id,
+            }), 400
+
+        # Check if user has already upvoted (custom)
         user_upvotes = upvotes[message_id]
         has_upvoted = discord_id in user_upvotes
 
@@ -3797,22 +3838,25 @@ def get_meme_reactions(message_id):
         if discord_id not in ["legacy_user", "unknown"]:
             has_custom_upvoted = discord_id in user_upvotes
 
-        # Get Discord reactions count
+
+        # Get Discord reactions count and check if user has upvoted via Discord
         discord_count = 0
+        has_discord_upvoted = False
         bot = app.config.get("bot_instance")
         if bot:
             meme_channel_id = Config.MEME_CHANNEL_ID
             if meme_channel_id:
 
-                async def fetch_discord_reactions():
+                async def fetch_discord_reactions_and_user():
                     channel = bot.get_channel(meme_channel_id)
                     if not channel:
-                        return 0
+                        return 0, False
 
                     try:
                         message = await channel.fetch_message(int(message_id))
                         # Count all positive reactions (exclude negative emojis and bots)
                         total_count = 0
+                        user_reacted = False
                         for reaction in message.reactions:
                             emoji_str = str(reaction.emoji)
 
@@ -3822,18 +3866,23 @@ def get_meme_reactions(message_id):
 
                             # Count reactions from non-bot users
                             users = [user async for user in reaction.users()]
-                            total_count += sum(1 for user in users if not user.bot)
+                            non_bot_users = [user for user in users if not user.bot]
+                            total_count += len(non_bot_users)
+                            # Check if current user has reacted
+                            if discord_id not in ["legacy_user", "unknown"]:
+                                if any(str(user.id) == str(discord_id) for user in non_bot_users):
+                                    user_reacted = True
 
-                        return total_count
+                        return total_count, user_reacted
                     except Exception:
-                        return 0
+                        return 0, False
 
                 import asyncio
 
                 try:
-                    discord_count = asyncio.run_coroutine_threadsafe(fetch_discord_reactions(), bot.loop).result(
-                        timeout=5
-                    )
+                    discord_count, has_discord_upvoted = asyncio.run_coroutine_threadsafe(
+                        fetch_discord_reactions_and_user(), bot.loop
+                    ).result(timeout=5)
                 except Exception:
                     pass  # Silently fail, use custom count only
 
@@ -3848,6 +3897,7 @@ def get_meme_reactions(message_id):
                 "custom_upvotes": custom_count,
                 "discord_upvotes": discord_count,
                 "has_upvoted": has_custom_upvoted,
+                "has_discord_upvoted": has_discord_upvoted,
             }
         )
 
