@@ -215,17 +215,15 @@ class GamingHub(commands.Cog):
             try:
                 message = await channel.fetch_message(message_id)
 
-                # Create and attach the view
+                # Create and attach the view without editing the message
                 view = GameRequestView(requester_id, target_id, game_name, created_at)
-
-                # Edit message to re-attach the view
-                await message.edit(view=view)
+                self.bot.add_view(view, message_id=message_id)
 
                 restored_count += 1
                 cleaned_data.append(request_data)
                 logger.info(f"Restored game request view for message {message_id} in channel {channel_id}")
 
-                await asyncio.sleep(0.5)  # Rate limit protection
+                await asyncio.sleep(0.2)  # Rate limit protection
 
             except discord.NotFound:
                 logger.warning(f"Message {message_id} not found, removing from game requests")
