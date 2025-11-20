@@ -296,9 +296,11 @@ class DailyMeme(commands.Cog):
         # Configure and start the daily meme task with saved settings
         hour = self.daily_config.get("hour", 12)
         minute = self.daily_config.get("minute", 0)
-        # Assuming local time is CET (UTC+1), convert to UTC for server
-        adjusted_hour = (hour - 1) % 24
-        self.daily_meme_task.change_interval(time=time(hour=adjusted_hour, minute=minute))
+        # Convert local time to UTC for discord.py task scheduling
+        from zoneinfo import ZoneInfo
+        local_time = datetime.now(ZoneInfo(Config.TIMEZONE)).replace(hour=hour, minute=minute)
+        utc_time = local_time.astimezone(ZoneInfo("UTC"))
+        self.daily_meme_task.change_interval(time=time(hour=utc_time.hour, minute=utc_time.minute))
 
         if self.daily_config.get("enabled", True) and not self.daily_meme_task.is_running():
             self.daily_meme_task.start()
@@ -899,9 +901,11 @@ class DailyMeme(commands.Cog):
         # Update task time
         hour = self.daily_config.get("hour", 12)
         minute = self.daily_config.get("minute", 0)
-        # Assuming local time is CET (UTC+1), convert to UTC for server
-        adjusted_hour = (hour - 1) % 24
-        self.daily_meme_task.change_interval(time=time(hour=adjusted_hour, minute=minute))
+        # Convert local time to UTC for discord.py task scheduling
+        from zoneinfo import ZoneInfo
+        local_time = datetime.now(ZoneInfo(Config.TIMEZONE)).replace(hour=hour, minute=minute)
+        utc_time = local_time.astimezone(ZoneInfo("UTC"))
+        self.daily_meme_task.change_interval(time=time(hour=utc_time.hour, minute=utc_time.minute))
 
         if self.daily_meme_task.is_running():
             # Task is already running, just update the interval

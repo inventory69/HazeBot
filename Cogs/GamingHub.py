@@ -189,7 +189,8 @@ class GamingHub(commands.Cog):
         """Restore persistent game request views."""
         restored_count = 0
         cleaned_data = []
-        now = datetime.now().timestamp()
+        from Config import get_local_now
+        now = get_local_now().timestamp()
 
         for request_data in self.game_requests_data:
             channel_id = request_data.get("channel_id")
@@ -248,6 +249,7 @@ class GamingHub(commands.Cog):
                 return
 
         # Add new entry
+        from Config import get_local_now
         self.game_requests_data.append(
             {
                 "channel_id": channel_id,
@@ -255,7 +257,7 @@ class GamingHub(commands.Cog):
                 "requester_id": requester_id,
                 "target_id": target_id,
                 "game_name": game_name,
-                "created_at": datetime.now().timestamp(),
+                "created_at": get_local_now().timestamp(),
             }
         )
 
@@ -286,7 +288,8 @@ class GamingHub(commands.Cog):
     @tasks.loop(hours=6)
     async def cleanup_expired_requests(self):
         """Clean up expired game requests (older than 7 days)"""
-        now = datetime.now().timestamp()
+        from Config import get_local_now
+        now = get_local_now().timestamp()
         cleaned_count = 0
 
         for request_data in list(self.game_requests_data):

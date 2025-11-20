@@ -7,6 +7,8 @@
 
 import logging
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import discord
 from dotenv import load_dotenv
@@ -34,6 +36,9 @@ GUILD_NAME = os.getenv("DISCORD_GUILD_NAME" if PROD_MODE else "DISCORD_TEST_GUIL
 # Data directory selection based on PROD_MODE
 DATA_DIR = "Data" if PROD_MODE else "TestData"
 
+# Timezone configuration for consistent datetime display
+TIMEZONE = os.getenv("TIMEZONE", "Europe/Berlin")
+
 
 # Helper functions
 def get_guild_id():
@@ -44,6 +49,31 @@ def get_guild_id():
 def get_data_dir():
     """Returns the current data directory based on PROD_MODE"""
     return DATA_DIR
+
+
+def get_local_now():
+    """Returns current datetime in the configured timezone"""
+    return datetime.now(ZoneInfo(TIMEZONE))
+
+
+def get_utc_now():
+    """Returns current datetime in UTC (for Discord embeds and API responses)"""
+    return datetime.now(ZoneInfo("UTC"))
+
+
+def local_to_utc(dt):
+    """Convert a naive or local datetime to UTC"""
+    if dt.tzinfo is None:
+        # Assume it's in the configured timezone
+        dt = dt.replace(tzinfo=ZoneInfo(TIMEZONE))
+    return dt.astimezone(ZoneInfo("UTC"))
+
+
+def utc_to_local(dt):
+    """Convert a UTC datetime to the configured timezone"""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt.astimezone(ZoneInfo(TIMEZONE))
 
 
 # ============================================================================

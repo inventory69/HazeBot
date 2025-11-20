@@ -336,7 +336,7 @@ def token_required(f):
                 "discord_id": request.discord_id,
                 "role": request.user_role,
                 "permissions": request.user_permissions,
-                "last_seen": datetime.now().isoformat(),
+                "last_seen": Config.get_utc_now().isoformat(),
                 "ip": real_ip,
                 "user_agent": request.headers.get("User-Agent", "Unknown"),
                 "endpoint": request.endpoint or "unknown",
@@ -1919,7 +1919,7 @@ def post_game_request():
             title="🎮 Game Request",
             description=f"{requester.mention} wants to play **{game_name}** with {target.mention}!",
             color=discord.Color.green(),
-            timestamp=datetime.utcnow(),
+            timestamp=Config.get_utc_now(),
         )
 
         if message_text:
@@ -1931,11 +1931,9 @@ def post_game_request():
         # Send message with buttons using persistent GameRequestView from GamingHub cog
         async def send_request():
             # Import the persistent view from GamingHub cog
-            from datetime import datetime
-
             from Cogs.GamingHub import GameRequestView
 
-            view = GameRequestView(int(discord_id), int(target_user_id), game_name, datetime.now().timestamp())
+            view = GameRequestView(int(discord_id), int(target_user_id), game_name, Config.get_local_now().timestamp())
             msg = await channel.send(content=f"🎮 {target.mention}", embed=embed, view=view)
 
             # Save to persistent storage
