@@ -757,6 +757,23 @@ def refresh_token():
         return jsonify({"error": "Token refresh failed"}), 500
 
 
+@app.route("/api/auth/logout", methods=["POST"])
+@token_required
+def logout():
+    """Logout user and remove their active session"""
+    try:
+        # Remove session from active_sessions
+        session_id = request.session_id
+        if session_id in active_sessions:
+            del active_sessions[session_id]
+            logger.info(f"🚪 User logged out: {request.username} (Session: {session_id[:8]}...)")
+        
+        return jsonify({"message": "Logged out successfully"}), 200
+    except Exception as e:
+        logger.error(f"❌ Logout failed: {e}")
+        return jsonify({"error": "Logout failed"}), 500
+
+
 @app.route("/api/admin/active-sessions", methods=["GET"])
 @token_required
 @require_permission("all")
