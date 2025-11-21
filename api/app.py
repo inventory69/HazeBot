@@ -2258,6 +2258,12 @@ def get_logs():
         # Limit final results
         parsed_logs = parsed_logs[-limit:]
 
+        # Get available cogs from bot instance
+        available_cogs = []
+        bot = app.config.get("bot_instance")
+        if bot:
+            available_cogs = sorted([cog for cog in bot.cogs.keys()])
+
         return jsonify(
             {
                 "total": len(parsed_logs),
@@ -2268,6 +2274,7 @@ def get_logs():
                     "search": search,
                 },
                 "logs": parsed_logs,
+                "available_cogs": available_cogs,
             }
         )
 
