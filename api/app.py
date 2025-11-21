@@ -104,14 +104,14 @@ def update_app_usage(discord_id):
     """Update last seen timestamp for a user"""
     if discord_id and discord_id not in ["legacy_user", "unknown"]:
         app_usage = load_app_usage()
-        app_usage[discord_id] = datetime.utcnow().isoformat()
+        app_usage[discord_id] = Config.get_utc_now().isoformat()
         save_app_usage(app_usage)
 
 
 def get_active_app_users():
     """Get list of discord IDs who have used the app within the expiry period"""
     app_usage = load_app_usage()
-    current_time = datetime.utcnow()
+    current_time = Config.get_utc_now()
     active_users = set()
 
     for discord_id, last_seen_str in list(app_usage.items()):
@@ -223,7 +223,7 @@ def log_user_activity(username, discord_id, action, endpoint, details=None):
 
     # Aggressive deduplication: check if similar entry exists in last 5 minutes
     # This prevents the same action from appearing multiple times
-    now = datetime.utcnow()
+    now = Config.get_utc_now()
     cutoff_time = now - timedelta(minutes=5)
 
     for entry in reversed(recent_activity[-20:]):  # Check last 20 entries
@@ -294,7 +294,7 @@ def token_required(f):
             exp_timestamp = data.get("exp")
             if exp_timestamp:
                 exp_date = datetime.utcfromtimestamp(exp_timestamp)
-                time_until_expiry = exp_date - datetime.utcnow()
+                time_until_expiry = exp_date - Config.get_utc_now().replace(tzinfo=None)
                 if time_until_expiry.total_seconds() < 0:
                     logger.warning(f"❌ Token expired | User: {data.get('user')} | Expired: {exp_date}")
                     return jsonify({"error": "Token expired"}), 401
@@ -450,7 +450,7 @@ def login():
             {
                 "user": username,
                 "discord_id": "legacy_user",
-                "exp": datetime.utcnow() + timedelta(days=7),  # 7 days instead of 24 hours
+                "exp": Config.get_utc_now().replace(tzinfo=None) + timedelta(days=7),  # 7 days instead of 24 hours
                 "role": "admin",
                 "permissions": ["all"],
                 "auth_type": "legacy",
@@ -637,7 +637,7 @@ def discord_callback():
         {
             "user": user_data["username"],
             "discord_id": user_data["id"],
-            "exp": datetime.utcnow() + timedelta(days=7),  # 7 days instead of 24 hours
+            "exp": Config.get_utc_now().replace(tzinfo=None) + timedelta(days=7),  # 7 days instead of 24 hours
             "role": role,
             "role_name": role_name,
             "permissions": permissions,
@@ -725,7 +725,7 @@ def refresh_token():
         token_payload = {
             "user": request.username,
             "discord_id": request.discord_id,
-            "exp": datetime.utcnow() + timedelta(days=7),  # 7 days
+            "exp": Config.get_utc_now().replace(tzinfo=None) + timedelta(days=7),  # 7 days
             "role": request.user_role,
             "permissions": request.user_permissions,
             "auth_type": "refreshed",
@@ -763,7 +763,7 @@ def refresh_token():
 def get_active_sessions():
     """Get all active API sessions + recent activity (Admin/Mod only)"""
     # Clean up old sessions (older than 30 minutes - increased from 5 min)
-    current_time = datetime.now()
+    current_time = Config.get_utc_now()
     expired_sessions = []
 
     for session_id, session_data in list(active_sessions.items()):
