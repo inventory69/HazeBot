@@ -122,10 +122,12 @@ COG_LOG_LEVELS = {
 
 # Cog prefixes for logging (emoji + label)
 COG_PREFIXES = {
+    "APIServer": "🌐 [APIServer]",
     "CogManager": "🔧 [CogManager]",
     "Changelog": "📝 [Changelog]",
     "DailyMeme": "🎭 [DailyMeme]",
     "DiscordLogging": "📡 [DiscordLogging]",
+    "GamingHub": "🎮 [GamingHub]",
     "Leaderboard": "🏆 [Leaderboard]",
     "MemeGenerator": "🎨 [MemeGenerator]",
     "ModPerks": "🛡️ [ModPerks]",

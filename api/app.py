@@ -3937,11 +3937,392 @@ def get_meme_reactions(message_id):
         logger.error(f"Error fetching reactions: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch reactions: {str(e)}"}), 500
 
-    except Exception as e:
-        import traceback
+# ===== COG MANAGEMENT ENDPOINTS =====
 
-        logger.error(f"Error fetching meme reactions: {e}\n{traceback.format_exc()}")
-        return jsonify({"error": f"Failed to fetch reactions: {str(e)}"}), 500
+@app.route("/api/cogs", methods=["GET"])
+@token_required
+@require_permission("all")
+@log_config_action("cogs_list")
+def get_cogs():
+    """Get list of all cogs with their status"""
+    try:
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get cog manager instance
+        cog_manager = bot.get_cog("CogManager")
+        if not cog_manager:
+            return jsonify({"error": "CogManager not available"}), 503
+
+        # Get all cog files and their class names
+        all_cogs = cog_manager.get_all_cog_files()
+
+        # Get loaded cogs
+        loaded_cogs = list(bot.cogs.keys())
+
+        # Get disabled cogs
+        disabled_cogs = cog_manager.get_disabled_cogs()
+
+        # Build response
+        cogs_list = []
+        for file_name, class_name in all_cogs.items():
+            status = "loaded" if class_name in loaded_cogs else "unloaded"
+            if file_name in disabled_cogs:
+                status = "disabled"
+
+            cogs_list.append({
+                "name": class_name,
+                "file_name": file_name,
+                "status": status,
+                "can_load": status in ["unloaded", "disabled"],
+                "can_unload": status == "loaded" and class_name != "CogManager",
+                "can_reload": status == "loaded" and class_name != "CogManager",
+                "can_view_logs": status == "loaded"
+            })
+
+        return jsonify({
+            "success": True,
+            "cogs": cogs_list,
+            "total": len(cogs_list),
+            "loaded_count": len([c for c in cogs_list if c["status"] == "loaded"]),
+            "disabled_count": len([c for c in cogs_list if c["status"] == "disabled"])
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting cogs list: {e}")
+        return jsonify({"error": f"Failed to get cogs list: {str(e)}"}), 500
+
+
+@app.route("/api/cogs/<cog_name>/load", methods=["POST"])
+@token_required
+@require_permission("all")
+def load_cog(cog_name):
+    """Load a cog"""
+    try:
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get cog manager instance
+        cog_manager = bot.get_cog("CogManager")
+        if not cog_manager:
+            return jsonify({"error": "CogManager not available"}), 503
+
+        # Find the file name for this cog
+        all_cogs = cog_manager.get_all_cog_files()
+        file_name = None
+
+        # Try to match by class name first, then by file name
+        for fname, cname in all_cogs.items():
+            if cname == cog_name or fname == cog_name:
+                file_name = fname
+                break
+
+        if not file_name:
+            return jsonify({"error": f"Cog '{cog_name}' not found"}), 404
+
+        # Check if already loaded
+        loaded_cogs = list(bot.cogs.keys())
+        class_name = all_cogs.get(file_name, file_name)
+        if class_name in loaded_cogs:
+            return jsonify({"error": f"Cog '{cog_name}' is already loaded"}), 400
+
+        # Load the cog
+        import asyncio
+        success, message = asyncio.run_coroutine_threadsafe(
+            cog_manager.load_cog_api(file_name), bot.loop
+        ).result(timeout=10)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": message,
+                "cog": {
+                    "name": class_name,
+                    "file_name": file_name,
+                    "status": "loaded"
+                }
+            })
+        else:
+            return jsonify({"error": message}), 500
+
+    except Exception as e:
+        logger.error(f"Error loading cog {cog_name}: {e}")
+        return jsonify({"error": f"Failed to load cog: {str(e)}"}), 500
+
+
+@app.route("/api/cogs/<cog_name>/unload", methods=["POST"])
+@token_required
+@require_permission("all")
+def unload_cog(cog_name):
+    """Unload a cog"""
+    try:
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get cog manager instance
+        cog_manager = bot.get_cog("CogManager")
+        if not cog_manager:
+            return jsonify({"error": "CogManager not available"}), 503
+
+        # Check if trying to unload CogManager
+        if cog_name.lower() == "cogmanager":
+            return jsonify({"error": "Cannot unload CogManager"}), 400
+
+        # Find the file name for this cog
+        all_cogs = cog_manager.get_all_cog_files()
+        file_name = None
+        class_name = cog_name
+
+        # Try to match by class name first, then by file name
+        for fname, cname in all_cogs.items():
+            if cname == cog_name or fname == cog_name:
+                file_name = fname
+                class_name = cname
+                break
+
+        if not file_name:
+            return jsonify({"error": f"Cog '{cog_name}' not found"}), 404
+
+        # Check if loaded
+        loaded_cogs = list(bot.cogs.keys())
+        if class_name not in loaded_cogs:
+            return jsonify({"error": f"Cog '{cog_name}' is not loaded"}), 400
+
+        # Unload the cog
+        import asyncio
+        success, message = asyncio.run_coroutine_threadsafe(
+            cog_manager.unload_cog_api(class_name), bot.loop
+        ).result(timeout=10)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": message,
+                "cog": {
+                    "name": class_name,
+                    "file_name": file_name,
+                    "status": "unloaded"
+                }
+            })
+        else:
+            return jsonify({"error": message}), 500
+
+    except Exception as e:
+        logger.error(f"Error unloading cog {cog_name}: {e}")
+        return jsonify({"error": f"Failed to unload cog: {str(e)}"}), 500
+
+
+@app.route("/api/cogs/<cog_name>/reload", methods=["POST"])
+@token_required
+@require_permission("all")
+def reload_cog(cog_name):
+    """Reload a cog"""
+    try:
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get cog manager instance
+        cog_manager = bot.get_cog("CogManager")
+        if not cog_manager:
+            return jsonify({"error": "CogManager not available"}), 503
+
+        # Check if trying to reload CogManager
+        if cog_name.lower() == "cogmanager":
+            return jsonify({"error": "Cannot reload CogManager"}), 400
+
+        # Find the file name for this cog
+        all_cogs = cog_manager.get_all_cog_files()
+        file_name = None
+        class_name = cog_name
+
+        # Try to match by class name first, then by file name
+        for fname, cname in all_cogs.items():
+            if cname == cog_name or fname == cog_name:
+                file_name = fname
+                class_name = cname
+                break
+
+        if not file_name:
+            return jsonify({"error": f"Cog '{cog_name}' not found"}), 404
+
+        # Check if loaded
+        loaded_cogs = list(bot.cogs.keys())
+        if class_name not in loaded_cogs:
+            return jsonify({"error": f"Cog '{cog_name}' is not loaded"}), 400
+
+        # Reload the cog using the API method
+        import asyncio
+
+        # Longer timeout for APIServer and other slow-loading cogs
+        timeout = 35 if class_name == "APIServer" else 15
+        
+        try:
+            success, message = asyncio.run_coroutine_threadsafe(
+                cog_manager.reload_cog_api(class_name), bot.loop
+            ).result(timeout=timeout)
+
+            if success:
+                return jsonify({
+                    "success": True,
+                    "message": message,
+                    "cog": {
+                        "name": class_name,
+                        "file_name": file_name,
+                        "status": "loaded"
+                    }
+                })
+            else:
+                return jsonify({"error": message}), 500
+        
+        except asyncio.TimeoutError:
+            # For APIServer, timeout might occur during reload (expected)
+            # Wait a bit more and check if it's actually loaded
+            if class_name == "APIServer":
+                import time
+                time.sleep(3)
+                # Check if APIServer is now loaded
+                if "APIServer" in bot.cogs:
+                    return jsonify({
+                        "success": True,
+                        "message": f"Cog '{class_name}' reloaded successfully (delayed)",
+                        "cog": {
+                            "name": class_name,
+                            "file_name": file_name,
+                            "status": "loaded"
+                        }
+                    })
+            raise
+
+    except Exception as e:
+        # Don't log expected errors for APIServer reload
+        if not (class_name == "APIServer" and ("timeout" in str(e).lower() or "file descriptor" in str(e).lower())):
+            logger.error(f"Error reloading cog {cog_name}: {e}")
+        return jsonify({"error": f"Failed to reload cog: {str(e)}"}), 500
+
+
+@app.route("/api/cogs/<cog_name>/logs", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_cog_logs(cog_name):
+    """Get logs for a specific cog"""
+    try:
+        # Get bot instance
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get cog manager instance
+        cog_manager = bot.get_cog("CogManager")
+        if not cog_manager:
+            return jsonify({"error": "CogManager not available"}), 503
+
+        # Find the actual cog name
+        all_cogs = cog_manager.get_all_cog_files()
+        actual_cog_name = cog_name
+
+        # Try to match by class name first, then by file name
+        for fname, cname in all_cogs.items():
+            if cname == cog_name or fname == cog_name:
+                actual_cog_name = cname
+                break
+
+        # Get logs using the cog manager's method
+        import asyncio
+
+        # Create a mock context for the log retrieval
+        class MockContext:
+            pass
+
+        mock_ctx = MockContext()
+
+        # Get the logs by calling the internal method
+        try:
+            # We'll extract the log reading logic from _show_cog_logs
+            import os
+
+            # Read log file - use absolute path
+            log_file = os.path.join(os.getcwd(), "Logs", "HazeBot.log")
+
+            if not os.path.exists(log_file):
+                # Try alternative paths
+                alternative_paths = [
+                    "Logs/HazeBot.log",
+                    os.path.join(os.path.dirname(os.path.dirname(__file__)), "Logs", "HazeBot.log"),
+                    "/home/liq/gitProjects/HazeBot/Logs/HazeBot.log",
+                ]
+
+                for alt_path in alternative_paths:
+                    if os.path.exists(alt_path):
+                        log_file = alt_path
+                        break
+                else:
+                    return jsonify({"error": "Log file not found"}), 404
+
+            # Read last 1000 lines
+            with open(log_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+                lines = lines[-1000:]
+
+            # Filter logs for this cog
+            cog_filter = actual_cog_name.lower()
+            filtered_logs = [line for line in lines if cog_filter in line.lower()]
+
+            # Format logs for API response
+            logs = []
+            for log_line in filtered_logs[-50:]:  # Last 50 entries
+                parts = log_line.strip().split(None, 3)
+                if len(parts) >= 4:
+                    timestamp = parts[0]
+                    time = parts[1]
+                    level = parts[2]
+                    message = parts[3] if len(parts) > 3 else ""
+
+                    # Censor sensitive data
+                    message = cog_manager._censor_sensitive_data(message)
+
+                    logs.append({
+                        "timestamp": timestamp,
+                        "time": time,
+                        "level": level,
+                        "message": message
+                    })
+
+            # Count log levels
+            info_count = sum(1 for log in logs if log["level"] == "INFO")
+            warning_count = sum(1 for log in logs if log["level"] == "WARNING")
+            error_count = sum(1 for log in logs if log["level"] == "ERROR")
+            debug_count = sum(1 for log in logs if log["level"] == "DEBUG")
+
+            return jsonify({
+                "success": True,
+                "cog_name": actual_cog_name,
+                "logs": logs,
+                "total_entries": len(filtered_logs),
+                "returned_entries": len(logs),
+                "statistics": {
+                    "info": info_count,
+                    "warning": warning_count,
+                    "error": error_count,
+                    "debug": debug_count
+                },
+                "log_file": log_file
+            })
+
+        except Exception as e:
+            logger.error(f"Error reading logs for {cog_name}: {e}")
+            return jsonify({"error": f"Failed to read logs: {str(e)}"}), 500
+
+    except Exception as e:
+        logger.error(f"Error getting cog logs for {cog_name}: {e}")
+        return jsonify({"error": f"Failed to get cog logs: {str(e)}"}), 500
 
 
 if __name__ == "__main__":

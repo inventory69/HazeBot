@@ -77,7 +77,15 @@ class HazeWorldBot(commands.Bot):
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
 
-        # Load CogManager first
+        # Load APIServer first (so API is available for other cogs)
+        try:
+            await self.load_extension("Cogs.APIServer")
+            loaded_cogs.append("APIServer")
+            Logger.info("   └─ ✅ Loaded: APIServer")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load APIServer: {e}")
+
+        # Load CogManager second
         try:
             await self.load_extension("Cogs.CogManager")
             loaded_cogs.append("CogManager")
@@ -86,7 +94,7 @@ class HazeWorldBot(commands.Bot):
             Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
             return
 
-        # Load DiscordLogging second
+        # Load DiscordLogging third
         try:
             await self.load_extension("Cogs.DiscordLogging")
             loaded_cogs.append("DiscordLogging")
@@ -100,7 +108,7 @@ class HazeWorldBot(commands.Bot):
 
         # Load other cogs
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_") or cog.stem in ["CogManager", "DiscordLogging"]:
+            if cog.name.startswith("_") or cog.stem in ["APIServer", "CogManager", "DiscordLogging"]:
                 continue
             if cog.stem in disabled_cogs:
                 Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")
@@ -270,44 +278,13 @@ class HazeWorldBot(commands.Bot):
         Logger.info(f"🗑️ Message deleted by {message.author} in {message.channel}: '{message.content}'")
 
 
-def start_api(bot):
-    """Start the Flask API server with Waitress (production-ready WSGI server)"""
-    Logger.info("🌐 Starting API server with Waitress...")
-
-    # Import API app
-    sys.path.insert(0, str(Path(__file__).parent / "api"))
-    from api.app import app, set_bot_instance
-
-    # Set bot instance for API to use
-    set_bot_instance(bot)
-
-    # Get port from environment
-    port = int(os.getenv("API_PORT", 5070))
-
-    Logger.info(f"🌐 API server starting on port {port} (Waitress WSGI)")
-
-    # Use Waitress (production-ready, thread-safe WSGI server)
-    from waitress import serve
-
-    serve(app, host="0.0.0.0", port=port, threads=8)
-
-
 def main():
     """Main entry point"""
     # Create bot instance
     bot = HazeWorldBot()
 
-    # Start API in separate thread
-    api_thread = threading.Thread(target=start_api, args=(bot,), daemon=True)
-    api_thread.start()
-
-    Logger.info("⏳ Waiting for API to start...")
-    import time
-
-    time.sleep(2)  # Give API time to start
-
-    # Start bot
-    Logger.info("🤖 Starting Discord bot...")
+    # API will be started by the APIServer cog
+    Logger.info("🤖 Starting Discord bot (API will start via APIServer cog)...")
     bot.run(Token)
 
 
