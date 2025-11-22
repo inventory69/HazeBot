@@ -19,6 +19,8 @@ class PreferencesSystem(commands.Cog):
     Modular and persistent with JSON.
     """
 
+    __cog_name__ = "Preferences"
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 

@@ -405,6 +405,8 @@ class ModPanel(commands.Cog):
     📦 Mod Panel Cog: Quick moderation actions for Slot Keepers and Admins.
     """
 
+    __cog_name__ = "ModPerks"
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 

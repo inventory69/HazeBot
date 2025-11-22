@@ -3956,6 +3956,316 @@ def get_cogs():
         if not cog_manager:
             return jsonify({"error": "CogManager not available"}), 503
 
+        # Cog descriptions and metadata
+        cog_metadata = {
+            "APIServer": {
+                "description": "Manages the Flask REST API server for the admin panel",
+                "icon": "api",
+                "category": "core",
+                "features": [
+                    "Waitress WSGI Server",
+                    "JWT Token Auth",
+                    "CORS Support",
+                    "Hot Reload via Cog System",
+                    "Port Binding Retry (8×3s)",
+                    "Graceful Shutdown",
+                    "/apistatus Command",
+                    "/apirestart Command"
+                ]
+            },
+            "CogManager": {
+                "description": "Dynamic cog loading, unloading, and reloading system",
+                "icon": "settings",
+                "category": "core",
+                "features": [
+                    "/load Command",
+                    "/unload Command",
+                    "/reload Command",
+                    "/listcogs Command",
+                    "/logs <cog> Command",
+                    "Interactive Dropdown Selection",
+                    "Disabled Cogs State File",
+                    "Log Censoring (URLs/Secrets)"
+                ]
+            },
+            "Changelog": {
+                "description": "Manages changelog notifications and version updates",
+                "icon": "update",
+                "category": "notifications",
+                "features": [
+                    "/changelog Command",
+                    "GPT-4.1-nano Title Generation",
+                    "Discord Markdown Formatting",
+                    "Changelog Role Ping",
+                    "Opt-in Button",
+                    "Persistent Views",
+                    "/update_changelog_view Command"
+                ]
+            },
+            "DailyMeme": {
+                "description": "Automated daily meme posting from Reddit and Lemmy",
+                "icon": "image",
+                "category": "content",
+                "features": [
+                    "Reddit Top Posts",
+                    "Lemmy Community Support",
+                    "Daily Scheduled Post (10 AM)",
+                    "/testmeme Command",
+                    "/memesubreddits Management",
+                    "/lemmycommunities Management",
+                    "/memesources Enable/Disable",
+                    "/dailyconfig Command"
+                ]
+            },
+            "DiscordLogging": {
+                "description": "Logs bot events and errors to a Discord channel",
+                "icon": "analytics",
+                "category": "monitoring",
+                "features": [
+                    "INFO/WARNING/ERROR Levels",
+                    "Cog Color-coded Embeds",
+                    "Emoji Prefixes per Cog",
+                    "/togglediscordlogs Command",
+                    "/testdiscordlog Command",
+                    "Auto-disable on Errors",
+                    "Rate Limiting (1 msg/2s)"
+                ]
+            },
+            "GamingHub": {
+                "description": "Community gaming features with presence tracking",
+                "icon": "sports_esports",
+                "category": "community",
+                "features": [
+                    "Online/Idle/DND/Offline Status",
+                    "Current Game Detection",
+                    "Game Request Posts",
+                    "Accept/Decline/Maybe Buttons",
+                    "DM Notifications to Requester",
+                    "Auto-fill Current Game",
+                    "Member Filter (All/Online/Playing)",
+                    "Persistent Views Restore"
+                ]
+            },
+            "Leaderboard": {
+                "description": "Server activity leaderboard and statistics",
+                "icon": "leaderboard",
+                "category": "community",
+                "features": [
+                    "/leaderboard Command",
+                    "Message Count Tracking",
+                    "Image Share Tracking",
+                    "Meme Requests Count",
+                    "Memes Generated Count",
+                    "Resolved Tickets Count",
+                    "Rocket League Rank Display",
+                    "Interactive Dropdown"
+                ]
+            },
+            "MemeGenerator": {
+                "description": "Create custom memes with Imgflip templates",
+                "icon": "create",
+                "category": "content",
+                "features": [
+                    "/creatememe Command",
+                    "100+ Imgflip Templates",
+                    "Interactive Template Selector",
+                    "Dynamic Text Input Modal",
+                    "1-5 Text Boxes per Template",
+                    "Imgflip API Integration",
+                    "Author Tracking in Embed",
+                    "/refreshtemplates Command"
+                ]
+            },
+            "ModPerks": {
+                "description": "Moderator utilities and management tools",
+                "icon": "shield",
+                "category": "moderation",
+                "features": [
+                    "/mod Command",
+                    "/modpanel Interactive View",
+                    "/modoverview Stats Display",
+                    "/moddetails Member Stats",
+                    "/optins Management",
+                    "Permission-based Access",
+                    "Admin/Mod Role Checks"
+                ]
+            },
+            "Preferences": {
+                "description": "User preference management for notifications",
+                "icon": "tune",
+                "category": "user",
+                "features": [
+                    "/preferences Command",
+                    "Changelog Role Toggle",
+                    "Daily Meme Role Toggle",
+                    "Interactive Buttons",
+                    "Role Add/Remove",
+                    "JSON Preference Storage",
+                    "Persistent State"
+                ]
+            },
+            "Presence": {
+                "description": "Bot status and activity rotation system",
+                "icon": "visibility",
+                "category": "core",
+                "features": [
+                    "Playing Activity",
+                    "Watching Activity",
+                    "Listening Activity",
+                    "Custom Status Messages",
+                    "Server Count Display",
+                    "Member Count Display",
+                    "Hourly Rotation (3600s)"
+                ]
+            },
+            "Profile": {
+                "description": "User profile viewing and statistics",
+                "icon": "person",
+                "category": "user",
+                "features": [
+                    "/profile Command",
+                    "Discord Join Date",
+                    "Server Join Date",
+                    "Role List",
+                    "Rocket League Ranks",
+                    "Activity Stats",
+                    "Avatar Thumbnail"
+                ]
+            },
+            "RocketLeague": {
+                "description": "Rocket League rank tracking with automatic updates",
+                "icon": "rocket_launch",
+                "category": "gaming",
+                "features": [
+                    "/rocket Hub Command",
+                    "/setrlaccount (Epic/Steam)",
+                    "/rlstats View Stats",
+                    "/unlinkrlaccount Command",
+                    "1v1/2v2/3v3/4v4 Support",
+                    "Division Tracking (I-IV)",
+                    "Auto Rank Check (3h)",
+                    "Promotion Embeds + Congrats",
+                    "FlareSolverr Cloudflare Bypass",
+                    "/restorecongratsview Admin"
+                ]
+            },
+            "RoleInfo": {
+                "description": "Server role information and descriptions",
+                "icon": "badge",
+                "category": "info",
+                "features": [
+                    "/roleinfo Command",
+                    "Role Descriptions",
+                    "Permission List",
+                    "Member Count",
+                    "Role Color Display",
+                    "Role ID Display",
+                    "Formatted Embed"
+                ]
+            },
+            "ServerGuide": {
+                "description": "Interactive server guide with quick access buttons",
+                "icon": "menu_book",
+                "category": "info",
+                "features": [
+                    "/server-guide Command",
+                    "Help Button",
+                    "Ticket Button",
+                    "Profile Button",
+                    "Rocket League Hub",
+                    "Warframe Hub",
+                    "Preferences Button",
+                    "Interactive Embeds"
+                ]
+            },
+            "SupportButtons": {
+                "description": "Persistent support buttons for common actions",
+                "icon": "support_agent",
+                "category": "support",
+                "features": [
+                    "/create-button Command",
+                    "Ticket Buttons",
+                    "Slash Command Buttons",
+                    "Prefix Command Buttons",
+                    "Custom Labels/Emojis",
+                    "Persistent Views",
+                    "JSON Persistence"
+                ]
+            },
+            "TicketSystem": {
+                "description": "Support ticket system with transcripts",
+                "icon": "confirmation_number",
+                "category": "support",
+                "features": [
+                    "/ticket Command",
+                    "Support Categories",
+                    "Claim/Close/Reopen",
+                    "Add/Remove Users",
+                    "Transcript Generation",
+                    "Email Transcripts",
+                    "Numbered Tickets",
+                    "JSON Persistence"
+                ]
+            },
+            "TodoList": {
+                "description": "Server-wide todo list management",
+                "icon": "checklist",
+                "category": "productivity",
+                "features": [
+                    "/todo-update Command",
+                    "Interactive View",
+                    "Add/Complete/Delete",
+                    "Priority Levels",
+                    "Persistent Storage",
+                    "Formatted Display",
+                    "JSON Persistence"
+                ]
+            },
+            "Utility": {
+                "description": "General utility commands and helper functions",
+                "icon": "build",
+                "category": "utility",
+                "features": [
+                    "/help Command",
+                    "/status Command",
+                    "/clear Command",
+                    "/say Command",
+                    "/sync Command",
+                    "Embed Utils",
+                    "Admin Tools"
+                ]
+            },
+            "Warframe": {
+                "description": "Warframe market integration and game status",
+                "icon": "videogame_asset",
+                "category": "gaming",
+                "features": [
+                    "/warframe Hub",
+                    "Game Status",
+                    "Market Search",
+                    "Invasions Display",
+                    "Sortie Info",
+                    "Price Statistics",
+                    "Top Orders",
+                    "Warframe.market API"
+                ]
+            },
+            "Welcome": {
+                "description": "Welcome system with rule acceptance and roles",
+                "icon": "waving_hand",
+                "category": "community",
+                "features": [
+                    "Interest Selection",
+                    "Rules Acceptance",
+                    "Member Role Grant",
+                    "Random Greetings",
+                    "Server Guide Link",
+                    "Persistent Views",
+                    "Event Listeners"
+                ]
+            }
+        }
+
         # Get all cog files and their class names
         all_cogs = cog_manager.get_all_cog_files()
 
@@ -3972,15 +4282,31 @@ def get_cogs():
             if file_name in disabled_cogs:
                 status = "disabled"
 
+            # Use file_name as key for metadata lookup
+            metadata = cog_metadata.get(file_name, {
+                "description": f"Discord bot module: {class_name}",
+                "icon": "extension",
+                "category": "other",
+                "features": []
+            })
+
             cogs_list.append({
                 "name": class_name,
                 "file_name": file_name,
                 "status": status,
+                "description": metadata["description"],
+                "icon": metadata["icon"],
+                "category": metadata["category"],
+                "features": metadata["features"],
                 "can_load": status in ["unloaded", "disabled"],
                 "can_unload": status == "loaded" and class_name != "CogManager",
                 "can_reload": status == "loaded" and class_name != "CogManager",
                 "can_view_logs": status == "loaded"
             })
+
+        # Sort by category, then by name
+        category_order = ["core", "community", "content", "gaming", "moderation", "support", "user", "info", "productivity", "utility", "notifications", "monitoring", "other"]
+        cogs_list.sort(key=lambda c: (category_order.index(c["category"]) if c["category"] in category_order else 999, c["name"]))
 
         return jsonify({
             "success": True,

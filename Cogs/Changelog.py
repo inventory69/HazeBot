@@ -18,6 +18,8 @@ class ChangelogCog(commands.Cog):
     📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4.1-nano.
     """
 
+    __cog_name__ = "Changelog"
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         openai.api_key = os.getenv("OPENAI_API_KEY")
