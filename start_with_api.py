@@ -4,9 +4,6 @@ Runs both the Discord bot and the Flask API in separate threads
 """
 
 import logging
-import sys
-import threading
-from pathlib import Path
 
 # Setup logging first
 logging.basicConfig(
@@ -27,7 +24,6 @@ root_logger.handlers.clear()
 # Now imports
 import asyncio
 import difflib
-import os
 import pathlib
 
 import discord
@@ -285,7 +281,17 @@ def main():
 
     # API will be started by the APIServer cog
     Logger.info("🤖 Starting Discord bot (API will start via APIServer cog)...")
-    bot.run(Token)
+
+    try:
+        bot.run(Token)
+    except KeyboardInterrupt:
+        Logger.info("🛑 Keyboard interrupt received, cleaning up...")
+    finally:
+        # Cleanup on exit - stop API server
+        api_server = bot.get_cog("APIServer")
+        if api_server:
+            Logger.info("Stopping API server...")
+            api_server.stop_api_server()
 
 
 if __name__ == "__main__":

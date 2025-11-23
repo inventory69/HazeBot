@@ -767,7 +767,7 @@ def logout():
         if session_id in active_sessions:
             del active_sessions[session_id]
             logger.info(f"🚪 User logged out: {request.username} (Session: {session_id[:8]}...)")
-        
+
         return jsonify({"message": "Logged out successfully"}), 200
     except Exception as e:
         logger.error(f"❌ Logout failed: {e}")
@@ -2895,14 +2895,16 @@ def send_meme_to_discord():
             set_pink_footer(embed, bot=bot.user)
 
             # Get requester Discord ID from token
-            requester_id = request.discord_id if hasattr(request, 'discord_id') and request.discord_id != "unknown" else None
-            
+            requester_id = (
+                request.discord_id if hasattr(request, "discord_id") and request.discord_id != "unknown" else None
+            )
+
             # Send with custom message including requester mention
             if requester_id:
                 message_text = f"🎭 Meme sent from Admin Panel by <@{requester_id}>"
             else:
                 message_text = "🎭 Meme sent from Admin Panel"
-            
+
             await channel.send(message_text, embed=embed)
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
@@ -3767,7 +3769,6 @@ def toggle_upvote_meme(message_id):
         if message_id not in upvotes:
             upvotes[message_id] = []
 
-
         # Check if user has already upvoted via Discord
         # (reuse logic from get_meme_reactions)
         has_discord_upvoted = False
@@ -3775,6 +3776,7 @@ def toggle_upvote_meme(message_id):
         if bot:
             meme_channel_id = Config.MEME_CHANNEL_ID
             if meme_channel_id:
+
                 async def fetch_discord_user_reacted():
                     channel = bot.get_channel(meme_channel_id)
                     if not channel:
@@ -3792,7 +3794,9 @@ def toggle_upvote_meme(message_id):
                         return False
                     except Exception:
                         return False
+
                 import asyncio
+
                 try:
                     has_discord_upvoted = asyncio.run_coroutine_threadsafe(
                         fetch_discord_user_reacted(), bot.loop
@@ -3801,12 +3805,14 @@ def toggle_upvote_meme(message_id):
                     pass
 
         if has_discord_upvoted:
-            return jsonify({
-                "error": "User has already upvoted via Discord. Cannot upvote again.",
-                "has_discord_upvoted": True,
-                "success": False,
-                "message_id": message_id,
-            }), 400
+            return jsonify(
+                {
+                    "error": "User has already upvoted via Discord. Cannot upvote again.",
+                    "has_discord_upvoted": True,
+                    "success": False,
+                    "message_id": message_id,
+                }
+            ), 400
 
         # Check if user has already upvoted (custom)
         user_upvotes = upvotes[message_id]
@@ -3867,7 +3873,6 @@ def get_meme_reactions(message_id):
         has_custom_upvoted = False
         if discord_id not in ["legacy_user", "unknown"]:
             has_custom_upvoted = discord_id in user_upvotes
-
 
         # Get Discord reactions count and check if user has upvoted via Discord
         discord_count = 0
@@ -3937,7 +3942,9 @@ def get_meme_reactions(message_id):
         logger.error(f"Error fetching reactions: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch reactions: {str(e)}"}), 500
 
+
 # ===== COG MANAGEMENT ENDPOINTS =====
+
 
 @app.route("/api/cogs", methods=["GET"])
 @token_required
@@ -3970,8 +3977,8 @@ def get_cogs():
                     "Port Binding Retry (8×3s)",
                     "Graceful Shutdown",
                     "/apistatus Command",
-                    "/apirestart Command"
-                ]
+                    "/apirestart Command",
+                ],
             },
             "CogManager": {
                 "description": "Dynamic cog loading, unloading, and reloading system",
@@ -3985,8 +3992,8 @@ def get_cogs():
                     "/logs <cog> Command",
                     "Interactive Dropdown Selection",
                     "Disabled Cogs State File",
-                    "Log Censoring (URLs/Secrets)"
-                ]
+                    "Log Censoring (URLs/Secrets)",
+                ],
             },
             "Changelog": {
                 "description": "Manages changelog notifications and version updates",
@@ -3999,8 +4006,8 @@ def get_cogs():
                     "Changelog Role Ping",
                     "Opt-in Button",
                     "Persistent Views",
-                    "/update_changelog_view Command"
-                ]
+                    "/update_changelog_view Command",
+                ],
             },
             "DailyMeme": {
                 "description": "Automated daily meme posting from Reddit and Lemmy",
@@ -4014,8 +4021,8 @@ def get_cogs():
                     "/memesubreddits Management",
                     "/lemmycommunities Management",
                     "/memesources Enable/Disable",
-                    "/dailyconfig Command"
-                ]
+                    "/dailyconfig Command",
+                ],
             },
             "DiscordLogging": {
                 "description": "Logs bot events and errors to a Discord channel",
@@ -4028,8 +4035,8 @@ def get_cogs():
                     "/togglediscordlogs Command",
                     "/testdiscordlog Command",
                     "Auto-disable on Errors",
-                    "Rate Limiting (1 msg/2s)"
-                ]
+                    "Rate Limiting (1 msg/2s)",
+                ],
             },
             "GamingHub": {
                 "description": "Community gaming features with presence tracking",
@@ -4043,8 +4050,8 @@ def get_cogs():
                     "DM Notifications to Requester",
                     "Auto-fill Current Game",
                     "Member Filter (All/Online/Playing)",
-                    "Persistent Views Restore"
-                ]
+                    "Persistent Views Restore",
+                ],
             },
             "Leaderboard": {
                 "description": "Server activity leaderboard and statistics",
@@ -4058,8 +4065,8 @@ def get_cogs():
                     "Memes Generated Count",
                     "Resolved Tickets Count",
                     "Rocket League Rank Display",
-                    "Interactive Dropdown"
-                ]
+                    "Interactive Dropdown",
+                ],
             },
             "MemeGenerator": {
                 "description": "Create custom memes with Imgflip templates",
@@ -4073,8 +4080,8 @@ def get_cogs():
                     "1-5 Text Boxes per Template",
                     "Imgflip API Integration",
                     "Author Tracking in Embed",
-                    "/refreshtemplates Command"
-                ]
+                    "/refreshtemplates Command",
+                ],
             },
             "ModPerks": {
                 "description": "Moderator utilities and management tools",
@@ -4087,8 +4094,8 @@ def get_cogs():
                     "/moddetails Member Stats",
                     "/optins Management",
                     "Permission-based Access",
-                    "Admin/Mod Role Checks"
-                ]
+                    "Admin/Mod Role Checks",
+                ],
             },
             "Preferences": {
                 "description": "User preference management for notifications",
@@ -4101,8 +4108,8 @@ def get_cogs():
                     "Interactive Buttons",
                     "Role Add/Remove",
                     "JSON Preference Storage",
-                    "Persistent State"
-                ]
+                    "Persistent State",
+                ],
             },
             "Presence": {
                 "description": "Bot status and activity rotation system",
@@ -4115,8 +4122,8 @@ def get_cogs():
                     "Custom Status Messages",
                     "Server Count Display",
                     "Member Count Display",
-                    "Hourly Rotation (3600s)"
-                ]
+                    "Hourly Rotation (3600s)",
+                ],
             },
             "Profile": {
                 "description": "User profile viewing and statistics",
@@ -4129,8 +4136,8 @@ def get_cogs():
                     "Role List",
                     "Rocket League Ranks",
                     "Activity Stats",
-                    "Avatar Thumbnail"
-                ]
+                    "Avatar Thumbnail",
+                ],
             },
             "RocketLeague": {
                 "description": "Rocket League rank tracking with automatic updates",
@@ -4146,8 +4153,8 @@ def get_cogs():
                     "Auto Rank Check (3h)",
                     "Promotion Embeds + Congrats",
                     "FlareSolverr Cloudflare Bypass",
-                    "/restorecongratsview Admin"
-                ]
+                    "/restorecongratsview Admin",
+                ],
             },
             "RoleInfo": {
                 "description": "Server role information and descriptions",
@@ -4160,8 +4167,8 @@ def get_cogs():
                     "Member Count",
                     "Role Color Display",
                     "Role ID Display",
-                    "Formatted Embed"
-                ]
+                    "Formatted Embed",
+                ],
             },
             "ServerGuide": {
                 "description": "Interactive server guide with quick access buttons",
@@ -4175,8 +4182,8 @@ def get_cogs():
                     "Rocket League Hub",
                     "Warframe Hub",
                     "Preferences Button",
-                    "Interactive Embeds"
-                ]
+                    "Interactive Embeds",
+                ],
             },
             "SupportButtons": {
                 "description": "Persistent support buttons for common actions",
@@ -4189,8 +4196,8 @@ def get_cogs():
                     "Prefix Command Buttons",
                     "Custom Labels/Emojis",
                     "Persistent Views",
-                    "JSON Persistence"
-                ]
+                    "JSON Persistence",
+                ],
             },
             "TicketSystem": {
                 "description": "Support ticket system with transcripts",
@@ -4204,8 +4211,8 @@ def get_cogs():
                     "Transcript Generation",
                     "Email Transcripts",
                     "Numbered Tickets",
-                    "JSON Persistence"
-                ]
+                    "JSON Persistence",
+                ],
             },
             "TodoList": {
                 "description": "Server-wide todo list management",
@@ -4218,8 +4225,8 @@ def get_cogs():
                     "Priority Levels",
                     "Persistent Storage",
                     "Formatted Display",
-                    "JSON Persistence"
-                ]
+                    "JSON Persistence",
+                ],
             },
             "Utility": {
                 "description": "General utility commands and helper functions",
@@ -4232,8 +4239,8 @@ def get_cogs():
                     "/say Command",
                     "/sync Command",
                     "Embed Utils",
-                    "Admin Tools"
-                ]
+                    "Admin Tools",
+                ],
             },
             "Warframe": {
                 "description": "Warframe market integration and game status",
@@ -4247,8 +4254,8 @@ def get_cogs():
                     "Sortie Info",
                     "Price Statistics",
                     "Top Orders",
-                    "Warframe.market API"
-                ]
+                    "Warframe.market API",
+                ],
             },
             "Welcome": {
                 "description": "Welcome system with rule acceptance and roles",
@@ -4261,9 +4268,9 @@ def get_cogs():
                     "Random Greetings",
                     "Server Guide Link",
                     "Persistent Views",
-                    "Event Listeners"
-                ]
-            }
+                    "Event Listeners",
+                ],
+            },
         }
 
         # Get all cog files and their class names
@@ -4283,38 +4290,61 @@ def get_cogs():
                 status = "disabled"
 
             # Use file_name as key for metadata lookup
-            metadata = cog_metadata.get(file_name, {
-                "description": f"Discord bot module: {class_name}",
-                "icon": "extension",
-                "category": "other",
-                "features": []
-            })
+            metadata = cog_metadata.get(
+                file_name,
+                {
+                    "description": f"Discord bot module: {class_name}",
+                    "icon": "extension",
+                    "category": "other",
+                    "features": [],
+                },
+            )
 
-            cogs_list.append({
-                "name": class_name,
-                "file_name": file_name,
-                "status": status,
-                "description": metadata["description"],
-                "icon": metadata["icon"],
-                "category": metadata["category"],
-                "features": metadata["features"],
-                "can_load": status in ["unloaded", "disabled"],
-                "can_unload": status == "loaded" and class_name != "CogManager",
-                "can_reload": status == "loaded" and class_name != "CogManager",
-                "can_view_logs": status == "loaded"
-            })
+            cogs_list.append(
+                {
+                    "name": class_name,
+                    "file_name": file_name,
+                    "status": status,
+                    "description": metadata["description"],
+                    "icon": metadata["icon"],
+                    "category": metadata["category"],
+                    "features": metadata["features"],
+                    "can_load": status in ["unloaded", "disabled"],
+                    "can_unload": status == "loaded" and class_name != "CogManager",
+                    "can_reload": status == "loaded" and class_name != "CogManager",
+                    "can_view_logs": status == "loaded",
+                }
+            )
 
         # Sort by category, then by name
-        category_order = ["core", "community", "content", "gaming", "moderation", "support", "user", "info", "productivity", "utility", "notifications", "monitoring", "other"]
-        cogs_list.sort(key=lambda c: (category_order.index(c["category"]) if c["category"] in category_order else 999, c["name"]))
+        category_order = [
+            "core",
+            "community",
+            "content",
+            "gaming",
+            "moderation",
+            "support",
+            "user",
+            "info",
+            "productivity",
+            "utility",
+            "notifications",
+            "monitoring",
+            "other",
+        ]
+        cogs_list.sort(
+            key=lambda c: (category_order.index(c["category"]) if c["category"] in category_order else 999, c["name"])
+        )
 
-        return jsonify({
-            "success": True,
-            "cogs": cogs_list,
-            "total": len(cogs_list),
-            "loaded_count": len([c for c in cogs_list if c["status"] == "loaded"]),
-            "disabled_count": len([c for c in cogs_list if c["status"] == "disabled"])
-        })
+        return jsonify(
+            {
+                "success": True,
+                "cogs": cogs_list,
+                "total": len(cogs_list),
+                "loaded_count": len([c for c in cogs_list if c["status"] == "loaded"]),
+                "disabled_count": len([c for c in cogs_list if c["status"] == "disabled"]),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error getting cogs list: {e}")
@@ -4358,20 +4388,19 @@ def load_cog(cog_name):
 
         # Load the cog
         import asyncio
-        success, message = asyncio.run_coroutine_threadsafe(
-            cog_manager.load_cog_api(file_name), bot.loop
-        ).result(timeout=10)
+
+        success, message = asyncio.run_coroutine_threadsafe(cog_manager.load_cog_api(file_name), bot.loop).result(
+            timeout=10
+        )
 
         if success:
-            return jsonify({
-                "success": True,
-                "message": message,
-                "cog": {
-                    "name": class_name,
-                    "file_name": file_name,
-                    "status": "loaded"
+            return jsonify(
+                {
+                    "success": True,
+                    "message": message,
+                    "cog": {"name": class_name, "file_name": file_name, "status": "loaded"},
                 }
-            })
+            )
         else:
             return jsonify({"error": message}), 500
 
@@ -4396,9 +4425,13 @@ def unload_cog(cog_name):
         if not cog_manager:
             return jsonify({"error": "CogManager not available"}), 503
 
-        # Check if trying to unload CogManager
+        # Check if trying to unload critical cogs
         if cog_name.lower() == "cogmanager":
             return jsonify({"error": "Cannot unload CogManager"}), 400
+
+        # Check if trying to unload APIServer
+        if cog_name.lower() == "apiserver":
+            return jsonify({"error": "APIServer cannot be unloaded. Use reload instead."}), 403
 
         # Find the file name for this cog
         all_cogs = cog_manager.get_all_cog_files()
@@ -4422,20 +4455,19 @@ def unload_cog(cog_name):
 
         # Unload the cog
         import asyncio
-        success, message = asyncio.run_coroutine_threadsafe(
-            cog_manager.unload_cog_api(class_name), bot.loop
-        ).result(timeout=10)
+
+        success, message = asyncio.run_coroutine_threadsafe(cog_manager.unload_cog_api(class_name), bot.loop).result(
+            timeout=10
+        )
 
         if success:
-            return jsonify({
-                "success": True,
-                "message": message,
-                "cog": {
-                    "name": class_name,
-                    "file_name": file_name,
-                    "status": "unloaded"
+            return jsonify(
+                {
+                    "success": True,
+                    "message": message,
+                    "cog": {"name": class_name, "file_name": file_name, "status": "unloaded"},
                 }
-            })
+            )
         else:
             return jsonify({"error": message}), 500
 
@@ -4489,42 +4521,39 @@ def reload_cog(cog_name):
 
         # Longer timeout for APIServer and other slow-loading cogs
         timeout = 35 if class_name == "APIServer" else 15
-        
+
         try:
             success, message = asyncio.run_coroutine_threadsafe(
                 cog_manager.reload_cog_api(class_name), bot.loop
             ).result(timeout=timeout)
 
             if success:
-                return jsonify({
-                    "success": True,
-                    "message": message,
-                    "cog": {
-                        "name": class_name,
-                        "file_name": file_name,
-                        "status": "loaded"
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": message,
+                        "cog": {"name": class_name, "file_name": file_name, "status": "loaded"},
                     }
-                })
+                )
             else:
                 return jsonify({"error": message}), 500
-        
+
         except asyncio.TimeoutError:
             # For APIServer, timeout might occur during reload (expected)
             # Wait a bit more and check if it's actually loaded
             if class_name == "APIServer":
                 import time
+
                 time.sleep(3)
                 # Check if APIServer is now loaded
                 if "APIServer" in bot.cogs:
-                    return jsonify({
-                        "success": True,
-                        "message": f"Cog '{class_name}' reloaded successfully (delayed)",
-                        "cog": {
-                            "name": class_name,
-                            "file_name": file_name,
-                            "status": "loaded"
+                    return jsonify(
+                        {
+                            "success": True,
+                            "message": f"Cog '{class_name}' reloaded successfully (delayed)",
+                            "cog": {"name": class_name, "file_name": file_name, "status": "loaded"},
                         }
-                    })
+                    )
             raise
 
     except Exception as e:
@@ -4614,12 +4643,7 @@ def get_cog_logs(cog_name):
                     # Censor sensitive data
                     message = cog_manager._censor_sensitive_data(message)
 
-                    logs.append({
-                        "timestamp": timestamp,
-                        "time": time,
-                        "level": level,
-                        "message": message
-                    })
+                    logs.append({"timestamp": timestamp, "time": time, "level": level, "message": message})
 
             # Count log levels
             info_count = sum(1 for log in logs if log["level"] == "INFO")
@@ -4627,20 +4651,22 @@ def get_cog_logs(cog_name):
             error_count = sum(1 for log in logs if log["level"] == "ERROR")
             debug_count = sum(1 for log in logs if log["level"] == "DEBUG")
 
-            return jsonify({
-                "success": True,
-                "cog_name": actual_cog_name,
-                "logs": logs,
-                "total_entries": len(filtered_logs),
-                "returned_entries": len(logs),
-                "statistics": {
-                    "info": info_count,
-                    "warning": warning_count,
-                    "error": error_count,
-                    "debug": debug_count
-                },
-                "log_file": log_file
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "cog_name": actual_cog_name,
+                    "logs": logs,
+                    "total_entries": len(filtered_logs),
+                    "returned_entries": len(logs),
+                    "statistics": {
+                        "info": info_count,
+                        "warning": warning_count,
+                        "error": error_count,
+                        "debug": debug_count,
+                    },
+                    "log_file": log_file,
+                }
+            )
 
         except Exception as e:
             logger.error(f"Error reading logs for {cog_name}: {e}")
