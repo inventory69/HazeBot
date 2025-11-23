@@ -4927,6 +4927,387 @@ def delete_ticket_endpoint(ticket_id):
         return jsonify({"error": f"Failed to delete ticket: {str(e)}"}), 500
 
 
+@app.route("/api/tickets/<ticket_id>/claim", methods=["POST"])
+@token_required
+@require_permission("all")
+def claim_ticket_endpoint(ticket_id):
+    """Claim a ticket"""
+    try:
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        data = request.get_json() or {}
+        user_id = data.get("user_id")  # Admin user ID who claims the ticket
+
+        if not user_id:
+            return jsonify({"error": "user_id required"}), 400
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        if ticket.get("status") == "Closed":
+            return jsonify({"error": "Cannot claim a closed ticket"}), 400
+
+        channel_id = ticket.get("channel_id")
+
+        # Update ticket
+        future = asyncio.run_coroutine_threadsafe(
+            update_ticket(channel_id, {"claimed_by": int(user_id), "status": "Claimed"}), loop
+        )
+        future.result(timeout=10)
+
+        log_action(
+            request.username,
+            "claim_ticket",
+            {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "claimed_by": user_id},
+        )
+
+        return jsonify({"success": True, "message": "Ticket claimed successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error claiming ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to claim ticket: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>/assign", methods=["POST"])
+@token_required
+@require_permission("all")
+def assign_ticket_endpoint(ticket_id):
+    """Assign a ticket to a moderator"""
+    try:
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        data = request.get_json() or {}
+        assigned_to = data.get("assigned_to")
+
+        if not assigned_to:
+            return jsonify({"error": "assigned_to user_id required"}), 400
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        if ticket.get("status") == "Closed":
+            return jsonify({"error": "Cannot assign a closed ticket"}), 400
+
+        channel_id = ticket.get("channel_id")
+
+        # Update ticket
+        future = asyncio.run_coroutine_threadsafe(update_ticket(channel_id, {"assigned_to": int(assigned_to)}), loop)
+        future.result(timeout=10)
+
+        log_action(
+            request.username,
+            "assign_ticket",
+            {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "assigned_to": assigned_to},
+        )
+
+        return jsonify({"success": True, "message": "Ticket assigned successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error assigning ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to assign ticket: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>/close", methods=["POST"])
+@token_required
+@require_permission("all")
+def close_ticket_endpoint(ticket_id):
+    """Close a ticket with optional message"""
+    try:
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        data = request.get_json() or {}
+        close_message = data.get("close_message", "")
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        if ticket.get("status") == "Closed":
+            return jsonify({"error": "Ticket is already closed"}), 400
+
+        channel_id = ticket.get("channel_id")
+
+        # Get the channel
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        # Send close message to channel
+        async def send_close_message():
+            success_msg = "Ticket successfully closed and archived. It will be deleted after 7 days."
+            if close_message.strip():
+                success_msg += f"\n\n**Closing Message:** {close_message}"
+            await channel.send(success_msg)
+
+        future = asyncio.run_coroutine_threadsafe(send_close_message(), loop)
+        future.result(timeout=10)
+
+        # Update ticket status
+        future = asyncio.run_coroutine_threadsafe(
+            update_ticket(channel_id, {"status": "Closed", "closed_at": datetime.now().isoformat()}), loop
+        )
+        future.result(timeout=10)
+
+        log_action(
+            request.username,
+            "close_ticket",
+            {
+                "ticket_id": ticket_id,
+                "ticket_num": ticket.get("ticket_num"),
+                "close_message": close_message if close_message else None,
+            },
+        )
+
+        return jsonify({"success": True, "message": "Ticket closed successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error closing ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to close ticket: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>/reopen", methods=["POST"])
+@token_required
+@require_permission("all")
+def reopen_ticket_endpoint(ticket_id):
+    """Reopen a closed ticket"""
+    try:
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        if ticket.get("status") != "Closed":
+            return jsonify({"error": "Ticket is not closed"}), 400
+
+        reopen_count = ticket.get("reopen_count", 0)
+        if reopen_count >= 3:
+            return jsonify({"error": "Ticket cannot be reopened more than 3 times"}), 400
+
+        channel_id = ticket.get("channel_id")
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        # Restore permissions for creator
+        async def restore_permissions():
+            creator = bot.get_user(ticket["user_id"])
+            if creator:
+                try:
+                    await channel.set_permissions(
+                        creator,
+                        view_channel=True,
+                        send_messages=True,
+                        add_reactions=True,
+                        reason=f"Ticket #{ticket['ticket_num']} reopened",
+                    )
+                except Exception as e:
+                    logger.error(f"Error restoring permissions: {e}")
+
+        future = asyncio.run_coroutine_threadsafe(restore_permissions(), loop)
+        future.result(timeout=10)
+
+        # Update ticket
+        future = asyncio.run_coroutine_threadsafe(
+            update_ticket(
+                channel_id,
+                {
+                    "status": "Open",
+                    "closed_at": None,
+                    "reopen_count": reopen_count + 1,
+                    "reopened_at": datetime.now().isoformat(),
+                },
+            ),
+            loop,
+        )
+        future.result(timeout=10)
+
+        log_action(
+            request.username, "reopen_ticket", {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num")}
+        )
+
+        return jsonify({"success": True, "message": "Ticket reopened successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error reopening ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to reopen ticket: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>/messages", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_ticket_messages_endpoint(ticket_id):
+    """Get messages from a ticket channel"""
+    try:
+        from Cogs.TicketSystem import load_tickets
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        channel_id = ticket.get("channel_id")
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        # Fetch messages from channel
+        async def fetch_messages():
+            messages = []
+            async for message in channel.history(limit=50, oldest_first=False):
+                # Skip bot system messages
+                if message.author.bot and not message.content.startswith("**Initial details"):
+                    continue
+
+                avatar_url = None
+                if message.author.display_avatar:
+                    avatar_url = str(message.author.display_avatar.url)
+
+                messages.append(
+                    {
+                        "id": str(message.id),
+                        "author_id": str(message.author.id),
+                        "author_name": message.author.name,
+                        "author_avatar": avatar_url,
+                        "content": message.content,
+                        "timestamp": message.created_at.isoformat(),
+                        "is_bot": message.author.bot,
+                    }
+                )
+            return list(reversed(messages))  # Oldest first
+
+        future = asyncio.run_coroutine_threadsafe(fetch_messages(), loop)
+        messages = future.result(timeout=10)
+
+        return jsonify({"messages": messages})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching messages for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch messages: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>/messages", methods=["POST"])
+@token_required
+@require_permission("all")
+def send_ticket_message_endpoint(ticket_id):
+    """Send a message to a ticket channel"""
+    try:
+        from Cogs.TicketSystem import load_tickets
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        data = request.get_json() or {}
+        message_content = data.get("content", "").strip()
+
+        if not message_content:
+            return jsonify({"error": "Message content required"}), 400
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        channel_id = ticket.get("channel_id")
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        # Send message to channel
+        async def send_message():
+            msg = await channel.send(f"**[Admin Panel - {request.username}]:** {message_content}")
+            return {
+                "id": str(msg.id),
+                "author_name": request.username,
+                "content": message_content,
+                "timestamp": msg.created_at.isoformat(),
+            }
+
+        future = asyncio.run_coroutine_threadsafe(send_message(), loop)
+        message_data = future.result(timeout=10)
+
+        log_action(
+            request.username,
+            "send_ticket_message",
+            {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "message_preview": message_content[:50]},
+        )
+
+        return jsonify({"success": True, "message": "Message sent successfully", "data": message_data})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error sending message to ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to send message: {str(e)}"}), 500
+
+
 @app.route("/api/config/tickets", methods=["GET"])
 @token_required
 @require_permission("all")
