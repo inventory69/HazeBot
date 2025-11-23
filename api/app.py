@@ -3543,12 +3543,13 @@ def get_latest_memes():
                                     except (ValueError, AttributeError):
                                         author = f"User {user_id}"
                                 meme_data["author"] = author
-                            
+
                             # Requester field: "📤 Requested by"
                             elif "requested by" in field_name or "📤" in field_name:
                                 requester = field.value
                                 # Extract Discord username from mention if present
                                 import re
+
                                 mention_match = re.search(r"<@!?(\d+)>", requester)
                                 if mention_match:
                                     user_id = mention_match.group(1)
@@ -4612,13 +4613,6 @@ def get_cog_logs(cog_name):
                 break
 
         # Get logs using the cog manager's method
-        import asyncio
-
-        # Create a mock context for the log retrieval
-        class MockContext:
-            pass
-
-        mock_ctx = MockContext()
 
         # Get the logs by calling the internal method
         try:
@@ -5192,9 +5186,7 @@ def reopen_ticket_endpoint(ticket_id):
         )
         future.result(timeout=10)
 
-        log_action(
-            request.username, "reopen_ticket", {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num")}
-        )
+        log_action(request.username, "reopen_ticket", {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num")})
 
         return jsonify({"success": True, "message": "Ticket reopened successfully"})
 
@@ -5239,8 +5231,9 @@ def get_ticket_messages_endpoint(ticket_id):
                 # Skip bot system messages (but keep Initial details and Admin Panel messages)
                 if message.author.bot:
                     # Only include bot messages that are initial details or admin panel messages
-                    if not (message.content.startswith("**Initial details") or 
-                            message.content.startswith("**[Admin Panel")):
+                    if not (
+                        message.content.startswith("**Initial details") or message.content.startswith("**[Admin Panel")
+                    ):
                         continue
 
                 avatar_url = None
@@ -5341,7 +5334,7 @@ def get_ticket_config():
     try:
         # Load config from file if exists, otherwise use defaults
         config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
-        
+
         if config_file.exists():
             with open(config_file, "r", encoding="utf-8") as f:
                 ticket_config = json.load(f)

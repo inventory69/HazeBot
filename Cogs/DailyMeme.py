@@ -298,6 +298,7 @@ class DailyMeme(commands.Cog):
         minute = self.daily_config.get("minute", 0)
         # Convert local time to UTC for discord.py task scheduling
         from zoneinfo import ZoneInfo
+
         local_time = datetime.now(ZoneInfo(Config.TIMEZONE)).replace(hour=hour, minute=minute)
         utc_time = local_time.astimezone(ZoneInfo("UTC"))
         self.daily_meme_task.change_interval(time=time(hour=utc_time.hour, minute=utc_time.minute))
@@ -780,35 +781,35 @@ class DailyMeme(commands.Cog):
 
         # Display source appropriately
         source_name = f"r/{meme['subreddit']}"  # Default to subreddit format
-    # Add custom mappings for non-reddit sources here if needed
-    if meme["subreddit"].startswith("lemmy:"):
-        # Format: "lemmy:instance@community" -> "instance@community"
-        source_name = meme["subreddit"].replace("lemmy:", "")
-    # e.g., if meme["subreddit"] == "othersource": source_name = "Other Source"
+        # Add custom mappings for non-reddit sources here if needed
+        if meme["subreddit"].startswith("lemmy:"):
+            # Format: "lemmy:instance@community" -> "instance@community"
+            source_name = meme["subreddit"].replace("lemmy:", "")
+        # e.g., if meme["subreddit"] == "othersource": source_name = "Other Source"
 
-    embed.add_field(name="📍 Source", value=source_name, inline=True)
-    embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
+        embed.add_field(name="📍 Source", value=source_name, inline=True)
+        embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
 
-    # Add requester field if a user requested it
-    if requested_by:
-        embed.add_field(name="📤 Requested by", value=requested_by.mention, inline=True)
+        # Add requester field if a user requested it
+        if requested_by:
+            embed.add_field(name="📤 Requested by", value=requested_by.mention, inline=True)
 
-    if meme.get("nsfw"):
-        embed.add_field(name="⚠️", value="NSFW Content", inline=False)
+        if meme.get("nsfw"):
+            embed.add_field(name="⚠️", value="NSFW Content", inline=False)
 
-    set_pink_footer(embed, bot=self.bot.user)
+        set_pink_footer(embed, bot=self.bot.user)
 
-    # Send with optional mention and requester
-    if requested_by:
-        message = f"🎭 Meme requested by {requested_by.mention}"
-        if mention:
-            message += f" {mention}"
-    elif mention:
-        message = f"🎭 Daily Meme Alert! {mention}"
-    else:
-        message = "🎭 Daily Meme Alert!"
+        # Send with optional mention and requester
+        if requested_by:
+            message = f"🎭 Meme requested by {requested_by.mention}"
+            if mention:
+                message += f" {mention}"
+        elif mention:
+            message = f"🎭 Daily Meme Alert! {mention}"
+        else:
+            message = "🎭 Daily Meme Alert!"
 
-    await channel.send(message.strip(), embed=embed)
+        await channel.send(message.strip(), embed=embed)
 
         # Format source for logging
         if meme["subreddit"].startswith("lemmy:"):
@@ -907,6 +908,7 @@ class DailyMeme(commands.Cog):
         minute = self.daily_config.get("minute", 0)
         # Convert local time to UTC for discord.py task scheduling
         from zoneinfo import ZoneInfo
+
         local_time = datetime.now(ZoneInfo(Config.TIMEZONE)).replace(hour=hour, minute=minute)
         utc_time = local_time.astimezone(ZoneInfo("UTC"))
         self.daily_meme_task.change_interval(time=time(hour=utc_time.hour, minute=utc_time.minute))
