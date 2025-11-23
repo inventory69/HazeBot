@@ -5214,9 +5214,12 @@ def get_ticket_messages_endpoint(ticket_id):
         async def fetch_messages():
             messages = []
             async for message in channel.history(limit=50, oldest_first=False):
-                # Skip bot system messages
-                if message.author.bot and not message.content.startswith("**Initial details"):
-                    continue
+                # Skip bot system messages (but keep Initial details and Admin Panel messages)
+                if message.author.bot:
+                    # Only include bot messages that are initial details or admin panel messages
+                    if not (message.content.startswith("**Initial details") or 
+                            message.content.startswith("**[Admin Panel")):
+                        continue
 
                 avatar_url = None
                 if message.author.display_avatar:
