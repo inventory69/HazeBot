@@ -767,7 +767,12 @@ class DailyMeme(commands.Cog):
         return selected_meme
 
     async def post_meme(
-        self, meme: dict, channel: discord.TextChannel, mention: str = "", requested_by: discord.Member = None
+        self,
+        meme: dict,
+        channel: discord.TextChannel,
+        mention: str = "",
+        requested_by: discord.Member = None,
+        is_daily: bool = False,
     ):
         """Post a meme to the channel"""
         embed = discord.Embed(
@@ -790,9 +795,11 @@ class DailyMeme(commands.Cog):
         embed.add_field(name="📍 Source", value=source_name, inline=True)
         embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
 
-        # Add requester field if a user requested it
+        # Add requester field if a user requested it, or mark as daily meme
         if requested_by:
             embed.add_field(name="📤 Requested by", value=requested_by.mention, inline=True)
+        elif is_daily:
+            embed.add_field(name="📅 Daily Meme", value="Automated Post", inline=True)
 
         if meme.get("nsfw"):
             embed.add_field(name="⚠️", value="NSFW Content", inline=False)
@@ -893,7 +900,7 @@ class DailyMeme(commands.Cog):
                 # Check if we should ping the role
                 role_id = self.daily_config.get("role_id")
                 mention = f"<@&{role_id}>" if role_id else ""
-                await self.post_meme(meme, channel, mention=mention)
+                await self.post_meme(meme, channel, mention=mention, is_daily=True)
             else:
                 logger.error("Failed to fetch daily meme")
                 await channel.send("❌ Sorry, couldn't fetch today's meme. Try again later!")

@@ -3599,6 +3599,10 @@ def get_latest_memes():
                                 # Prefer embed field over message content
                                 requester = field_requester
 
+                            # Daily Meme field: "📅 Daily Meme"
+                            elif "daily meme" in field_name or "📅" in field_name:
+                                meme_data["is_daily"] = True
+
                     # Add requester to meme_data if found (either from message content or embed field)
                     if requester:
                         meme_data["requester"] = requester
