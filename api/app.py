@@ -4941,12 +4941,14 @@ def get_ticket_config():
                 ticket_config = json.load(f)
         else:
             # Default ticket configuration based on bot's TicketTypeSelect
+            # Email comes from SUPPORT_EMAIL in .env (same as bot uses)
+            support_email = os.getenv("SUPPORT_EMAIL", "")
             ticket_config = {
                 "categories": ["Application", "Bug", "Support"],  # From bot's TicketTypeSelect
-                "auto_close_after_days": None,  # null = disabled
+                "auto_delete_after_close_days": 7,  # Bot deletes closed tickets after 7 days
                 "require_claim": False,
-                "send_transcript_email": False,
-                "transcript_email_address": "",
+                "send_transcript_email": bool(support_email),  # Enable if email configured
+                "transcript_email_address": support_email,
             }
 
         return jsonify(ticket_config)
@@ -4982,19 +4984,20 @@ def update_ticket_config():
                 config = json.load(f)
         else:
             # Default matches bot's TicketTypeSelect
+            support_email = os.getenv("SUPPORT_EMAIL", "")
             config = {
                 "categories": ["Application", "Bug", "Support"],
-                "auto_close_after_days": None,
+                "auto_delete_after_close_days": 7,
                 "require_claim": False,
-                "send_transcript_email": False,
-                "transcript_email_address": "",
+                "send_transcript_email": bool(support_email),
+                "transcript_email_address": support_email,
             }
 
         # Update config with provided data
         if "categories" in data:
             config["categories"] = data["categories"]
-        if "auto_close_after_days" in data:
-            config["auto_close_after_days"] = data["auto_close_after_days"]
+        if "auto_delete_after_close_days" in data:
+            config["auto_delete_after_close_days"] = data["auto_delete_after_close_days"]
         if "require_claim" in data:
             config["require_claim"] = data["require_claim"]
         if "send_transcript_email" in data:
@@ -5026,12 +5029,13 @@ def reset_ticket_config():
         config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
 
         # Reset to defaults (matching bot's TicketTypeSelect)
+        support_email = os.getenv("SUPPORT_EMAIL", "")
         default_config = {
             "categories": ["Application", "Bug", "Support"],
-            "auto_close_after_days": None,
+            "auto_delete_after_close_days": 7,  # Bot deletes closed tickets after 7 days
             "require_claim": False,
-            "send_transcript_email": False,
-            "transcript_email_address": "",
+            "send_transcript_email": bool(support_email),
+            "transcript_email_address": support_email,
         }
 
         config_file.parent.mkdir(parents=True, exist_ok=True)
