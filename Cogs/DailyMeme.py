@@ -780,19 +780,21 @@ class DailyMeme(commands.Cog):
 
         # Display source appropriately
         source_name = f"r/{meme['subreddit']}"  # Default to subreddit format
-        # Add custom mappings for non-reddit sources here if needed
-        if meme["subreddit"].startswith("lemmy:"):
-            # Format: "lemmy:instance@community" -> "instance@community"
-            source_name = meme["subreddit"].replace("lemmy:", "")
-        # e.g., if meme["subreddit"] == "othersource": source_name = "Other Source"
+    # Add custom mappings for non-reddit sources here if needed
+    if meme["subreddit"].startswith("lemmy:"):
+        # Format: "lemmy:instance@community" -> "instance@community"
+        source_name = meme["subreddit"].replace("lemmy:", "")
+    # e.g., if meme["subreddit"] == "othersource": source_name = "Other Source"
 
-        embed.add_field(name="📍 Source", value=source_name, inline=True)
-        embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
+    embed.add_field(name="📍 Source", value=source_name, inline=True)
+    embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
 
-        if meme.get("nsfw"):
-            embed.add_field(name="⚠️", value="NSFW Content", inline=False)
+    # Add requester field if a user requested it
+    if requested_by:
+        embed.add_field(name="📤 Requested by", value=requested_by.mention, inline=True)
 
-        set_pink_footer(embed, bot=self.bot.user)
+    if meme.get("nsfw"):
+        embed.add_field(name="⚠️", value="NSFW Content", inline=False)        set_pink_footer(embed, bot=self.bot.user)
 
         # Send with optional mention and requester
         if requested_by:

@@ -3543,6 +3543,28 @@ def get_latest_memes():
                                     except (ValueError, AttributeError):
                                         author = f"User {user_id}"
                                 meme_data["author"] = author
+                            
+                            # Requester field: "📤 Requested by"
+                            elif "requested by" in field_name or "📤" in field_name:
+                                requester = field.value
+                                # Extract Discord username from mention if present
+                                import re
+                                mention_match = re.search(r"<@!?(\d+)>", requester)
+                                if mention_match:
+                                    user_id = mention_match.group(1)
+                                    try:
+                                        guild = bot.get_guild(Config.get_guild_id())
+                                        if guild:
+                                            member = guild.get_member(int(user_id))
+                                            if member:
+                                                requester = member.display_name or member.name
+                                            else:
+                                                requester = f"User {user_id}"
+                                        else:
+                                            requester = f"User {user_id}"
+                                    except (ValueError, AttributeError):
+                                        requester = f"User {user_id}"
+                                meme_data["requester"] = requester
 
                     # Set defaults if not found
                     if "score" not in meme_data:
