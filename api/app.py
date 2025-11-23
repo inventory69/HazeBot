@@ -4677,6 +4677,374 @@ def get_cog_logs(cog_name):
         return jsonify({"error": f"Failed to get cog logs: {str(e)}"}), 500
 
 
+# ============================================================================
+# TICKET SYSTEM ENDPOINTS
+# ============================================================================
+
+
+@app.route("/api/tickets", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_tickets():
+    """Get all tickets with optional status filter"""
+    try:
+        from Cogs.TicketSystem import load_tickets
+
+        import asyncio
+
+        # Get tickets data
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        # Filter by status if provided
+        status_filter = request.args.get("status")
+        if status_filter:
+            tickets = [t for t in tickets if t.get("status", "").lower() == status_filter.lower()]
+
+        # Enrich with Discord user information
+        guild = bot.get_guild(Config.GUILD_ID)
+        enriched_tickets = []
+
+        for ticket in tickets:
+            # Get creator info
+            creator_id = ticket.get("user_id")
+            creator = None
+            if guild and creator_id:
+                creator = guild.get_member(int(creator_id))
+
+            # Get claimer info
+            claimed_by_id = ticket.get("claimed_by")
+            claimer = None
+            if guild and claimed_by_id:
+                claimer = guild.get_member(int(claimed_by_id))
+
+            # Get assigned user info
+            assigned_to_id = ticket.get("assigned_to")
+            assigned = None
+            if guild and assigned_to_id:
+                assigned = guild.get_member(int(assigned_to_id))
+
+            enriched_ticket = {
+                "ticket_id": ticket.get("ticket_id"),
+                "ticket_num": ticket.get("ticket_num"),
+                "channel_id": str(ticket.get("channel_id")) if ticket.get("channel_id") else None,
+                "user_id": str(creator_id) if creator_id else None,
+                "username": creator.name if creator else "Unknown User",
+                "display_name": creator.display_name if creator else "Unknown User",
+                "avatar_url": str(creator.avatar.url) if creator and creator.avatar else None,
+                "type": ticket.get("type", "General"),
+                "status": ticket.get("status", "Open"),
+                "created_at": ticket.get("created_at"),
+                "closed_at": ticket.get("closed_at"),
+                "claimed_by": str(claimed_by_id) if claimed_by_id else None,
+                "claimed_by_name": claimer.name if claimer else None,
+                "assigned_to": str(assigned_to_id) if assigned_to_id else None,
+                "assigned_to_name": assigned.name if assigned else None,
+            }
+            enriched_tickets.append(enriched_ticket)
+
+        # Sort by ticket_num descending (newest first)
+        enriched_tickets.sort(key=lambda t: t.get("ticket_num", 0), reverse=True)
+
+        return jsonify({"tickets": enriched_tickets, "total": len(enriched_tickets)})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching tickets: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch tickets: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_ticket(ticket_id):
+    """Get a single ticket by ID"""
+    try:
+        from Cogs.TicketSystem import load_tickets
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        # Find ticket
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        # Enrich with Discord user information
+        guild = bot.get_guild(Config.GUILD_ID)
+
+        creator_id = ticket.get("user_id")
+        creator = guild.get_member(int(creator_id)) if guild and creator_id else None
+
+        claimed_by_id = ticket.get("claimed_by")
+        claimer = guild.get_member(int(claimed_by_id)) if guild and claimed_by_id else None
+
+        assigned_to_id = ticket.get("assigned_to")
+        assigned = guild.get_member(int(assigned_to_id)) if guild and assigned_to_id else None
+
+        enriched_ticket = {
+            "ticket_id": ticket.get("ticket_id"),
+            "ticket_num": ticket.get("ticket_num"),
+            "channel_id": str(ticket.get("channel_id")) if ticket.get("channel_id") else None,
+            "user_id": str(creator_id) if creator_id else None,
+            "username": creator.name if creator else "Unknown User",
+            "display_name": creator.display_name if creator else "Unknown User",
+            "avatar_url": str(creator.avatar.url) if creator and creator.avatar else None,
+            "type": ticket.get("type", "General"),
+            "status": ticket.get("status", "Open"),
+            "created_at": ticket.get("created_at"),
+            "closed_at": ticket.get("closed_at"),
+            "claimed_by": str(claimed_by_id) if claimed_by_id else None,
+            "claimed_by_name": claimer.name if claimer else None,
+            "assigned_to": str(assigned_to_id) if assigned_to_id else None,
+            "assigned_to_name": assigned.name if assigned else None,
+        }
+
+        return jsonify(enriched_ticket)
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch ticket: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>", methods=["PUT"])
+@token_required
+@require_permission("all")
+def update_ticket(ticket_id):
+    """Update a ticket (status, assigned user, etc.)"""
+    try:
+        from Cogs.TicketSystem import load_tickets, update_ticket as update_ticket_data
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # Load tickets to find the channel_id
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        channel_id = ticket.get("channel_id")
+
+        # Prepare updates
+        updates = {}
+        if "status" in data:
+            updates["status"] = data["status"]
+        if "assigned_to" in data:
+            # Convert string ID to int or None
+            updates["assigned_to"] = int(data["assigned_to"]) if data["assigned_to"] else None
+        if "claimed_by" in data:
+            updates["claimed_by"] = int(data["claimed_by"]) if data["claimed_by"] else None
+        if "type" in data:
+            updates["type"] = data["type"]
+
+        # Update ticket
+        future = asyncio.run_coroutine_threadsafe(update_ticket_data(channel_id, updates), loop)
+        future.result(timeout=10)
+
+        # Log the action
+        log_action(
+            request.username,
+            "update_ticket",
+            {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "updates": list(updates.keys())},
+        )
+
+        return jsonify({"success": True, "message": "Ticket updated successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error updating ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to update ticket: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/<ticket_id>", methods=["DELETE"])
+@token_required
+@require_permission("all")
+def delete_ticket_endpoint(ticket_id):
+    """Delete a ticket"""
+    try:
+        from Cogs.TicketSystem import delete_ticket, load_tickets
+
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Load tickets to find the channel_id and ticket_num
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        channel_id = ticket.get("channel_id")
+        ticket_num = ticket.get("ticket_num")
+
+        # Delete ticket from database
+        future = asyncio.run_coroutine_threadsafe(delete_ticket(channel_id), loop)
+        future.result(timeout=10)
+
+        # Log the action
+        log_action(
+            request.username, "delete_ticket", {"ticket_id": ticket_id, "ticket_num": ticket_num, "status": "deleted"}
+        )
+
+        return jsonify({"success": True, "message": f"Ticket #{ticket_num} deleted successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error deleting ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to delete ticket: {str(e)}"}), 500
+
+
+@app.route("/api/config/tickets", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_ticket_config():
+    """Get ticket system configuration"""
+    try:
+        # Default ticket configuration
+        # Note: category_id and transcript_channel_id are already in channels config
+        ticket_config = {
+            "categories": ["Support", "Bug Report", "Feature Request", "General", "Other"],
+            "auto_close_after_days": None,  # null = disabled
+            "require_claim": False,
+            "send_transcript_email": False,
+            "transcript_email_address": "",
+        }
+
+        # Try to load from bot config or file if we implement persistence
+        # For now, return defaults
+
+        return jsonify(ticket_config)
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching ticket config: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch ticket config: {str(e)}"}), 500
+
+
+@app.route("/api/config/tickets", methods=["PUT"])
+@token_required
+@require_permission("all")
+@log_config_action("tickets")
+def update_ticket_config():
+    """Update ticket system configuration"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # TODO: Implement saving ticket config to file
+        # For now, just validate and return success
+        # This will be stored in a tickets_config.json file
+
+        config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing config or create default
+        if config_file.exists():
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        else:
+            config = {
+                "categories": ["Support", "Bug Report", "Feature Request", "General", "Other"],
+                "auto_close_after_days": None,
+                "require_claim": False,
+                "send_transcript_email": False,
+                "transcript_email_address": "",
+            }
+
+        # Update config with provided data
+        if "categories" in data:
+            config["categories"] = data["categories"]
+        if "auto_close_after_days" in data:
+            config["auto_close_after_days"] = data["auto_close_after_days"]
+        if "require_claim" in data:
+            config["require_claim"] = data["require_claim"]
+        if "send_transcript_email" in data:
+            config["send_transcript_email"] = data["send_transcript_email"]
+        if "transcript_email_address" in data:
+            config["transcript_email_address"] = data["transcript_email_address"]
+
+        # Save config
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+
+        logger.info(f"✅ Ticket config updated by {request.username}")
+
+        return jsonify({"success": True, "message": "Ticket configuration updated successfully"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error updating ticket config: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to update ticket config: {str(e)}"}), 500
+
+
+@app.route("/api/config/tickets/reset", methods=["POST"])
+@token_required
+@require_permission("all")
+def reset_ticket_config():
+    """Reset ticket configuration to defaults"""
+    try:
+        config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
+
+        # Reset to defaults
+        default_config = {
+            "categories": ["Support", "Bug Report", "Feature Request", "General", "Other"],
+            "auto_close_after_days": None,
+            "require_claim": False,
+            "send_transcript_email": False,
+            "transcript_email_address": "",
+        }
+
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(default_config, f, indent=2)
+
+        log_action(request.username, "reset_ticket_config", {"status": "reset to defaults"})
+
+        return jsonify({"success": True, "message": "Ticket configuration reset to defaults"})
+
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error resetting ticket config: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to reset ticket config: {str(e)}"}), 500
+
+
 if __name__ == "__main__":
     # Load any saved configuration on startup
     load_config_from_file()
