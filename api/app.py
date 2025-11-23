@@ -4933,18 +4933,21 @@ def delete_ticket_endpoint(ticket_id):
 def get_ticket_config():
     """Get ticket system configuration"""
     try:
-        # Default ticket configuration
-        # Note: category_id and transcript_channel_id are already in channels config
-        ticket_config = {
-            "categories": ["Support", "Bug Report", "Feature Request", "General", "Other"],
-            "auto_close_after_days": None,  # null = disabled
-            "require_claim": False,
-            "send_transcript_email": False,
-            "transcript_email_address": "",
-        }
-
-        # Try to load from bot config or file if we implement persistence
-        # For now, return defaults
+        # Load config from file if exists, otherwise use defaults
+        config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
+        
+        if config_file.exists():
+            with open(config_file, "r", encoding="utf-8") as f:
+                ticket_config = json.load(f)
+        else:
+            # Default ticket configuration based on bot's TicketTypeSelect
+            ticket_config = {
+                "categories": ["Application", "Bug", "Support"],  # From bot's TicketTypeSelect
+                "auto_close_after_days": None,  # null = disabled
+                "require_claim": False,
+                "send_transcript_email": False,
+                "transcript_email_address": "",
+            }
 
         return jsonify(ticket_config)
 
@@ -4978,8 +4981,9 @@ def update_ticket_config():
             with open(config_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
         else:
+            # Default matches bot's TicketTypeSelect
             config = {
-                "categories": ["Support", "Bug Report", "Feature Request", "General", "Other"],
+                "categories": ["Application", "Bug", "Support"],
                 "auto_close_after_days": None,
                 "require_claim": False,
                 "send_transcript_email": False,
@@ -5021,9 +5025,9 @@ def reset_ticket_config():
     try:
         config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
 
-        # Reset to defaults
+        # Reset to defaults (matching bot's TicketTypeSelect)
         default_config = {
-            "categories": ["Support", "Bug Report", "Feature Request", "General", "Other"],
+            "categories": ["Application", "Bug", "Support"],
             "auto_close_after_days": None,
             "require_claim": False,
             "send_transcript_email": False,
