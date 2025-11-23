@@ -2889,15 +2889,19 @@ def send_meme_to_discord():
             embed.add_field(name="📍 Source", value=source_name, inline=True)
             embed.add_field(name="👤 Author", value=f"u/{meme_data['author']}", inline=True)
 
-            if meme_data.get("nsfw"):
-                embed.add_field(name="⚠️", value="NSFW Content", inline=False)
-
-            set_pink_footer(embed, bot=bot.user)
-
             # Get requester Discord ID from token
             requester_id = (
                 request.discord_id if hasattr(request, "discord_id") and request.discord_id != "unknown" else None
             )
+
+            # Add requester field to embed if available
+            if requester_id:
+                embed.add_field(name="📤 Requested by", value=f"<@{requester_id}>", inline=True)
+
+            if meme_data.get("nsfw"):
+                embed.add_field(name="⚠️", value="NSFW Content", inline=False)
+
+            set_pink_footer(embed, bot=bot.user)
 
             # Send with custom message including requester mention
             if requester_id:
@@ -3499,6 +3503,33 @@ def get_latest_memes():
                     meme_data["custom_upvotes"] = custom_count
                     meme_data["discord_upvotes"] = discord_count
 
+                    # Extract requester from message content (e.g., "Meme sent from Admin Panel by @username")
+                    # or "🎭 Meme requested by @username"
+                    requester = None
+                    if message.content:
+                        import re
+
+                        # Pattern 1: "Meme sent from Admin Panel by @username"
+                        match = re.search(r"Meme sent from Admin Panel by <@!?(\d+)>", message.content)
+                        if not match:
+                            # Pattern 2: "🎭 Meme requested by @username"
+                            match = re.search(r"Meme requested by <@!?(\d+)>", message.content)
+
+                        if match:
+                            user_id = match.group(1)
+                            try:
+                                guild = bot.get_guild(Config.get_guild_id())
+                                if guild:
+                                    member = guild.get_member(int(user_id))
+                                    if member:
+                                        requester = member.display_name or member.name
+                                    else:
+                                        requester = f"User {user_id}"
+                                else:
+                                    requester = f"User {user_id}"
+                            except (ValueError, AttributeError):
+                                requester = f"User {user_id}"
+
                     # Parse fields for upvotes, source, author, creator
                     if embed.fields:
                         for field in embed.fields:
@@ -3544,13 +3575,13 @@ def get_latest_memes():
                                         author = f"User {user_id}"
                                 meme_data["author"] = author
 
-                            # Requester field: "📤 Requested by"
+                            # Requester field: "📤 Requested by" (from embed field)
                             elif "requested by" in field_name or "📤" in field_name:
-                                requester = field.value
+                                field_requester = field.value
                                 # Extract Discord username from mention if present
                                 import re
 
-                                mention_match = re.search(r"<@!?(\d+)>", requester)
+                                mention_match = re.search(r"<@!?(\d+)>", field_requester)
                                 if mention_match:
                                     user_id = mention_match.group(1)
                                     try:
@@ -3558,14 +3589,19 @@ def get_latest_memes():
                                         if guild:
                                             member = guild.get_member(int(user_id))
                                             if member:
-                                                requester = member.display_name or member.name
+                                                field_requester = member.display_name or member.name
                                             else:
-                                                requester = f"User {user_id}"
+                                                field_requester = f"User {user_id}"
                                         else:
-                                            requester = f"User {user_id}"
+                                            field_requester = f"User {user_id}"
                                     except (ValueError, AttributeError):
-                                        requester = f"User {user_id}"
-                                meme_data["requester"] = requester
+                                        field_requester = f"User {user_id}"
+                                # Prefer embed field over message content
+                                requester = field_requester
+
+                    # Add requester to meme_data if found (either from message content or embed field)
+                    if requester:
+                        meme_data["requester"] = requester
 
                     # Set defaults if not found
                     if "score" not in meme_data:
