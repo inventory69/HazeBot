@@ -794,19 +794,21 @@ class DailyMeme(commands.Cog):
         embed.add_field(name="📤 Requested by", value=requested_by.mention, inline=True)
 
     if meme.get("nsfw"):
-        embed.add_field(name="⚠️", value="NSFW Content", inline=False)        set_pink_footer(embed, bot=self.bot.user)
+        embed.add_field(name="⚠️", value="NSFW Content", inline=False)
 
-        # Send with optional mention and requester
-        if requested_by:
-            message = f"🎭 Meme requested by {requested_by.mention}"
-            if mention:
-                message += f" {mention}"
-        elif mention:
-            message = f"🎭 Daily Meme Alert! {mention}"
-        else:
-            message = "🎭 Daily Meme Alert!"
+    set_pink_footer(embed, bot=self.bot.user)
 
-        await channel.send(message.strip(), embed=embed)
+    # Send with optional mention and requester
+    if requested_by:
+        message = f"🎭 Meme requested by {requested_by.mention}"
+        if mention:
+            message += f" {mention}"
+    elif mention:
+        message = f"🎭 Daily Meme Alert! {mention}"
+    else:
+        message = "🎭 Daily Meme Alert!"
+
+    await channel.send(message.strip(), embed=embed)
 
         # Format source for logging
         if meme["subreddit"].startswith("lemmy:"):
