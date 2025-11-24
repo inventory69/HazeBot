@@ -17,6 +17,7 @@ import jwt
 import requests
 from flask import Flask, jsonify, redirect, request
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # Add parent directory to path to import Config
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,6 +30,7 @@ from Utils.Logger import Logger as logger
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', logger=False, engineio_logger=False)
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()
@@ -3456,8 +3458,8 @@ def get_latest_memes():
 
             memes = []
             # Fetch more messages to account for non-meme messages (e.g., text-only messages)
-            # We'll search through up to 5x the limit to ensure we find enough memes
-            async for message in channel.history(limit=limit * 5):
+            # Search through up to 100 messages to ensure we find enough memes (increased from 5x)
+            async for message in channel.history(limit=min(limit * 10, 100)):
                 # Only include messages with embeds (memes posted by bot)
                 if message.embeds:
                     embed = message.embeds[0]
@@ -4872,6 +4874,37 @@ def get_my_tickets():
             if guild and assigned_to_id:
                 assigned = guild.get_member(int(assigned_to_id))
 
+            # Get avatar URLs with fallback
+            creator_avatar = None
+            if creator:
+                try:
+                    if creator.display_avatar:
+                        creator_avatar = str(creator.display_avatar.url)
+                    elif creator.avatar:
+                        creator_avatar = str(creator.avatar.url)
+                except (AttributeError, Exception):
+                    creator_avatar = None
+
+            claimer_avatar = None
+            if claimer:
+                try:
+                    if claimer.display_avatar:
+                        claimer_avatar = str(claimer.display_avatar.url)
+                    elif claimer.avatar:
+                        claimer_avatar = str(claimer.avatar.url)
+                except (AttributeError, Exception):
+                    claimer_avatar = None
+
+            assigned_avatar = None
+            if assigned:
+                try:
+                    if assigned.display_avatar:
+                        assigned_avatar = str(assigned.display_avatar.url)
+                    elif assigned.avatar:
+                        assigned_avatar = str(assigned.avatar.url)
+                except (AttributeError, Exception):
+                    assigned_avatar = None
+
             enriched_ticket = {
                 "ticket_id": ticket.get("ticket_id"),
                 "ticket_num": ticket.get("ticket_num"),
@@ -4879,17 +4912,17 @@ def get_my_tickets():
                 "user_id": str(user_id),
                 "username": creator.name if creator else "Unknown User",
                 "display_name": creator.display_name if creator else "Unknown User",
-                "avatar_url": str(creator.avatar.url) if creator and creator.avatar else None,
+                "avatar_url": creator_avatar,
                 "type": ticket.get("type", "General"),
                 "status": ticket.get("status", "Open"),
                 "created_at": ticket.get("created_at"),
                 "closed_at": ticket.get("closed_at"),
                 "claimed_by": str(claimed_by_id) if claimed_by_id else None,
                 "claimed_by_name": claimer.display_name if claimer else None,
-                "claimed_by_avatar": str(claimer.avatar.url) if claimer and claimer.avatar else None,
+                "claimed_by_avatar": claimer_avatar,
                 "assigned_to": str(assigned_to_id) if assigned_to_id else None,
                 "assigned_to_name": assigned.display_name if assigned else None,
-                "assigned_to_avatar": str(assigned.avatar.url) if assigned and assigned.avatar else None,
+                "assigned_to_avatar": assigned_avatar,
                 "initial_message": ticket.get("initial_message"),
             }
             enriched_tickets.append(enriched_ticket)
@@ -5394,13 +5427,19 @@ def assign_ticket_endpoint(ticket_id):
         guild = bot.get_guild(Config.GUILD_ID)
         if guild:
             assignee = guild.get_member(int(assigned_to))
-            assignee_name = assignee.mention if assignee else f"<@{assigned_to}>"
+            if assignee:
+                assignee_display = assignee.display_name
+                assignee_mention = assignee.mention
+            else:
+                assignee_display = f"User {assigned_to}"
+                assignee_mention = f"<@{assigned_to}>"
         else:
-            assignee_name = f"<@{assigned_to}>"
+            assignee_display = f"User {assigned_to}"
+            assignee_mention = f"<@{assigned_to}>"
 
-        # Send assignment message to channel
+        # Send assignment message to channel (with mention for notification + display name for readability)
         async def send_assign_message():
-            await channel.send(f"👤 **Ticket assigned to {assignee_name}**")
+            await channel.send(f"👤 **Ticket assigned to {assignee_display}** ({assignee_mention})")
 
         future = asyncio.run_coroutine_threadsafe(send_assign_message(), loop)
         future.result(timeout=10)
@@ -5634,9 +5673,69 @@ def get_ticket_messages_endpoint(ticket_id):
                     ):
                         continue
 
+                # Get avatar URL with fallback
+                # For admin panel messages, extract the real admin's username and get their avatar
                 avatar_url = None
-                if message.author.display_avatar:
-                    avatar_url = str(message.author.display_avatar.url)
+                actual_author_name = message.author.name
+                is_admin = False
+                user_role = None  # 'admin', 'moderator', or None
+                
+                # Check if author has admin or moderator role
+                if hasattr(message.author, 'roles') and message.author.roles:
+                    for role in message.author.roles:
+                        if role.id == Config.ADMIN_ROLE_ID:
+                            is_admin = True
+                            user_role = 'admin'
+                            break
+                        elif role.id == Config.MODERATOR_ROLE_ID:
+                            is_admin = True
+                            user_role = 'moderator'
+                            break
+                
+                if message.content.startswith("**[Admin Panel"):
+                    is_admin = True
+                    # Parse admin username from message like "**[Admin Panel - username]:**"
+                    import re
+                    admin_match = re.search(r'\[Admin Panel - ([^\]]+)\]', message.content)
+                    if admin_match:
+                        admin_username = admin_match.group(1)
+                        # Try to find member by username
+                        guild = message.guild
+                        admin_member = None
+                        for member in guild.members:
+                            if member.name == admin_username or member.display_name == admin_username or member.global_name == admin_username:
+                                admin_member = member
+                                break
+                        
+                        if admin_member:
+                            actual_author_name = admin_member.name
+                            # Determine role for admin panel sender
+                            if hasattr(admin_member, 'roles') and admin_member.roles:
+                                for role in admin_member.roles:
+                                    if role.id == Config.ADMIN_ROLE_ID:
+                                        user_role = 'admin'
+                                        break
+                                    elif role.id == Config.MODERATOR_ROLE_ID:
+                                        user_role = 'moderator'
+                                        break
+                            try:
+                                if admin_member.display_avatar:
+                                    avatar_url = str(admin_member.display_avatar.url)
+                                elif admin_member.avatar:
+                                    avatar_url = str(admin_member.avatar.url)
+                            except (AttributeError, Exception) as e:
+                                logger.debug(f"Could not get avatar for admin {admin_member.id}: {e}")
+                
+                # If not an admin message or avatar not found, use message author's avatar
+                if avatar_url is None:
+                    try:
+                        if message.author.display_avatar:
+                            avatar_url = str(message.author.display_avatar.url)
+                        elif message.author.avatar:
+                            avatar_url = str(message.author.avatar.url)
+                    except (AttributeError, Exception) as e:
+                        logger.debug(f"Could not get avatar for user {message.author.id}: {e}")
+                        avatar_url = None
 
                 messages.append(
                     {
@@ -5647,8 +5746,11 @@ def get_ticket_messages_endpoint(ticket_id):
                         "content": message.content,
                         "timestamp": message.created_at.isoformat(),
                         "is_bot": message.author.bot,
+                        "is_admin": is_admin,
+                        "role": user_role,  # 'admin', 'moderator', or None
                     }
                 )
+            logger.debug(f"✅ [GET MESSAGES] Returning {len(messages)} messages for ticket {ticket_id}")
             return list(reversed(messages))  # Oldest first
 
         future = asyncio.run_coroutine_threadsafe(fetch_messages(), loop)
@@ -5725,10 +5827,18 @@ def send_ticket_message_endpoint(ticket_id):
             
             msg = await channel.send(formatted_content)
             
-            # Get avatar URL
+            # Get avatar URL with fallback
             avatar_url = None
-            if member.display_avatar:
-                avatar_url = str(member.display_avatar.url)
+            try:
+                if member.display_avatar:
+                    avatar_url = str(member.display_avatar.url)
+                elif member.avatar:
+                    avatar_url = str(member.avatar.url)
+            except (AttributeError, Exception) as e:
+                logger.debug(f"Could not get avatar for user {member.id}: {e}")
+                avatar_url = None
+            
+            logger.info(f"📤 Message sent from {member.name} (ID: {member.id}) - avatar_url: {avatar_url or 'None'}, is_admin: {is_admin_or_mod}")
             
             return {
                 "id": str(msg.id),
@@ -5742,6 +5852,9 @@ def send_ticket_message_endpoint(ticket_id):
 
         future = asyncio.run_coroutine_threadsafe(send_message(), loop)
         message_data = future.result(timeout=10)
+
+        # Notify WebSocket clients about new message
+        notify_ticket_update(ticket_id, 'new_message', message_data)
 
         log_action(
             request.username,
@@ -5884,6 +5997,69 @@ def reset_ticket_config():
         return jsonify({"error": f"Failed to reset ticket config: {str(e)}"}), 500
 
 
+# ==================================
+# WebSocket Events
+# ==================================
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle WebSocket connection"""
+    logger.info(f"🔌 WebSocket client connected: {request.sid}")
+    emit('connected', {'message': 'Connected to HazeBot API'})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle WebSocket disconnection"""
+    logger.info(f"🔌 WebSocket client disconnected: {request.sid}")
+
+
+@socketio.on('join_ticket')
+def handle_join_ticket(data):
+    """Join a ticket room to receive real-time updates"""
+    ticket_id = data.get('ticket_id')
+    if not ticket_id:
+        emit('error', {'message': 'ticket_id required'})
+        return
+    
+    room = f"ticket_{ticket_id}"
+    join_room(room)
+    logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
+    emit('joined_ticket', {'ticket_id': ticket_id, 'room': room})
+
+
+@socketio.on('leave_ticket')
+def handle_leave_ticket(data):
+    """Leave a ticket room"""
+    ticket_id = data.get('ticket_id')
+    if not ticket_id:
+        return
+    
+    room = f"ticket_{ticket_id}"
+    leave_room(room)
+    logger.info(f"🎫 Client {request.sid} left ticket room: {room}")
+    emit('left_ticket', {'ticket_id': ticket_id, 'room': room})
+
+
+def notify_ticket_update(ticket_id, event_type, data):
+    """
+    Notify all clients in a ticket room about an update
+    
+    Args:
+        ticket_id: Ticket ID
+        event_type: Type of event (new_message, status_change, etc.)
+        data: Event data
+    """
+    room = f"ticket_{ticket_id}"
+    socketio.emit('ticket_update', {
+        'ticket_id': ticket_id,
+        'event_type': event_type,
+        'data': data,
+        'timestamp': datetime.utcnow().isoformat()
+    }, room=room)
+    logger.info(f"📡 Broadcast to {room}: {event_type}")
+
+
 if __name__ == "__main__":
     # Load any saved configuration on startup
     load_config_from_file()
@@ -5898,6 +6074,8 @@ if __name__ == "__main__":
         print("WARNING: Running in DEBUG mode. This should NEVER be used in production!")
 
     print(f"Starting HazeBot Configuration API on port {port}")
+    print(f"WebSocket support enabled with gevent on ws://localhost:{port}/socket.io/")
     print(f"API Documentation: http://localhost:{port}/api/health")
 
-    app.run(host="0.0.0.0", port=port, debug=debug_mode)
+    # Use socketio.run instead of app.run for WebSocket support
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug_mode)

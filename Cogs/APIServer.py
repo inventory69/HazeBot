@@ -83,37 +83,10 @@ class APIServer(commands.Cog):
 
             # Import API app
             sys.path.insert(0, str(Path(__file__).parent.parent / "api"))
-            from api.app import app, set_bot_instance
+            from api.app import app, socketio, set_bot_instance
 
             # Set bot instance for API to use
             set_bot_instance(self.bot)
-
-            # Create a custom exception handler that filters shutdown-related errors
-            class ShutdownErrorFilter(logging.Filter):
-                def __init__(self, shutdown_event):
-                    super().__init__()
-                    self.shutdown_event = shutdown_event
-
-                def filter(self, record):
-                    # Suppress common shutdown errors
-                    if self.shutdown_event.is_set():
-                        msg = str(record.getMessage())
-                        if any(
-                            err in msg
-                            for err in [
-                                "Bad file descriptor",
-                                "Invalid argument",
-                                "Exception when servicing",
-                                "server accept() threw",
-                            ]
-                        ):
-                            return False
-                    return True
-
-            # Add filter to waitress logger
-            waitress_logger = logging.getLogger("waitress")
-            shutdown_filter = ShutdownErrorFilter(self._shutdown_event)
-            waitress_logger.addFilter(shutdown_filter)
 
             # Retry logic for port binding
             max_retries = 8
@@ -128,36 +101,21 @@ class APIServer(commands.Cog):
                 try:
                     logger.info(f"API server starting on port {self.api_port} (attempt {attempt}/{max_retries})...")
 
-                    # Suppress Waitress exceptions during shutdown
-                    import warnings
+                    # Start the SocketIO server with gevent (this blocks until server stops)
+                    # Store reference for shutdown
+                    self._server = socketio
+                    
+                    logger.info(f"API server successfully bound to port {self.api_port}")
 
-                    warnings.filterwarnings("ignore", category=ResourceWarning)
-
-                    # Start the server (this blocks until server stops)
-                    from waitress.server import create_server
-                    import socket
-
-                    self._server = create_server(
+                    # Run the server with SocketIO
+                    socketio.run(
                         app,
                         host="0.0.0.0",
                         port=self.api_port,
-                        threads=8,
-                        channel_timeout=1,  # Shorter timeout for faster shutdown
+                        debug=False,
+                        use_reloader=False,
+                        log_output=True
                     )
-
-                    # Enable SO_REUSEADDR to allow immediate port reuse after shutdown
-                    if hasattr(self._server, "socket") and self._server.socket:
-                        self._server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-                    logger.info(f"API server successfully bound to port {self.api_port}")
-
-                    # Run the server (suppress exceptions during shutdown)
-                    try:
-                        self._server.run()
-                    except (OSError, IOError):
-                        # Expected during shutdown - ignore
-                        if not self._shutdown_event.is_set():
-                            raise
 
                     # Only log if this was an intentional shutdown
                     if self._shutdown_event.is_set():
@@ -204,47 +162,17 @@ class APIServer(commands.Cog):
             logger.info("API server is not running")
             return
 
-        # Signal shutdown and suppress Waitress errors
+        # Signal shutdown
         self._shutdown_event.set()
-        self._suppress_errors = True
 
-        # Suppress Waitress logging during shutdown
-        waitress_logger = logging.getLogger("waitress")
-        old_level = waitress_logger.level
-        waitress_logger.setLevel(logging.CRITICAL)
-
-        # Close the server if it exists
+        # Stop the SocketIO server if it exists
         if self._server:
-            logger.info("Shutting down API server gracefully...")
+            logger.info("Shutting down SocketIO server gracefully...")
             try:
-                # First, close the server's task channel to stop accepting new requests
-                if hasattr(self._server, "task_dispatcher") and self._server.task_dispatcher:
-                    try:
-                        self._server.task_dispatcher.shutdown()
-                    except Exception:
-                        pass
-
-                # Stop accepting new connections and close socket properly
-                import socket
-
-                if hasattr(self._server, "socket") and self._server.socket:
-                    try:
-                        # Set SO_REUSEADDR to allow immediate port reuse
-                        self._server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                        # Shutdown socket
-                        self._server.socket.shutdown(socket.SHUT_RDWR)
-                    except Exception:
-                        pass  # Socket might already be closed
-
-                    try:
-                        # Close socket
-                        self._server.socket.close()
-                    except Exception:
-                        pass
-
-                # Then close the server itself
-                self._server.close()
-                logger.info("API server socket closed successfully")
+                # SocketIO server will stop when we stop the server
+                # The socketio.run() call in the thread will exit
+                self._server.stop()
+                logger.info("SocketIO server stopped successfully")
             except Exception as e:
                 logger.warning(f"Error during server shutdown: {e}")
 
@@ -257,10 +185,6 @@ class APIServer(commands.Cog):
                 logger.debug("API server thread still running (background cleanup)")
             else:
                 logger.info("API server thread terminated successfully")
-
-        # Restore Waitress logging
-        waitress_logger.setLevel(old_level)
-        self._suppress_errors = False
 
         self._server = None
 

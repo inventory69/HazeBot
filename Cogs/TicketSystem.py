@@ -865,6 +865,57 @@ class TicketSystem(commands.Cog):
     async def on_ready(self) -> None:
         await self._restore_ticket_views()
 
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        """Listen for messages in ticket channels and notify WebSocket clients"""
+        # Ignore bot messages or non-ticket channels
+        if message.author.bot or not message.channel:
+            return
+        
+        # Check if this is a ticket channel
+        tickets = await load_tickets()
+        ticket = next((t for t in tickets if t["channel_id"] == message.channel.id), None)
+        if not ticket:
+            return
+        
+        # Get avatar URL with fallback
+        avatar_url = None
+        try:
+            if message.author.display_avatar:
+                avatar_url = str(message.author.display_avatar.url)
+            elif message.author.avatar:
+                avatar_url = str(message.author.avatar.url)
+        except (AttributeError, Exception) as e:
+            logger.debug(f"Could not get avatar for user {message.author.id}: {e}")
+        
+        # Check if author has admin role
+        is_admin = False
+        if hasattr(message.author, 'roles') and message.author.roles:
+            for role in message.author.roles:
+                if role.id == Config.ADMIN_ROLE_ID or role.id == Config.MODERATOR_ROLE_ID:
+                    is_admin = True
+                    break
+        
+        # Prepare message data
+        message_data = {
+            "id": str(message.id),
+            "author_id": str(message.author.id),
+            "author_name": message.author.name,
+            "author_avatar": avatar_url,
+            "content": message.content,
+            "timestamp": message.created_at.isoformat(),
+            "is_bot": message.author.bot,
+            "is_admin": is_admin,
+        }
+        
+        # Notify WebSocket clients
+        try:
+            from api.app import notify_ticket_update
+            notify_ticket_update(ticket["ticket_id"], 'new_message', message_data)
+            logger.info(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
+        except Exception as e:
+            logger.error(f"Failed to send WebSocket notification: {e}")
+
     async def cog_load(self) -> None:
         """Called when the cog is loaded (including reloads)"""
         if self.bot.is_ready():
