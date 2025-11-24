@@ -269,7 +269,9 @@ async def send_notification(
                         priority='high',
                         notification=messaging.AndroidNotification(
                             sound='default',
-                            channel_id='hazebot_tickets'
+                            channel_id='hazebot_tickets',
+                            icon='ic_notification',  # Monochrome notification icon
+                            color='#FF6B35'  # Orange accent color for icon tint
                         ),
                     ),
                 )
