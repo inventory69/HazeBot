@@ -5016,6 +5016,26 @@ def claim_ticket_endpoint(ticket_id):
 
         channel_id = ticket.get("channel_id")
 
+        # Get the channel and user
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        # Get the guild to fetch member info
+        guild = bot.get_guild(Config.GUILD_ID)
+        if guild:
+            claimer = guild.get_member(int(user_id))
+            claimer_name = claimer.display_name if claimer else f"User {user_id}"
+        else:
+            claimer_name = f"User {user_id}"
+
+        # Send claim message to channel
+        async def send_claim_message():
+            await channel.send(f"🎫 **Ticket claimed by {claimer_name}**\nStatus changed to: **Claimed**")
+
+        future = asyncio.run_coroutine_threadsafe(send_claim_message(), loop)
+        future.result(timeout=10)
+
         # Update ticket
         future = asyncio.run_coroutine_threadsafe(
             update_ticket(channel_id, {"claimed_by": int(user_id), "status": "Claimed"}), loop
@@ -5069,6 +5089,26 @@ def assign_ticket_endpoint(ticket_id):
             return jsonify({"error": "Cannot assign a closed ticket"}), 400
 
         channel_id = ticket.get("channel_id")
+
+        # Get the channel and user
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        # Get the guild to fetch member info
+        guild = bot.get_guild(Config.GUILD_ID)
+        if guild:
+            assignee = guild.get_member(int(assigned_to))
+            assignee_name = assignee.mention if assignee else f"<@{assigned_to}>"
+        else:
+            assignee_name = f"<@{assigned_to}>"
+
+        # Send assignment message to channel
+        async def send_assign_message():
+            await channel.send(f"👤 **Ticket assigned to {assignee_name}**")
+
+        future = asyncio.run_coroutine_threadsafe(send_assign_message(), loop)
+        future.result(timeout=10)
 
         # Update ticket
         future = asyncio.run_coroutine_threadsafe(update_ticket(channel_id, {"assigned_to": int(assigned_to)}), loop)
@@ -5134,9 +5174,18 @@ def close_ticket_endpoint(ticket_id):
         future = asyncio.run_coroutine_threadsafe(send_close_message(), loop)
         future.result(timeout=10)
 
-        # Update ticket status
+        # Update ticket status and clear claimed_by/assigned_to
         future = asyncio.run_coroutine_threadsafe(
-            update_ticket(channel_id, {"status": "Closed", "closed_at": datetime.now().isoformat()}), loop
+            update_ticket(
+                channel_id,
+                {
+                    "status": "Closed",
+                    "closed_at": datetime.now().isoformat(),
+                    "claimed_by": None,
+                    "assigned_to": None,
+                },
+            ),
+            loop,
         )
         future.result(timeout=10)
 
@@ -5209,6 +5258,15 @@ def reopen_ticket_endpoint(ticket_id):
                     logger.error(f"Error restoring permissions: {e}")
 
         future = asyncio.run_coroutine_threadsafe(restore_permissions(), loop)
+        future.result(timeout=10)
+
+        # Send reopen message to channel
+        async def send_reopen_message():
+            await channel.send(
+                f"🔓 **Ticket has been reopened!**\nStatus changed to: **Open**\nReopen count: {reopen_count + 1}/3"
+            )
+
+        future = asyncio.run_coroutine_threadsafe(send_reopen_message(), loop)
         future.result(timeout=10)
 
         # Update ticket
