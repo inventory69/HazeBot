@@ -915,6 +915,23 @@ class TicketSystem(commands.Cog):
             logger.info(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
         except Exception as e:
             logger.error(f"Failed to send WebSocket notification: {e}")
+        
+        # Send push notifications
+        try:
+            logger.info(f"📱 About to send push notification for ticket {ticket['ticket_id']}")
+            from api.app import send_push_notification_for_ticket_event
+            import asyncio
+            asyncio.create_task(send_push_notification_for_ticket_event(
+                ticket["ticket_id"],
+                'new_message',
+                ticket,
+                message_data
+            ))
+            logger.info(f"📱 Push notification task created for ticket {ticket['ticket_num']}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send push notification: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     async def cog_load(self) -> None:
         """Called when the cog is loaded (including reloads)"""

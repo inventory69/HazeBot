@@ -1,7 +1,10 @@
-flask
+flask[async]
 flask-cors
 flask-socketio
 pyjwt
 gunicorn
 gevent
 gevent-websocket
+
+# Firebase Cloud Messaging for push notifications
+firebase-admin

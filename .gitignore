@@ -151,6 +151,14 @@ TestData/
 # API configuration overrides
 Data/api_config_overrides.json
 
+# Firebase credentials (sensitive)
+firebase-credentials.json
+*-firebase-adminsdk-*.json
+
+# Firebase credentials (NEVER commit these!)
+firebase-credentials.json
+**/firebase-credentials.json
+
 # Diff files
 my_changes.diff
 

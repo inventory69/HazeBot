@@ -101,6 +101,19 @@ class APIServer(commands.Cog):
                 try:
                     logger.info(f"API server starting on port {self.api_port} (attempt {attempt}/{max_retries})...")
 
+                    # Initialize Firebase Cloud Messaging (only on first attempt)
+                    if attempt == 1:
+                        try:
+                            from Utils.notification_service import initialize_firebase
+                            firebase_initialized = initialize_firebase()
+                            if firebase_initialized:
+                                logger.info("✅ Firebase Cloud Messaging initialized")
+                            else:
+                                logger.warning("⚠️  Firebase Cloud Messaging not available (push notifications disabled)")
+                        except Exception as e:
+                            logger.warning(f"⚠️  Failed to initialize Firebase: {e}")
+                            logger.warning("   Push notifications will be disabled")
+
                     # Start the SocketIO server with gevent (this blocks until server stops)
                     # Store reference for shutdown
                     self._server = socketio
