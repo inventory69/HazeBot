@@ -3455,7 +3455,9 @@ def get_latest_memes():
                 return None
 
             memes = []
-            async for message in channel.history(limit=limit * 2):  # Fetch more to ensure we have enough memes
+            # Fetch more messages to account for non-meme messages (e.g., text-only messages)
+            # We'll search through up to 5x the limit to ensure we find enough memes
+            async for message in channel.history(limit=limit * 5):
                 # Only include messages with embeds (memes posted by bot)
                 if message.embeds:
                     embed = message.embeds[0]
@@ -5093,6 +5095,8 @@ def create_ticket_endpoint():
         future = asyncio.run_coroutine_threadsafe(create_ticket_from_api(), loop)
         ticket_data = future.result(timeout=15)
 
+        logger.info(f"✅ Ticket created via API: #{ticket_data['ticket_num']} (ID: {ticket_data['ticket_id']}) by user {discord_id}")
+
         return jsonify({
             "success": True,
             "ticket_id": ticket_data["ticket_id"],
@@ -5103,7 +5107,7 @@ def create_ticket_endpoint():
 
     except Exception as e:
         import traceback
-        logger.error(f"Error creating ticket: {e}\n{traceback.format_exc()}")
+        logger.error(f"❌ Error creating ticket via API: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to create ticket: {str(e)}"}), 500
 
 
@@ -5661,11 +5665,10 @@ def get_ticket_messages_endpoint(ticket_id):
 
 @app.route("/api/tickets/<ticket_id>/messages", methods=["POST"])
 @token_required
-@require_permission("all")
 def send_ticket_message_endpoint(ticket_id):
-    """Send a message to a ticket channel"""
+    """Send a message to a ticket channel (admins can message any ticket, users can only message their own)"""
     try:
-        from Cogs.TicketSystem import load_tickets
+        from Cogs.TicketSystem import load_tickets, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
 
         import asyncio
 
@@ -5687,6 +5690,26 @@ def send_ticket_message_endpoint(ticket_id):
         if not ticket:
             return jsonify({"error": "Ticket not found"}), 404
 
+        # Check permissions: Admins/Mods can message any ticket, users can only message their own
+        discord_id = getattr(request, 'discord_id', None)
+        if not discord_id:
+            return jsonify({"error": "User information not found"}), 401
+
+        user_id = int(discord_id)
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        member = guild.get_member(user_id)
+        if not member:
+            return jsonify({"error": "User not found in guild"}), 404
+
+        is_admin_or_mod = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
+        
+        # Users can only message their own tickets
+        if not is_admin_or_mod and ticket.get("user_id") != user_id:
+            return jsonify({"error": "You can only message your own tickets"}), 403
+
         channel_id = ticket.get("channel_id")
         channel = bot.get_channel(channel_id)
         if not channel:
@@ -5694,12 +5717,27 @@ def send_ticket_message_endpoint(ticket_id):
 
         # Send message to channel
         async def send_message():
-            msg = await channel.send(f"**[Admin Panel - {request.username}]:** {message_content}")
+            # Format message differently for admins vs regular users
+            if is_admin_or_mod:
+                formatted_content = f"**[Admin Panel - {request.username}]:** {message_content}"
+            else:
+                formatted_content = message_content
+            
+            msg = await channel.send(formatted_content)
+            
+            # Get avatar URL
+            avatar_url = None
+            if member.display_avatar:
+                avatar_url = str(member.display_avatar.url)
+            
             return {
                 "id": str(msg.id),
-                "author_name": request.username,
-                "content": message_content,
+                "author_id": str(member.id),
+                "author_name": member.name,
+                "author_avatar": avatar_url,
+                "content": formatted_content,
                 "timestamp": msg.created_at.isoformat(),
+                "is_bot": False,
             }
 
         future = asyncio.run_coroutine_threadsafe(send_message(), loop)
