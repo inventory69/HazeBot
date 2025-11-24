@@ -4798,9 +4798,11 @@ def get_tickets():
                 "created_at": ticket.get("created_at"),
                 "closed_at": ticket.get("closed_at"),
                 "claimed_by": str(claimed_by_id) if claimed_by_id else None,
-                "claimed_by_name": claimer.name if claimer else None,
+                "claimed_by_name": claimer.display_name if claimer else None,
+                "claimed_by_avatar": str(claimer.avatar.url) if claimer and claimer.avatar else None,
                 "assigned_to": str(assigned_to_id) if assigned_to_id else None,
-                "assigned_to_name": assigned.name if assigned else None,
+                "assigned_to_name": assigned.display_name if assigned else None,
+                "assigned_to_avatar": str(assigned.avatar.url) if assigned and assigned.avatar else None,
             }
             enriched_tickets.append(enriched_ticket)
 
@@ -4814,6 +4816,295 @@ def get_tickets():
 
         logger.error(f"Error fetching tickets: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch tickets: {str(e)}"}), 500
+
+
+@app.route("/api/tickets/my", methods=["GET"])
+@token_required
+def get_my_tickets():
+    """Get current user's tickets with optional status filter"""
+    try:
+        from Cogs.TicketSystem import load_tickets
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get current user's Discord ID from token
+        discord_id = getattr(request, 'discord_id', None)
+        if not discord_id or discord_id == "unknown":
+            return jsonify({"error": "User information not found"}), 401
+
+        user_id = int(discord_id)
+
+        # Get all tickets
+        loop = bot.loop
+        future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+        tickets = future.result(timeout=10)
+
+        # Filter by current user
+        user_tickets = [t for t in tickets if t.get("user_id") == user_id]
+
+        # Filter by status if provided
+        status_filter = request.args.get("status")
+        if status_filter:
+            user_tickets = [t for t in user_tickets if t.get("status", "").lower() == status_filter.lower()]
+
+        # Enrich with Discord user information
+        guild = bot.get_guild(Config.GUILD_ID)
+        enriched_tickets = []
+
+        for ticket in user_tickets:
+            # Get creator info
+            creator = guild.get_member(user_id) if guild else None
+
+            # Get claimer info
+            claimed_by_id = ticket.get("claimed_by")
+            claimer = None
+            if guild and claimed_by_id:
+                claimer = guild.get_member(int(claimed_by_id))
+
+            # Get assigned user info
+            assigned_to_id = ticket.get("assigned_to")
+            assigned = None
+            if guild and assigned_to_id:
+                assigned = guild.get_member(int(assigned_to_id))
+
+            enriched_ticket = {
+                "ticket_id": ticket.get("ticket_id"),
+                "ticket_num": ticket.get("ticket_num"),
+                "channel_id": str(ticket.get("channel_id")) if ticket.get("channel_id") else None,
+                "user_id": str(user_id),
+                "username": creator.name if creator else "Unknown User",
+                "display_name": creator.display_name if creator else "Unknown User",
+                "avatar_url": str(creator.avatar.url) if creator and creator.avatar else None,
+                "type": ticket.get("type", "General"),
+                "status": ticket.get("status", "Open"),
+                "created_at": ticket.get("created_at"),
+                "closed_at": ticket.get("closed_at"),
+                "claimed_by": str(claimed_by_id) if claimed_by_id else None,
+                "claimed_by_name": claimer.display_name if claimer else None,
+                "claimed_by_avatar": str(claimer.avatar.url) if claimer and claimer.avatar else None,
+                "assigned_to": str(assigned_to_id) if assigned_to_id else None,
+                "assigned_to_name": assigned.display_name if assigned else None,
+                "assigned_to_avatar": str(assigned.avatar.url) if assigned and assigned.avatar else None,
+                "initial_message": ticket.get("initial_message"),
+            }
+            enriched_tickets.append(enriched_ticket)
+
+        # Sort by ticket_num descending (newest first)
+        enriched_tickets.sort(key=lambda t: t.get("ticket_num", 0), reverse=True)
+
+        return jsonify({"tickets": enriched_tickets, "total": len(enriched_tickets)})
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Error fetching user tickets: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch tickets: {str(e)}"}), 500
+
+
+@app.route("/api/tickets", methods=["POST"])
+@token_required
+def create_ticket_endpoint():
+    """Create a new ticket (for regular users)"""
+    try:
+        from Cogs.TicketSystem import load_tickets, load_counter
+        from datetime import datetime, timedelta
+        import asyncio
+
+        bot = app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Parse request body
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        ticket_type = data.get("type")
+        subject = data.get("subject")
+        description = data.get("description")
+
+        # Validation
+        if not ticket_type or not subject or not description:
+            return jsonify({"error": "Missing required fields: type, subject, description"}), 400
+
+        # Load config to validate ticket type
+        config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
+        if config_file.exists():
+            with open(config_file, "r", encoding="utf-8") as f:
+                ticket_config = json.load(f)
+                valid_categories = ticket_config.get("categories", ["Application", "Bug", "Support"])
+        else:
+            valid_categories = ["Application", "Bug", "Support"]
+
+        if ticket_type not in valid_categories:
+            return jsonify({"error": f"Invalid ticket type. Must be one of: {', '.join(valid_categories)}"}), 400
+
+        # Validate lengths
+        if len(subject) < 3 or len(subject) > 100:
+            return jsonify({"error": "Subject must be between 3 and 100 characters"}), 400
+        if len(description) < 10 or len(description) > 2000:
+            return jsonify({"error": "Description must be between 10 and 2000 characters"}), 400
+
+        # Get current user info from JWT token (set by @token_required decorator)
+        discord_id = getattr(request, 'discord_id', None)
+        if not discord_id or discord_id == "unknown":
+            return jsonify({"error": "User information not found"}), 401
+
+        user_id = int(discord_id)
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        member = guild.get_member(user_id)
+        if not member:
+            return jsonify({"error": "User not found in guild"}), 404
+
+        # Check cooldown: 1 hour between ticket creations (except admins/mods)
+        from Cogs.TicketSystem import ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+        is_admin_or_mod = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
+
+        if not is_admin_or_mod:
+            loop = bot.loop
+            future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
+            tickets = future.result(timeout=10)
+
+            user_tickets = [t for t in tickets if t["user_id"] == user_id]
+            if user_tickets:
+                last_ticket = max(user_tickets, key=lambda t: datetime.fromisoformat(t["created_at"]))
+                time_since_last = datetime.now() - datetime.fromisoformat(last_ticket["created_at"])
+                if time_since_last < timedelta(hours=1):
+                    remaining_minutes = int((timedelta(hours=1) - time_since_last).total_seconds() / 60)
+                    return jsonify({
+                        "error": f"You can only create one ticket per hour. Please wait {remaining_minutes} minutes."
+                    }), 429
+
+        # Create ticket using bot's create_ticket function
+        # We'll create a mock interaction object for the create_ticket function
+        from Cogs.TicketSystem import create_ticket
+
+        # Create initial message combining subject and description
+        initial_message = f"**Subject:** {subject}\n\n**Description:**\n{description}"
+
+        # We need to create a proper interaction-like object
+        # For API calls, we'll directly call the ticket creation logic
+        from Cogs.TicketSystem import (
+            load_tickets, save_ticket, update_ticket, save_counter,
+            TICKETS_CATEGORY_ID, create_ticket_embed, TicketControlView
+        )
+        import uuid
+
+        loop = bot.loop
+
+        async def create_ticket_from_api():
+            import discord
+            
+            tickets = await load_tickets()
+
+            guild = bot.get_guild(Config.GUILD_ID)
+            category = guild.get_channel(TICKETS_CATEGORY_ID)
+            if not category or not isinstance(category, discord.CategoryChannel):
+                raise Exception("Tickets category not available")
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                member: discord.PermissionOverwrite(view_channel=True),
+                guild.me: discord.PermissionOverwrite(view_channel=True),
+            }
+            moderator_role = discord.utils.get(guild.roles, id=MODERATOR_ROLE_ID)
+            if moderator_role:
+                overwrites[moderator_role] = discord.PermissionOverwrite(view_channel=True)
+
+            # Calculate ticket_num
+            existing_nums = [t.get("ticket_num", 0) for t in tickets]
+            max_existing = max(existing_nums) if existing_nums else 0
+            current_counter = await load_counter()
+            if current_counter <= max_existing:
+                ticket_num = max_existing + 1
+                await save_counter(ticket_num + 1)
+            else:
+                ticket_num = current_counter
+                await save_counter(ticket_num + 1)
+
+            channel = await guild.create_text_channel(
+                name=f"ticket-{ticket_num}-{ticket_type}-{member.name}",
+                overwrites=overwrites,
+                category=category,
+            )
+
+            ticket_data = {
+                "ticket_id": str(uuid.uuid4()),
+                "ticket_num": ticket_num,
+                "user_id": member.id,
+                "channel_id": channel.id,
+                "type": ticket_type,
+                "status": "Open",
+                "claimed_by": None,
+                "assigned_to": None,
+                "created_at": datetime.now().isoformat(),
+                "embed_message_id": None,
+                "reopen_count": 0,
+                "initial_message": initial_message,
+            }
+
+            await save_ticket(ticket_data)
+
+            embed = create_ticket_embed(ticket_data, guild.me)
+            view = TicketControlView()
+            # Disable Reopen button since ticket is open
+            for item in view.children:
+                if isinstance(item, discord.ui.Button) and item.label == "Reopen":
+                    item.disabled = True
+
+            msg = await channel.send(
+                f"{member.mention}, your ticket has been opened!",
+                embed=embed,
+                view=view,
+            )
+
+            ticket_data["embed_message_id"] = msg.id
+            await update_ticket(channel.id, {"embed_message_id": msg.id})
+
+            # Notify Admins/Moderators
+            admin_role = discord.utils.get(guild.roles, id=ADMIN_ROLE_ID)
+            moderator_role = discord.utils.get(guild.roles, id=MODERATOR_ROLE_ID) if MODERATOR_ROLE_ID else None
+            roles_to_mention = []
+            if admin_role:
+                roles_to_mention.append(admin_role.mention)
+            if moderator_role:
+                roles_to_mention.append(moderator_role.mention)
+
+            if roles_to_mention:
+                await channel.send(
+                    f"{' '.join(roles_to_mention)} New ticket #{ticket_num} created by {member.mention}."
+                )
+
+            # Send the initial message (subject + description) to the channel
+            if initial_message:
+                await channel.send(initial_message)
+
+            await channel.send(
+                "An admin or moderator will handle your request soon. Please wait patiently."
+            )
+
+            return ticket_data
+
+        future = asyncio.run_coroutine_threadsafe(create_ticket_from_api(), loop)
+        ticket_data = future.result(timeout=15)
+
+        return jsonify({
+            "success": True,
+            "ticket_id": ticket_data["ticket_id"],
+            "ticket_num": ticket_data["ticket_num"],
+            "channel_id": str(ticket_data["channel_id"]),
+            "message": f"Ticket #{ticket_data['ticket_num']} created successfully!"
+        }), 201
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Error creating ticket: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to create ticket: {str(e)}"}), 500
 
 
 @app.route("/api/tickets/<ticket_id>", methods=["GET"])
@@ -5326,11 +5617,16 @@ def get_ticket_messages_endpoint(ticket_id):
         async def fetch_messages():
             messages = []
             async for message in channel.history(limit=50, oldest_first=False):
-                # Skip bot system messages (but keep Initial details and Admin Panel messages)
+                # Skip bot system messages (but keep Initial details, Admin Panel, and important system messages)
                 if message.author.bot:
-                    # Only include bot messages that are initial details or admin panel messages
+                    # Include bot messages that are important (initial details, admin panel, close/claim/assign/reopen notifications)
                     if not (
-                        message.content.startswith("**Initial details") or message.content.startswith("**[Admin Panel")
+                        message.content.startswith("**Initial details")
+                        or message.content.startswith("**[Admin Panel")
+                        or "Ticket successfully closed" in message.content
+                        or "Ticket claimed by" in message.content
+                        or "Ticket assigned to" in message.content
+                        or "Ticket has been reopened" in message.content
                     ):
                         continue
 
