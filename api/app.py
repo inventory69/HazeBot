@@ -6,8 +6,10 @@ Provides REST endpoints to read and update bot configuration
 import json
 import logging
 import os
+import re
 import sys
 import threading
+import traceback
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -5130,6 +5132,14 @@ def create_ticket_endpoint():
 
         logger.info(f"✅ Ticket created via API: #{ticket_data['ticket_num']} (ID: {ticket_data['ticket_id']}) by user {discord_id}")
 
+        # Send push notification to admins/mods about new ticket
+        async def notify_push():
+            # Add user_name to ticket_data for notification
+            ticket_data['user_name'] = member.display_name if member else 'Unknown'
+            await send_push_notification_for_ticket_event(ticket_data["ticket_id"], 'new_ticket', ticket_data)
+        
+        asyncio.run_coroutine_threadsafe(notify_push(), loop)
+
         return jsonify({
             "success": True,
             "ticket_id": ticket_data["ticket_id"],
@@ -5447,6 +5457,13 @@ def assign_ticket_endpoint(ticket_id):
         # Update ticket
         future = asyncio.run_coroutine_threadsafe(update_ticket(channel_id, {"assigned_to": int(assigned_to)}), loop)
         future.result(timeout=10)
+        
+        # Send push notification to assigned user
+        async def notify_push():
+            ticket['assigned_to'] = int(assigned_to)
+            await send_push_notification_for_ticket_event(ticket_id, 'ticket_assigned', ticket)
+        
+        asyncio.run_coroutine_threadsafe(notify_push(), loop)
 
         log_action(
             request.username,
@@ -5855,6 +5872,12 @@ def send_ticket_message_endpoint(ticket_id):
 
         # Notify WebSocket clients about new message
         notify_ticket_update(ticket_id, 'new_message', message_data)
+        
+        # Send push notification for new message
+        async def notify_push():
+            await send_push_notification_for_ticket_event(ticket_id, 'new_message', ticket, message_data)
+        
+        asyncio.run_coroutine_threadsafe(notify_push(), loop)
 
         log_action(
             request.username,
@@ -5998,6 +6021,185 @@ def reset_ticket_config():
 
 
 # ==================================
+# Notification Endpoints
+# ==================================
+
+@app.route("/api/notifications/register", methods=["POST"])
+async def notification_register_endpoint():
+    """Register FCM token for push notifications"""
+    try:
+        from Utils.notification_service import register_token, is_fcm_enabled
+        
+        if not is_fcm_enabled():
+            return jsonify({"error": "Push notifications are not enabled on this server"}), 503
+        
+        token_data = request.get_json()
+        auth_header = request.headers.get("Authorization")
+        
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        jwt_token = auth_header.split(" ")[1]
+        
+        # Decode JWT to get user info
+        try:
+            with jwt_decode_lock:
+                decoded = jwt.decode(jwt_token, Config.JWT_SECRET, algorithms=["HS256"])
+            user_id = decoded.get("user_id")
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+        
+        fcm_token = token_data.get("fcm_token")
+        device_info = token_data.get("device_info")
+        
+        if not fcm_token:
+            return jsonify({"error": "fcm_token is required"}), 400
+        
+        # Register token
+        success = await register_token(user_id, fcm_token, device_info)
+        
+        if success:
+            return jsonify({"message": "Token registered successfully"}), 200
+        else:
+            return jsonify({"error": "Failed to register token"}), 500
+        
+    except Exception as e:
+        logger.error(f"Error registering FCM token: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to register token: {str(e)}"}), 500
+
+
+@app.route("/api/notifications/unregister", methods=["POST"])
+async def notification_unregister_endpoint():
+    """Unregister FCM token"""
+    try:
+        from Utils.notification_service import unregister_token, is_fcm_enabled
+        
+        if not is_fcm_enabled():
+            return jsonify({"error": "Push notifications are not enabled on this server"}), 503
+        
+        token_data = request.get_json()
+        auth_header = request.headers.get("Authorization")
+        
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        jwt_token = auth_header.split(" ")[1]
+        
+        # Decode JWT to get user info
+        try:
+            with jwt_decode_lock:
+                decoded = jwt.decode(jwt_token, Config.JWT_SECRET, algorithms=["HS256"])
+            user_id = decoded.get("user_id")
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+        
+        fcm_token = token_data.get("fcm_token")
+        
+        if not fcm_token:
+            return jsonify({"error": "fcm_token is required"}), 400
+        
+        # Unregister token
+        success = await unregister_token(user_id, fcm_token)
+        
+        if success:
+            return jsonify({"message": "Token unregistered successfully"}), 200
+        else:
+            return jsonify({"error": "Token not found"}), 404
+        
+    except Exception as e:
+        logger.error(f"Error unregistering FCM token: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to unregister token: {str(e)}"}), 500
+
+
+@app.route("/api/notifications/settings", methods=["GET"])
+def notification_settings_get_endpoint():
+    """Get notification settings for authenticated user"""
+    try:
+        from Utils.notification_service import get_user_notification_settings
+        
+        auth_header = request.headers.get("Authorization")
+        
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        jwt_token = auth_header.split(" ")[1]
+        
+        # Decode JWT to get user info
+        try:
+            with jwt_decode_lock:
+                decoded = jwt.decode(jwt_token, Config.JWT_SECRET, algorithms=["HS256"])
+            user_id = decoded.get("user_id")
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+        
+        # Get user settings
+        settings = get_user_notification_settings(user_id)
+        
+        return jsonify(settings), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting notification settings: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get settings: {str(e)}"}), 500
+
+
+@app.route("/api/notifications/settings", methods=["PUT"])
+def notification_settings_update_endpoint():
+    """Update notification settings for authenticated user"""
+    try:
+        from Utils.notification_service import update_user_notification_settings
+        
+        settings_data = request.get_json()
+        auth_header = request.headers.get("Authorization")
+        
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+        
+        jwt_token = auth_header.split(" ")[1]
+        
+        # Decode JWT to get user info
+        try:
+            with jwt_decode_lock:
+                decoded = jwt.decode(jwt_token, Config.JWT_SECRET, algorithms=["HS256"])
+            user_id = decoded.get("user_id")
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 401
+        
+        # Validate settings
+        valid_settings = {
+            'ticket_new_messages',
+            'ticket_mentions',
+            'ticket_created',
+            'ticket_assigned',
+        }
+        
+        # Filter invalid settings
+        filtered_settings = {k: v for k, v in settings_data.items() if k in valid_settings}
+        
+        if not filtered_settings:
+            return jsonify({"error": "No valid settings provided"}), 400
+        
+        # Update settings
+        success = update_user_notification_settings(user_id, filtered_settings)
+        
+        if success:
+            return jsonify({"message": "Settings updated successfully"}), 200
+        else:
+            return jsonify({"error": "Failed to update settings"}), 500
+        
+    except Exception as e:
+        logger.error(f"Error updating notification settings: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
+
+
+# ==================================
 # WebSocket Events
 # ==================================
 
@@ -6043,7 +6245,7 @@ def handle_leave_ticket(data):
 
 def notify_ticket_update(ticket_id, event_type, data):
     """
-    Notify all clients in a ticket room about an update
+    Notify all clients in a ticket room about an update via WebSocket
     
     Args:
         ticket_id: Ticket ID
@@ -6060,9 +6262,157 @@ def notify_ticket_update(ticket_id, event_type, data):
     logger.info(f"📡 Broadcast to {room}: {event_type}")
 
 
+async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_data, message_data=None):
+    """
+    Send push notifications for ticket events
+    
+    Args:
+        ticket_id: Ticket ID
+        event_type: Type of event (new_ticket, new_message, ticket_assigned, etc.)
+        ticket_data: Ticket data dictionary
+        message_data: Optional message data for new_message events
+    """
+    try:
+        from Utils.notification_service import send_notification, send_notification_to_multiple_users, is_fcm_enabled
+        
+        if not is_fcm_enabled():
+            return
+        
+        # Determine who should receive notifications based on event type
+        notify_user_ids = []
+        notification_type = None
+        title = ""
+        body = ""
+        
+        if event_type == "new_ticket":
+            # Notify all admins and moderators about new tickets
+            notification_type = "ticket_created"
+            title = f"🎫 New Ticket #{ticket_data.get('ticket_number', '?')}"
+            body = f"{ticket_data.get('user_name', 'Someone')} created a new ticket"
+            
+            # Get all admin/mod IDs from the bot
+            bot = Config.bot
+            if bot:
+                guild = bot.get_guild(Config.get_guild_id())
+                if guild:
+                    admin_role = guild.get_role(Config.ADMIN_ROLE_ID)
+                    mod_role = guild.get_role(Config.MODERATOR_ROLE_ID)
+                    
+                    if admin_role:
+                        notify_user_ids.extend([str(member.id) for member in admin_role.members])
+                    if mod_role:
+                        notify_user_ids.extend([str(member.id) for member in mod_role.members])
+                    
+                    # Remove duplicates
+                    notify_user_ids = list(set(notify_user_ids))
+        
+        elif event_type == "new_message":
+            # Notify ticket creator OR assigned admin/moderator
+            notification_type = "ticket_new_messages"
+            
+            if message_data:
+                author_name = message_data.get('author_name', 'Someone')
+                title = f"💬 New message in Ticket #{ticket_data.get('ticket_number', '?')}"
+                body = f"{author_name}: {message_data.get('content', '')[:100]}"
+                
+                # Check for mentions in message
+                content = message_data.get('content', '')
+                mention_pattern = r'<@!?(\d+)>'
+                mentioned_ids = re.findall(mention_pattern, content)
+                
+                if mentioned_ids:
+                    # Send mention notifications
+                    for mentioned_id in mentioned_ids:
+                        # Don't notify if user mentioned themselves
+                        if mentioned_id != str(message_data.get('author_id')):
+                            await send_notification(
+                                mentioned_id,
+                                f"📢 You were mentioned in Ticket #{ticket_data.get('ticket_number', '?')}",
+                                f"{author_name} mentioned you: {content[:100]}",
+                                data={
+                                    'ticket_id': ticket_id,
+                                    'notification_type': 'mention',
+                                    'ticket_number': str(ticket_data.get('ticket_number', ''))
+                                },
+                                notification_type="ticket_mentions"
+                            )
+                
+                # Determine who should be notified about the message
+                author_id = str(message_data.get('author_id'))
+                ticket_creator_id = str(ticket_data.get('user_id'))
+                assigned_to = ticket_data.get('assigned_to')
+                claimed_by = ticket_data.get('claimed_by')
+                
+                # User created a message → notify assigned/claimed admin
+                if author_id == ticket_creator_id:
+                    if assigned_to:
+                        notify_user_ids = [str(assigned_to)]
+                    elif claimed_by:
+                        notify_user_ids = [str(claimed_by)]
+                # Admin/Mod created a message → notify ticket creator
+                else:
+                    notify_user_ids = [ticket_creator_id]
+                
+                # Don't notify the author
+                notify_user_ids = [uid for uid in notify_user_ids if uid != author_id]
+        
+        elif event_type == "ticket_assigned":
+            # Notify the assigned user
+            notification_type = "ticket_assigned"
+            assigned_to = ticket_data.get('assigned_to')
+            
+            if assigned_to:
+                title = f"📌 Ticket #{ticket_data.get('ticket_number', '?')} assigned to you"
+                body = f"You have been assigned to handle this ticket"
+                notify_user_ids = [str(assigned_to)]
+        
+        # Send notifications
+        if notify_user_ids and title and body:
+            payload_data = {
+                'ticket_id': ticket_id,
+                'notification_type': event_type,
+                'ticket_number': str(ticket_data.get('ticket_number', ''))
+            }
+            
+            if len(notify_user_ids) == 1:
+                await send_notification(
+                    notify_user_ids[0],
+                    title,
+                    body,
+                    data=payload_data,
+                    notification_type=notification_type
+                )
+            else:
+                count = await send_notification_to_multiple_users(
+                    notify_user_ids,
+                    title,
+                    body,
+                    data=payload_data,
+                    notification_type=notification_type
+                )
+                logger.info(f"📱 Sent push notifications to {count}/{len(notify_user_ids)} users")
+    
+    except Exception as e:
+        logger.error(f"Error sending push notification: {e}")
+        # Don't let notification errors break the main flow
+        pass
+
+
 if __name__ == "__main__":
     # Load any saved configuration on startup
     load_config_from_file()
+    
+    # Initialize Firebase Cloud Messaging (optional)
+    try:
+        from Utils.notification_service import initialize_firebase
+        firebase_initialized = initialize_firebase()
+        if firebase_initialized:
+            print("✅ Firebase Cloud Messaging initialized")
+        else:
+            print("⚠️  Firebase Cloud Messaging not available (push notifications disabled)")
+    except Exception as e:
+        print(f"⚠️  Failed to initialize Firebase: {e}")
+        print("   Push notifications will be disabled")
 
     # Get port from environment or use default
     port = int(os.getenv("API_PORT", 5000))
