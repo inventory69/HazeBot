@@ -271,6 +271,12 @@ async def update_user_notification_settings(user_id: str, new_settings: Dict[str
 async def check_user_notification_enabled(user_id: str, notification_type: str) -> bool:
     """Return whether a specific notification type is enabled for a user."""
     settings = await get_user_notification_settings(user_id)
+
+    # First check if notifications are globally enabled for this user
+    if not settings.get("notifications_enabled", True):
+        return False
+
+    # Then check the specific notification type
     return settings.get(notification_type, True)
 
 

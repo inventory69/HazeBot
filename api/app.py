@@ -5867,8 +5867,15 @@ def send_ticket_message_endpoint(ticket_id):
                 logger.debug(f"Could not get avatar for user {member.id}: {e}")
                 avatar_url = None
 
+            # Determine user role for badge display
+            user_role = None
+            if any(role.id == ADMIN_ROLE_ID for role in member.roles):
+                user_role = "admin"
+            elif any(role.id == MODERATOR_ROLE_ID for role in member.roles):
+                user_role = "moderator"
+
             logger.info(
-                f"📤 Message sent from {member.name} (ID: {member.id}) - avatar_url: {avatar_url or 'None'}, is_admin: {is_admin_or_mod}"
+                f"📤 Message sent from {member.name} (ID: {member.id}) - avatar_url: {avatar_url or 'None'}, is_admin: {is_admin_or_mod}, role: {user_role}"
             )
 
             return {
@@ -5879,6 +5886,8 @@ def send_ticket_message_endpoint(ticket_id):
                 "content": formatted_content,
                 "timestamp": msg.created_at.isoformat(),
                 "is_bot": False,
+                "is_admin": is_admin_or_mod,
+                "role": user_role,
             }
 
         future = asyncio.run_coroutine_threadsafe(send_message(), loop)
