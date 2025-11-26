@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
 
 import discord
 from discord.ext import commands, tasks
@@ -190,6 +189,7 @@ class GamingHub(commands.Cog):
         restored_count = 0
         cleaned_data = []
         from Config import get_local_now
+
         now = get_local_now().timestamp()
 
         for request_data in self.game_requests_data:
@@ -214,7 +214,7 @@ class GamingHub(commands.Cog):
                 continue
 
             try:
-                message = await channel.fetch_message(message_id)
+                await channel.fetch_message(message_id)
 
                 # Create and attach the view without editing the message
                 view = GameRequestView(requester_id, target_id, game_name, created_at)
@@ -250,6 +250,7 @@ class GamingHub(commands.Cog):
 
         # Add new entry
         from Config import get_local_now
+
         self.game_requests_data.append(
             {
                 "channel_id": channel_id,
@@ -289,6 +290,7 @@ class GamingHub(commands.Cog):
     async def cleanup_expired_requests(self):
         """Clean up expired game requests (older than 7 days)"""
         from Config import get_local_now
+
         now = get_local_now().timestamp()
         cleaned_count = 0
 

@@ -32,7 +32,7 @@ from Utils.Logger import Logger as logger
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', logger=False, engineio_logger=False)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()
@@ -4837,7 +4837,7 @@ def get_my_tickets():
             return jsonify({"error": "Bot not initialized"}), 503
 
         # Get current user's Discord ID from token
-        discord_id = getattr(request, 'discord_id', None)
+        discord_id = getattr(request, "discord_id", None)
         if not discord_id or discord_id == "unknown":
             return jsonify({"error": "User information not found"}), 401
 
@@ -4936,6 +4936,7 @@ def get_my_tickets():
 
     except Exception as e:
         import traceback
+
         logger.error(f"Error fetching user tickets: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch tickets: {str(e)}"}), 500
 
@@ -4985,7 +4986,7 @@ def create_ticket_endpoint():
             return jsonify({"error": "Description must be between 10 and 2000 characters"}), 400
 
         # Get current user info from JWT token (set by @token_required decorator)
-        discord_id = getattr(request, 'discord_id', None)
+        discord_id = getattr(request, "discord_id", None)
         if not discord_id or discord_id == "unknown":
             return jsonify({"error": "User information not found"}), 401
 
@@ -5000,6 +5001,7 @@ def create_ticket_endpoint():
 
         # Check cooldown: 1 hour between ticket creations (except admins/mods)
         from Cogs.TicketSystem import ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+
         is_admin_or_mod = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
 
         if not is_admin_or_mod:
@@ -5013,13 +5015,12 @@ def create_ticket_endpoint():
                 time_since_last = datetime.now() - datetime.fromisoformat(last_ticket["created_at"])
                 if time_since_last < timedelta(hours=1):
                     remaining_minutes = int((timedelta(hours=1) - time_since_last).total_seconds() / 60)
-                    return jsonify({
-                        "error": f"You can only create one ticket per hour. Please wait {remaining_minutes} minutes."
-                    }), 429
+                    return jsonify(
+                        {"error": f"You can only create one ticket per hour. Please wait {remaining_minutes} minutes."}
+                    ), 429
 
         # Create ticket using bot's create_ticket function
         # We'll create a mock interaction object for the create_ticket function
-        from Cogs.TicketSystem import create_ticket
 
         # Create initial message combining subject and description
         initial_message = f"**Subject:** {subject}\n\n**Description:**\n{description}"
@@ -5027,8 +5028,13 @@ def create_ticket_endpoint():
         # We need to create a proper interaction-like object
         # For API calls, we'll directly call the ticket creation logic
         from Cogs.TicketSystem import (
-            load_tickets, save_ticket, update_ticket, save_counter,
-            TICKETS_CATEGORY_ID, create_ticket_embed, TicketControlView
+            load_tickets,
+            save_ticket,
+            update_ticket,
+            save_counter,
+            TICKETS_CATEGORY_ID,
+            create_ticket_embed,
+            TicketControlView,
         )
         import uuid
 
@@ -5036,7 +5042,7 @@ def create_ticket_endpoint():
 
         async def create_ticket_from_api():
             import discord
-            
+
             tickets = await load_tickets()
 
             guild = bot.get_guild(Config.GUILD_ID)
@@ -5121,35 +5127,38 @@ def create_ticket_endpoint():
             if initial_message:
                 await channel.send(initial_message)
 
-            await channel.send(
-                "An admin or moderator will handle your request soon. Please wait patiently."
-            )
+            await channel.send("An admin or moderator will handle your request soon. Please wait patiently.")
 
             return ticket_data
 
         future = asyncio.run_coroutine_threadsafe(create_ticket_from_api(), loop)
         ticket_data = future.result(timeout=15)
 
-        logger.info(f"✅ Ticket created via API: #{ticket_data['ticket_num']} (ID: {ticket_data['ticket_id']}) by user {discord_id}")
+        logger.info(
+            f"✅ Ticket created via API: #{ticket_data['ticket_num']} (ID: {ticket_data['ticket_id']}) by user {discord_id}"
+        )
 
         # Send push notification to admins/mods about new ticket
         async def notify_push():
             # Add user_name to ticket_data for notification
-            ticket_data['user_name'] = member.display_name if member else 'Unknown'
-            await send_push_notification_for_ticket_event(ticket_data["ticket_id"], 'new_ticket', ticket_data)
-        
+            ticket_data["user_name"] = member.display_name if member else "Unknown"
+            await send_push_notification_for_ticket_event(ticket_data["ticket_id"], "new_ticket", ticket_data)
+
         asyncio.run_coroutine_threadsafe(notify_push(), loop)
 
-        return jsonify({
-            "success": True,
-            "ticket_id": ticket_data["ticket_id"],
-            "ticket_num": ticket_data["ticket_num"],
-            "channel_id": str(ticket_data["channel_id"]),
-            "message": f"Ticket #{ticket_data['ticket_num']} created successfully!"
-        }), 201
+        return jsonify(
+            {
+                "success": True,
+                "ticket_id": ticket_data["ticket_id"],
+                "ticket_num": ticket_data["ticket_num"],
+                "channel_id": str(ticket_data["channel_id"]),
+                "message": f"Ticket #{ticket_data['ticket_num']} created successfully!",
+            }
+        ), 201
 
     except Exception as e:
         import traceback
+
         logger.error(f"❌ Error creating ticket via API: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to create ticket: {str(e)}"}), 500
 
@@ -5457,12 +5466,12 @@ def assign_ticket_endpoint(ticket_id):
         # Update ticket
         future = asyncio.run_coroutine_threadsafe(update_ticket(channel_id, {"assigned_to": int(assigned_to)}), loop)
         future.result(timeout=10)
-        
+
         # Send push notification to assigned user
         async def notify_push():
-            ticket['assigned_to'] = int(assigned_to)
-            await send_push_notification_for_ticket_event(ticket_id, 'ticket_assigned', ticket)
-        
+            ticket["assigned_to"] = int(assigned_to)
+            await send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket)
+
         asyncio.run_coroutine_threadsafe(notify_push(), loop)
 
         log_action(
@@ -5693,47 +5702,50 @@ def get_ticket_messages_endpoint(ticket_id):
                 # Get avatar URL with fallback
                 # For admin panel messages, extract the real admin's username and get their avatar
                 avatar_url = None
-                actual_author_name = message.author.name
                 is_admin = False
                 user_role = None  # 'admin', 'moderator', or None
-                
+
                 # Check if author has admin or moderator role
-                if hasattr(message.author, 'roles') and message.author.roles:
+                if hasattr(message.author, "roles") and message.author.roles:
                     for role in message.author.roles:
                         if role.id == Config.ADMIN_ROLE_ID:
                             is_admin = True
-                            user_role = 'admin'
+                            user_role = "admin"
                             break
                         elif role.id == Config.MODERATOR_ROLE_ID:
                             is_admin = True
-                            user_role = 'moderator'
+                            user_role = "moderator"
                             break
-                
+
                 if message.content.startswith("**[Admin Panel"):
                     is_admin = True
                     # Parse admin username from message like "**[Admin Panel - username]:**"
                     import re
-                    admin_match = re.search(r'\[Admin Panel - ([^\]]+)\]', message.content)
+
+                    admin_match = re.search(r"\[Admin Panel - ([^\]]+)\]", message.content)
                     if admin_match:
                         admin_username = admin_match.group(1)
                         # Try to find member by username
                         guild = message.guild
                         admin_member = None
                         for member in guild.members:
-                            if member.name == admin_username or member.display_name == admin_username or member.global_name == admin_username:
+                            if (
+                                member.name == admin_username
+                                or member.display_name == admin_username
+                                or member.global_name == admin_username
+                            ):
                                 admin_member = member
                                 break
-                        
+
                         if admin_member:
-                            actual_author_name = admin_member.name
                             # Determine role for admin panel sender
-                            if hasattr(admin_member, 'roles') and admin_member.roles:
+                            if hasattr(admin_member, "roles") and admin_member.roles:
                                 for role in admin_member.roles:
                                     if role.id == Config.ADMIN_ROLE_ID:
-                                        user_role = 'admin'
+                                        user_role = "admin"
                                         break
                                     elif role.id == Config.MODERATOR_ROLE_ID:
-                                        user_role = 'moderator'
+                                        user_role = "moderator"
                                         break
                             try:
                                 if admin_member.display_avatar:
@@ -5742,7 +5754,7 @@ def get_ticket_messages_endpoint(ticket_id):
                                     avatar_url = str(admin_member.avatar.url)
                             except (AttributeError, Exception) as e:
                                 logger.debug(f"Could not get avatar for admin {admin_member.id}: {e}")
-                
+
                 # If not an admin message or avatar not found, use message author's avatar
                 if avatar_url is None:
                     try:
@@ -5810,7 +5822,7 @@ def send_ticket_message_endpoint(ticket_id):
             return jsonify({"error": "Ticket not found"}), 404
 
         # Check permissions: Admins/Mods can message any ticket, users can only message their own
-        discord_id = getattr(request, 'discord_id', None)
+        discord_id = getattr(request, "discord_id", None)
         if not discord_id:
             return jsonify({"error": "User information not found"}), 401
 
@@ -5824,7 +5836,7 @@ def send_ticket_message_endpoint(ticket_id):
             return jsonify({"error": "User not found in guild"}), 404
 
         is_admin_or_mod = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
-        
+
         # Users can only message their own tickets
         if not is_admin_or_mod and ticket.get("user_id") != user_id:
             return jsonify({"error": "You can only message your own tickets"}), 403
@@ -5841,9 +5853,9 @@ def send_ticket_message_endpoint(ticket_id):
                 formatted_content = f"**[Admin Panel - {request.username}]:** {message_content}"
             else:
                 formatted_content = message_content
-            
+
             msg = await channel.send(formatted_content)
-            
+
             # Get avatar URL with fallback
             avatar_url = None
             try:
@@ -5854,9 +5866,11 @@ def send_ticket_message_endpoint(ticket_id):
             except (AttributeError, Exception) as e:
                 logger.debug(f"Could not get avatar for user {member.id}: {e}")
                 avatar_url = None
-            
-            logger.info(f"📤 Message sent from {member.name} (ID: {member.id}) - avatar_url: {avatar_url or 'None'}, is_admin: {is_admin_or_mod}")
-            
+
+            logger.info(
+                f"📤 Message sent from {member.name} (ID: {member.id}) - avatar_url: {avatar_url or 'None'}, is_admin: {is_admin_or_mod}"
+            )
+
             return {
                 "id": str(msg.id),
                 "author_id": str(member.id),
@@ -5871,29 +5885,32 @@ def send_ticket_message_endpoint(ticket_id):
         message_data = future.result(timeout=10)
 
         # Notify WebSocket clients about new message
-        notify_ticket_update(ticket_id, 'new_message', message_data)
-        
+        notify_ticket_update(ticket_id, "new_message", message_data)
+
         # Send push notification for new message
         logger.info(f"📱 About to schedule push notification for ticket {ticket_id}")
+
         async def notify_push():
             try:
                 logger.info(f"📱 Starting push notification for new message in ticket {ticket_id}")
-                await send_push_notification_for_ticket_event(ticket_id, 'new_message', ticket, message_data)
+                await send_push_notification_for_ticket_event(ticket_id, "new_message", ticket, message_data)
                 logger.info(f"📱 Push notification completed for ticket {ticket_id}")
             except Exception as e:
                 logger.error(f"❌ Exception in notify_push: {e}")
                 import traceback
+
                 logger.error(traceback.format_exc())
-        
+
         try:
             future = asyncio.run_coroutine_threadsafe(notify_push(), loop)
-            logger.info(f"📱 Push notification scheduled, waiting for result...")
+            logger.info("📱 Push notification scheduled, waiting for result...")
             # Wait for it to complete to see any errors
             future.result(timeout=5)
-            logger.info(f"📱 Push notification future completed")
+            logger.info("📱 Push notification future completed")
         except Exception as e:
             logger.error(f"❌ Push notification future failed: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
 
         log_action(
@@ -6041,23 +6058,24 @@ def reset_ticket_config():
 # Notification Endpoints
 # ==================================
 
+
 @app.route("/api/notifications/register", methods=["POST"])
 async def notification_register_endpoint():
     """Register FCM token for push notifications"""
     try:
         from Utils.notification_service import register_token, is_fcm_enabled
-        
+
         if not is_fcm_enabled():
             return jsonify({"error": "Push notifications are not enabled on this server"}), 503
-        
+
         token_data = request.get_json()
         auth_header = request.headers.get("Authorization")
-        
+
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
-        
+
         jwt_token = auth_header.split(" ")[1]
-        
+
         # Decode JWT to get user info
         try:
             with jwt_decode_lock:
@@ -6067,21 +6085,21 @@ async def notification_register_endpoint():
             return jsonify({"error": "Token expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
-        
+
         fcm_token = token_data.get("fcm_token")
         device_info = token_data.get("device_info")
-        
+
         if not fcm_token:
             return jsonify({"error": "fcm_token is required"}), 400
-        
+
         # Register token
         success = await register_token(user_id, fcm_token, device_info)
-        
+
         if success:
             return jsonify({"message": "Token registered successfully"}), 200
         else:
             return jsonify({"error": "Failed to register token"}), 500
-        
+
     except Exception as e:
         logger.error(f"Error registering FCM token: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to register token: {str(e)}"}), 500
@@ -6092,18 +6110,18 @@ async def notification_unregister_endpoint():
     """Unregister FCM token"""
     try:
         from Utils.notification_service import unregister_token, is_fcm_enabled
-        
+
         if not is_fcm_enabled():
             return jsonify({"error": "Push notifications are not enabled on this server"}), 503
-        
+
         token_data = request.get_json()
         auth_header = request.headers.get("Authorization")
-        
+
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
-        
+
         jwt_token = auth_header.split(" ")[1]
-        
+
         # Decode JWT to get user info
         try:
             with jwt_decode_lock:
@@ -6113,20 +6131,20 @@ async def notification_unregister_endpoint():
             return jsonify({"error": "Token expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
-        
+
         fcm_token = token_data.get("fcm_token")
-        
+
         if not fcm_token:
             return jsonify({"error": "fcm_token is required"}), 400
-        
+
         # Unregister token
         success = await unregister_token(user_id, fcm_token)
-        
+
         if success:
             return jsonify({"message": "Token unregistered successfully"}), 200
         else:
             return jsonify({"error": "Token not found"}), 404
-        
+
     except Exception as e:
         logger.error(f"Error unregistering FCM token: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to unregister token: {str(e)}"}), 500
@@ -6137,14 +6155,14 @@ async def notification_settings_get_endpoint():
     """Get notification settings for authenticated user"""
     try:
         from Utils.notification_service import get_user_notification_settings
-        
+
         auth_header = request.headers.get("Authorization")
-        
+
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
-        
+
         jwt_token = auth_header.split(" ")[1]
-        
+
         # Decode JWT to get user info
         try:
             with jwt_decode_lock:
@@ -6154,12 +6172,12 @@ async def notification_settings_get_endpoint():
             return jsonify({"error": "Token expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
-        
+
         # Get user settings
         settings = await get_user_notification_settings(user_id)
-        
+
         return jsonify(settings), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting notification settings: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to get settings: {str(e)}"}), 500
@@ -6170,15 +6188,15 @@ async def notification_settings_update_endpoint():
     """Update notification settings for authenticated user"""
     try:
         from Utils.notification_service import update_user_notification_settings
-        
+
         settings_data = request.get_json()
         auth_header = request.headers.get("Authorization")
-        
+
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
-        
+
         jwt_token = auth_header.split(" ")[1]
-        
+
         # Decode JWT to get user info
         try:
             with jwt_decode_lock:
@@ -6188,29 +6206,29 @@ async def notification_settings_update_endpoint():
             return jsonify({"error": "Token expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
-        
+
         # Validate settings
         valid_settings = {
-            'ticket_new_messages',
-            'ticket_mentions',
-            'ticket_created',
-            'ticket_assigned',
+            "ticket_new_messages",
+            "ticket_mentions",
+            "ticket_created",
+            "ticket_assigned",
         }
-        
+
         # Filter invalid settings
         filtered_settings = {k: v for k, v in settings_data.items() if k in valid_settings}
-        
+
         if not filtered_settings:
             return jsonify({"error": "No valid settings provided"}), 400
-        
+
         # Update settings
         success = await update_user_notification_settings(user_id, filtered_settings)
-        
+
         if success:
             return jsonify({"message": "Settings updated successfully"}), 200
         else:
             return jsonify({"error": "Failed to update settings"}), 500
-        
+
     except Exception as e:
         logger.error(f"Error updating notification settings: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
@@ -6220,69 +6238,69 @@ async def notification_settings_update_endpoint():
 # WebSocket Events
 # ==================================
 
-@socketio.on('connect')
+
+@socketio.on("connect")
 def handle_connect():
     """Handle WebSocket connection"""
     logger.info(f"🔌 WebSocket client connected: {request.sid}")
-    emit('connected', {'message': 'Connected to HazeBot API'})
+    emit("connected", {"message": "Connected to HazeBot API"})
 
 
-@socketio.on('disconnect')
+@socketio.on("disconnect")
 def handle_disconnect():
     """Handle WebSocket disconnection"""
     logger.info(f"🔌 WebSocket client disconnected: {request.sid}")
 
 
-@socketio.on('join_ticket')
+@socketio.on("join_ticket")
 def handle_join_ticket(data):
     """Join a ticket room to receive real-time updates"""
-    ticket_id = data.get('ticket_id')
+    ticket_id = data.get("ticket_id")
     if not ticket_id:
-        emit('error', {'message': 'ticket_id required'})
+        emit("error", {"message": "ticket_id required"})
         return
-    
+
     room = f"ticket_{ticket_id}"
     join_room(room)
     logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
-    emit('joined_ticket', {'ticket_id': ticket_id, 'room': room})
+    emit("joined_ticket", {"ticket_id": ticket_id, "room": room})
 
 
-@socketio.on('leave_ticket')
+@socketio.on("leave_ticket")
 def handle_leave_ticket(data):
     """Leave a ticket room"""
-    ticket_id = data.get('ticket_id')
+    ticket_id = data.get("ticket_id")
     if not ticket_id:
         return
-    
+
     room = f"ticket_{ticket_id}"
     leave_room(room)
     logger.info(f"🎫 Client {request.sid} left ticket room: {room}")
-    emit('left_ticket', {'ticket_id': ticket_id, 'room': room})
+    emit("left_ticket", {"ticket_id": ticket_id, "room": room})
 
 
 def notify_ticket_update(ticket_id, event_type, data):
     """
     Notify all clients in a ticket room about an update via WebSocket
-    
+
     Args:
         ticket_id: Ticket ID
         event_type: Type of event (new_message, status_change, etc.)
         data: Event data
     """
     room = f"ticket_{ticket_id}"
-    socketio.emit('ticket_update', {
-        'ticket_id': ticket_id,
-        'event_type': event_type,
-        'data': data,
-        'timestamp': datetime.utcnow().isoformat()
-    }, room=room)
+    socketio.emit(
+        "ticket_update",
+        {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
+        room=room,
+    )
     logger.info(f"📡 Broadcast to {room}: {event_type}")
 
 
 async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_data, message_data=None):
     """
     Send push notifications for ticket events
-    
+
     Args:
         ticket_id: Ticket ID
         event_type: Type of event (new_ticket, new_message, ticket_assigned, etc.)
@@ -6291,22 +6309,22 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
     """
     try:
         from Utils.notification_service import send_notification, send_notification_to_multiple_users, is_fcm_enabled
-        
+
         if not is_fcm_enabled():
             return
-        
+
         # Determine who should receive notifications based on event type
         notify_user_ids = []
         notification_type = None
         title = ""
         body = ""
-        
+
         if event_type == "new_ticket":
             # Notify all admins and moderators about new tickets
             notification_type = "ticket_created"
             title = f"🎫 New Ticket #{ticket_data.get('ticket_num', '?')}"
             body = f"{ticket_data.get('user_name', 'Someone')} created a new ticket"
-            
+
             # Get all admin/mod IDs from the bot
             bot = Config.bot
             if bot:
@@ -6314,57 +6332,59 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                 if guild:
                     admin_role = guild.get_role(Config.ADMIN_ROLE_ID)
                     mod_role = guild.get_role(Config.MODERATOR_ROLE_ID)
-                    
+
                     if admin_role:
                         notify_user_ids.extend([str(member.id) for member in admin_role.members])
                     if mod_role:
                         notify_user_ids.extend([str(member.id) for member in mod_role.members])
-                    
+
                     # Remove duplicates
                     notify_user_ids = list(set(notify_user_ids))
-        
+
         elif event_type == "new_message":
             # Notify ticket creator OR assigned admin/moderator
             notification_type = "ticket_new_messages"
-            
+
             if message_data:
-                author_name = message_data.get('author_name', 'Someone')
+                author_name = message_data.get("author_name", "Someone")
                 title = f"💬 New message in Ticket #{ticket_data.get('ticket_num', '?')}"
                 body = f"{author_name}: {message_data.get('content', '')[:100]}"
-                
+
                 # Check for mentions in message
-                content = message_data.get('content', '')
-                mention_pattern = r'<@!?(\d+)>'
+                content = message_data.get("content", "")
+                mention_pattern = r"<@!?(\d+)>"
                 mentioned_ids = re.findall(mention_pattern, content)
-                
+
                 if mentioned_ids:
                     logger.info(f"📱 Found mentions in message: {mentioned_ids}")
                     # Send mention notifications
                     for mentioned_id in mentioned_ids:
                         # Don't notify if user mentioned themselves
-                        if mentioned_id != str(message_data.get('author_id')):
+                        if mentioned_id != str(message_data.get("author_id")):
                             logger.info(f"📱 Sending mention notification to user {mentioned_id}")
                             await send_notification(
                                 mentioned_id,
                                 f"📢 You were mentioned in Ticket #{ticket_data.get('ticket_num', '?')}",
                                 f"{author_name} mentioned you: {content[:100]}",
                                 data={
-                                    'ticket_id': ticket_id,
-                                    'notification_type': 'mention',
-                                    'ticket_num': str(ticket_data.get('ticket_num', '')),
-                                    'open_tab': 'messages'
+                                    "ticket_id": ticket_id,
+                                    "notification_type": "mention",
+                                    "ticket_num": str(ticket_data.get("ticket_num", "")),
+                                    "open_tab": "messages",
                                 },
-                                notification_type="ticket_mentions"
+                                notification_type="ticket_mentions",
                             )
-                
+
                 # Determine who should be notified about the message
-                author_id = str(message_data.get('author_id'))
-                ticket_creator_id = str(ticket_data.get('user_id'))
-                assigned_to = ticket_data.get('assigned_to')
-                claimed_by = ticket_data.get('claimed_by')
-                
-                logger.info(f"📱 Message event - author: {author_id}, creator: {ticket_creator_id}, assigned: {assigned_to}, claimed: {claimed_by}")
-                
+                author_id = str(message_data.get("author_id"))
+                ticket_creator_id = str(ticket_data.get("user_id"))
+                assigned_to = ticket_data.get("assigned_to")
+                claimed_by = ticket_data.get("claimed_by")
+
+                logger.info(
+                    f"📱 Message event - author: {author_id}, creator: {ticket_creator_id}, assigned: {assigned_to}, claimed: {claimed_by}"
+                )
+
                 # User created a message → notify assigned/claimed admin
                 if author_id == ticket_creator_id:
                     if assigned_to:
@@ -6377,66 +6397,61 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                 else:
                     notify_user_ids = [ticket_creator_id]
                     logger.info(f"📱 Admin message → notifying ticket creator {ticket_creator_id}")
-                
+
                 # Don't notify the author
                 notify_user_ids = [uid for uid in notify_user_ids if uid != author_id]
                 logger.info(f"📱 Final notify list (after removing author): {notify_user_ids}")
-        
+
         elif event_type == "ticket_assigned":
             # Notify the assigned user
             notification_type = "ticket_assigned"
-            assigned_to = ticket_data.get('assigned_to')
-            
+            assigned_to = ticket_data.get("assigned_to")
+
             if assigned_to:
                 title = f"📌 Ticket #{ticket_data.get('ticket_num', '?')} assigned to you"
-                body = f"You have been assigned to handle this ticket"
+                body = "You have been assigned to handle this ticket"
                 notify_user_ids = [str(assigned_to)]
-        
+
         # Send notifications
         if notify_user_ids and title and body:
             logger.info(f"📱 Preparing to send notifications to: {notify_user_ids} (type: {notification_type})")
-            
+
             # Determine which user should see which screen
             # Creator/regular users see messages tab, admins see detail screen
-            author_id = str(message_data.get('author_id')) if message_data else None
-            ticket_creator_id = str(ticket_data.get('user_id'))
-            
+            author_id = str(message_data.get("author_id")) if message_data else None
+            ticket_creator_id = str(ticket_data.get("user_id"))
+
             payload_data = {
-                'ticket_id': ticket_id,
-                'notification_type': event_type,
-                'ticket_num': str(ticket_data.get('ticket_num', ''))
+                "ticket_id": ticket_id,
+                "notification_type": event_type,
+                "ticket_num": str(ticket_data.get("ticket_num", "")),
             }
-            
+
             # If the notification is for the ticket creator (regular user), add open_tab parameter
             if notify_user_ids and notify_user_ids[0] == ticket_creator_id:
-                payload_data['open_tab'] = 'messages'  # Regular users go to messages tab
-            
+                payload_data["open_tab"] = "messages"  # Regular users go to messages tab
+
             if len(notify_user_ids) == 1:
                 logger.info(f"📱 Sending single notification: {title}")
                 result = await send_notification(
-                    notify_user_ids[0],
-                    title,
-                    body,
-                    data=payload_data,
-                    notification_type=notification_type
+                    notify_user_ids[0], title, body, data=payload_data, notification_type=notification_type
                 )
                 logger.info(f"📱 Notification sent result: {result}")
             else:
                 logger.info(f"📱 Sending bulk notification to {len(notify_user_ids)} users")
                 count = await send_notification_to_multiple_users(
-                    notify_user_ids,
-                    title,
-                    body,
-                    data=payload_data,
-                    notification_type=notification_type
+                    notify_user_ids, title, body, data=payload_data, notification_type=notification_type
                 )
                 logger.info(f"📱 Sent push notifications to {count}/{len(notify_user_ids)} users")
         else:
-            logger.warning(f"📱 Skipping notification - notify_user_ids: {notify_user_ids}, title: {title}, body: {body}")
-    
+            logger.warning(
+                f"📱 Skipping notification - notify_user_ids: {notify_user_ids}, title: {title}, body: {body}"
+            )
+
     except Exception as e:
         logger.error(f"❌ Error sending push notification: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         # Don't let notification errors break the main flow
         pass
@@ -6445,10 +6460,11 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
 if __name__ == "__main__":
     # Load any saved configuration on startup
     load_config_from_file()
-    
+
     # Initialize Firebase Cloud Messaging (optional)
     try:
         from Utils.notification_service import initialize_firebase
+
         firebase_initialized = initialize_firebase()
         if firebase_initialized:
             print("✅ Firebase Cloud Messaging initialized")

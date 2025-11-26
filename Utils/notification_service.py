@@ -7,10 +7,13 @@ Design goals:
 - Run blocking file I/O and firebase-admin network calls in a threadpool
   (using asyncio.to_thread) to avoid blocking the event loop
 """
+
 import json
 import logging
 import os
 import asyncio
+import re
+import html as html_module
 from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
@@ -18,6 +21,43 @@ logger = logging.getLogger(__name__)
 # Global Firebase Admin instance
 _firebase_app = None
 _fcm_enabled = False
+
+
+def strip_formatting(text: str) -> str:
+    """Remove HTML/Markdown formatting from notification text
+
+    Args:
+        text: Text with potential HTML/Markdown formatting
+
+    Returns:
+        Plain text without formatting tags
+    """
+    if not text:
+        return text
+
+    # Remove HTML tags
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # Remove Markdown bold (**text**)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+
+    # Remove Markdown italic (*text* or _text_)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    text = re.sub(r"_([^_]+)_", r"\1", text)
+
+    # Remove Markdown strikethrough (~~text~~)
+    text = re.sub(r"~~([^~]+)~~", r"\1", text)
+
+    # Remove Markdown code (`code`)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+
+    # Unescape HTML entities (&amp; -> &, &lt; -> <, etc.)
+    text = html_module.unescape(text)
+
+    # Remove extra whitespace
+    text = " ".join(text.split())
+
+    return text.strip()
 
 
 def initialize_firebase() -> bool:
@@ -33,7 +73,7 @@ def initialize_firebase() -> bool:
         from firebase_admin import credentials
 
         # Check if Firebase credentials file exists
-        cred_path = os.getenv('FIREBASE_CREDENTIALS_PATH', 'firebase-credentials.json')
+        cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "firebase-credentials.json")
 
         if not os.path.exists(cred_path):
             logger.warning(f"❌ Firebase credentials not found at {cred_path}. Push notifications disabled.")
@@ -66,6 +106,7 @@ def is_fcm_enabled() -> bool:
 async def load_notification_tokens() -> Dict[str, List[str]]:
     """Load FCM tokens from JSON file in a thread to avoid blocking."""
     from Config import get_data_dir
+
     token_file = f"{get_data_dir()}/notification_tokens.json"
     os.makedirs(os.path.dirname(token_file), exist_ok=True)
 
@@ -73,12 +114,12 @@ async def load_notification_tokens() -> Dict[str, List[str]]:
         logger.debug(f"📂 Loading tokens from: {token_file}")
         if not os.path.exists(token_file):
             logger.warning(f"⚠️ Token file not found, creating: {token_file}")
-            with open(token_file, 'w') as f:
+            with open(token_file, "w") as f:
                 json.dump({}, f)
             return {}
 
         try:
-            with open(token_file, 'r') as f:
+            with open(token_file, "r") as f:
                 tokens = json.load(f)
                 logger.info(f"📱 Loaded {len(tokens)} user(s) with FCM tokens from {token_file}")
                 logger.debug(f"📱 User IDs in tokens: {list(tokens.keys())}")
@@ -93,10 +134,11 @@ async def load_notification_tokens() -> Dict[str, List[str]]:
 async def save_notification_tokens(tokens: Dict[str, List[str]]) -> None:
     """Save FCM tokens to JSON file in a thread."""
     from Config import get_data_dir
+
     token_file = f"{get_data_dir()}/notification_tokens.json"
 
     def _write_tokens():
-        with open(token_file, 'w') as f:
+        with open(token_file, "w") as f:
             json.dump(tokens, f, indent=2)
 
     await asyncio.to_thread(_write_tokens)
@@ -111,7 +153,7 @@ async def register_token(user_id: str, fcm_token: str, device_info: Optional[str
         logger.info(f"🔐 Registering FCM token for user_id={user_id} (as string: '{user_id_str}')")
         logger.debug(f"🔐 Device info: {device_info}")
         logger.debug(f"🔐 Token preview: {fcm_token[:50]}...")
-        
+
         if user_id_str not in tokens:
             tokens[user_id_str] = []
             logger.debug(f"🔐 Created new token list for user {user_id_str}")
@@ -128,6 +170,7 @@ async def register_token(user_id: str, fcm_token: str, device_info: Optional[str
     except Exception as e:
         logger.error(f"❌ Failed to register FCM token: {e}")
         import traceback
+
         logger.error(traceback.format_exc())
         return False
 
@@ -158,17 +201,18 @@ async def unregister_token(user_id: str, fcm_token: str) -> bool:
 async def load_notification_settings() -> Dict[str, Dict[str, bool]]:
     """Load notification settings from JSON file in a thread."""
     from Config import get_data_dir
+
     settings_file = f"{get_data_dir()}/notification_settings.json"
     os.makedirs(os.path.dirname(settings_file), exist_ok=True)
 
     def _read_settings():
         if not os.path.exists(settings_file):
-            with open(settings_file, 'w') as f:
+            with open(settings_file, "w") as f:
                 json.dump({}, f)
             return {}
 
         try:
-            with open(settings_file, 'r') as f:
+            with open(settings_file, "r") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             logger.error("Error loading notification_settings.json")
@@ -180,10 +224,11 @@ async def load_notification_settings() -> Dict[str, Dict[str, bool]]:
 async def save_notification_settings(settings: Dict[str, Dict[str, bool]]) -> None:
     """Save notification settings to JSON file in a thread."""
     from Config import get_data_dir
+
     settings_file = f"{get_data_dir()}/notification_settings.json"
 
     def _write_settings():
-        with open(settings_file, 'w') as f:
+        with open(settings_file, "w") as f:
             json.dump(settings, f, indent=2)
 
     await asyncio.to_thread(_write_settings)
@@ -195,10 +240,10 @@ async def get_user_notification_settings(user_id: str) -> Dict[str, bool]:
     user_id_str = str(user_id)
 
     default_settings = {
-        'ticket_new_messages': True,
-        'ticket_mentions': True,
-        'ticket_created': True,
-        'ticket_assigned': True,
+        "ticket_new_messages": True,
+        "ticket_mentions": True,
+        "ticket_created": True,
+        "ticket_assigned": True,
     }
 
     return settings.get(user_id_str, default_settings)
@@ -230,11 +275,7 @@ async def check_user_notification_enabled(user_id: str, notification_type: str) 
 
 
 async def send_notification(
-    user_id: str,
-    title: str,
-    body: str,
-    data: Optional[Dict[str, Any]] = None,
-    notification_type: Optional[str] = None
+    user_id: str, title: str, body: str, data: Optional[Dict[str, Any]] = None, notification_type: Optional[str] = None
 ) -> bool:
     """Send push notification to a user's registered devices.
 
@@ -255,7 +296,7 @@ async def send_notification(
 
         tokens = await load_notification_tokens()
         user_id_str = str(user_id)
-        
+
         logger.debug(f"🔍 Looking for tokens for user_id={user_id} (as string: '{user_id_str}')")
         logger.debug(f"🔍 Available user IDs in tokens: {list(tokens.keys())}")
         logger.debug(f"🔍 Token dict has {len(tokens)} users total")
@@ -268,27 +309,35 @@ async def send_notification(
         user_tokens = tokens[user_id_str]
         logger.info(f"📱 Found {len(user_tokens)} FCM token(s) for user {user_id}")
 
+        # Strip formatting from title and body for clean notifications
+        clean_title = strip_formatting(title) if title else title
+        clean_body = strip_formatting(body) if body else body
+
+        # Truncate body to reasonable length (100 chars)
+        if clean_body and len(clean_body) > 100:
+            clean_body = clean_body[:97] + "..."
+
         notification_data = data or {}
-        notification_data['click_action'] = 'FLUTTER_NOTIFICATION_CLICK'
+        notification_data["click_action"] = "FLUTTER_NOTIFICATION_CLICK"
         notification_data = {k: str(v) for k, v in notification_data.items()}
 
         # Send to each token individually
         success_count = 0
         failed_tokens = []
-        
+
         for token in user_tokens:
             try:
                 message = messaging.Message(
-                    notification=messaging.Notification(title=title, body=body),
+                    notification=messaging.Notification(title=clean_title, body=clean_body),
                     data=notification_data,
                     token=token,
                     android=messaging.AndroidConfig(
-                        priority='high',
+                        priority="high",
                         notification=messaging.AndroidNotification(
-                            sound='default',
-                            channel_id='hazebot_tickets',
-                            icon='ic_notification',  # Monochrome notification icon
-                            color='#FF6B35'  # Orange accent color for icon tint
+                            sound="default",
+                            channel_id="hazebot_tickets",
+                            icon="ic_notification",  # Monochrome notification icon
+                            color="#FF6B35",  # Orange accent color for icon tint
                         ),
                     ),
                 )
@@ -299,7 +348,7 @@ async def send_notification(
                 message_id = await asyncio.to_thread(_send_message, message)
                 logger.info(f"📱 Sent to token: {message_id}")
                 success_count += 1
-                
+
             except Exception as token_error:
                 logger.warning(f"❌ Failed to send to token: {token_error}")
                 failed_tokens.append(token)

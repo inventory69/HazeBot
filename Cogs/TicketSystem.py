@@ -871,13 +871,13 @@ class TicketSystem(commands.Cog):
         # Ignore bot messages or non-ticket channels
         if message.author.bot or not message.channel:
             return
-        
+
         # Check if this is a ticket channel
         tickets = await load_tickets()
         ticket = next((t for t in tickets if t["channel_id"] == message.channel.id), None)
         if not ticket:
             return
-        
+
         # Get avatar URL with fallback
         avatar_url = None
         try:
@@ -887,15 +887,15 @@ class TicketSystem(commands.Cog):
                 avatar_url = str(message.author.avatar.url)
         except (AttributeError, Exception) as e:
             logger.debug(f"Could not get avatar for user {message.author.id}: {e}")
-        
+
         # Check if author has admin role
         is_admin = False
-        if hasattr(message.author, 'roles') and message.author.roles:
+        if hasattr(message.author, "roles") and message.author.roles:
             for role in message.author.roles:
                 if role.id == Config.ADMIN_ROLE_ID or role.id == Config.MODERATOR_ROLE_ID:
                     is_admin = True
                     break
-        
+
         # Prepare message data
         message_data = {
             "id": str(message.id),
@@ -907,30 +907,30 @@ class TicketSystem(commands.Cog):
             "is_bot": message.author.bot,
             "is_admin": is_admin,
         }
-        
+
         # Notify WebSocket clients
         try:
             from api.app import notify_ticket_update
-            notify_ticket_update(ticket["ticket_id"], 'new_message', message_data)
+
+            notify_ticket_update(ticket["ticket_id"], "new_message", message_data)
             logger.info(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
         except Exception as e:
             logger.error(f"Failed to send WebSocket notification: {e}")
-        
+
         # Send push notifications
         try:
             logger.info(f"📱 About to send push notification for ticket {ticket['ticket_id']}")
             from api.app import send_push_notification_for_ticket_event
             import asyncio
-            asyncio.create_task(send_push_notification_for_ticket_event(
-                ticket["ticket_id"],
-                'new_message',
-                ticket,
-                message_data
-            ))
+
+            asyncio.create_task(
+                send_push_notification_for_ticket_event(ticket["ticket_id"], "new_message", ticket, message_data)
+            )
             logger.info(f"📱 Push notification task created for ticket {ticket['ticket_num']}")
         except Exception as e:
             logger.error(f"❌ Failed to send push notification: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
 
     async def cog_load(self) -> None:
