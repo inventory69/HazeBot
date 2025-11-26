@@ -327,24 +327,35 @@ async def send_notification(
         notification_data["click_action"] = "FLUTTER_NOTIFICATION_CLICK"
         notification_data = {k: str(v) for k, v in notification_data.items()}
 
+        # Extract ticket_id for grouping (if available)
+        ticket_id = notification_data.get("ticket_id")
+        group_key = f"ticket_{ticket_id}" if ticket_id else None
+
         # Send to each token individually
         success_count = 0
         failed_tokens = []
 
         for token in user_tokens:
             try:
+                # Build AndroidNotification with grouping support
+                android_notification = messaging.AndroidNotification(
+                    sound="default",
+                    channel_id="hazebot_tickets",
+                    icon="ic_notification",  # Monochrome notification icon
+                    color="#FF6B35",  # Orange accent color for icon tint
+                )
+
+                # Add grouping tag if we have a ticket_id
+                if group_key:
+                    android_notification.tag = group_key  # Groups notifications by ticket
+
                 message = messaging.Message(
                     notification=messaging.Notification(title=clean_title, body=clean_body),
                     data=notification_data,
                     token=token,
                     android=messaging.AndroidConfig(
                         priority="high",
-                        notification=messaging.AndroidNotification(
-                            sound="default",
-                            channel_id="hazebot_tickets",
-                            icon="ic_notification",  # Monochrome notification icon
-                            color="#FF6B35",  # Orange accent color for icon tint
-                        ),
+                        notification=android_notification,
                     ),
                 )
 
