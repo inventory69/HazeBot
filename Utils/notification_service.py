@@ -70,16 +70,21 @@ async def load_notification_tokens() -> Dict[str, List[str]]:
     os.makedirs(os.path.dirname(token_file), exist_ok=True)
 
     def _read_tokens():
+        logger.debug(f"📂 Loading tokens from: {token_file}")
         if not os.path.exists(token_file):
+            logger.warning(f"⚠️ Token file not found, creating: {token_file}")
             with open(token_file, 'w') as f:
                 json.dump({}, f)
             return {}
 
         try:
             with open(token_file, 'r') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            logger.error("Error loading notification_tokens.json")
+                tokens = json.load(f)
+                logger.info(f"📱 Loaded {len(tokens)} user(s) with FCM tokens from {token_file}")
+                logger.debug(f"📱 User IDs in tokens: {list(tokens.keys())}")
+                return tokens
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Error loading notification_tokens.json: {e}")
             return {}
 
     return await asyncio.to_thread(_read_tokens)
@@ -103,20 +108,27 @@ async def register_token(user_id: str, fcm_token: str, device_info: Optional[str
         tokens = await load_notification_tokens()
 
         user_id_str = str(user_id)
+        logger.info(f"🔐 Registering FCM token for user_id={user_id} (as string: '{user_id_str}')")
+        logger.debug(f"🔐 Device info: {device_info}")
+        logger.debug(f"🔐 Token preview: {fcm_token[:50]}...")
+        
         if user_id_str not in tokens:
             tokens[user_id_str] = []
+            logger.debug(f"🔐 Created new token list for user {user_id_str}")
 
         if fcm_token not in tokens[user_id_str]:
             tokens[user_id_str].append(fcm_token)
             await save_notification_tokens(tokens)
-            logger.info(f"✅ Registered FCM token for user {user_id}")
+            logger.info(f"✅ Registered NEW FCM token for user {user_id} (total: {len(tokens[user_id_str])} tokens)")
             return True
 
-        logger.info(f"ℹ️ FCM token already registered for user {user_id}")
+        logger.info(f"ℹ️ FCM token already registered for user {user_id} (no changes needed)")
         return True
 
     except Exception as e:
         logger.error(f"❌ Failed to register FCM token: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 
@@ -243,9 +255,14 @@ async def send_notification(
 
         tokens = await load_notification_tokens()
         user_id_str = str(user_id)
+        
+        logger.debug(f"🔍 Looking for tokens for user_id={user_id} (as string: '{user_id_str}')")
+        logger.debug(f"🔍 Available user IDs in tokens: {list(tokens.keys())}")
+        logger.debug(f"🔍 Token dict has {len(tokens)} users total")
 
         if user_id_str not in tokens or not tokens[user_id_str]:
             logger.info(f"📱 No FCM tokens registered for user {user_id}")
+            logger.debug(f"📱 Checked for user_id_str='{user_id_str}' in tokens keys: {list(tokens.keys())}")
             return False
 
         user_tokens = tokens[user_id_str]
