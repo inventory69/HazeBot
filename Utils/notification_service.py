@@ -349,13 +349,18 @@ async def send_notification(
                 if group_key:
                     android_notification.tag = group_key  # Groups notifications by ticket
 
+                # ✅ FIX: Use data-only message to prevent Firebase auto-display
+                # The app's background handler will show custom notification with grouping
+                # Add title/body to data payload for the app to display
+                notification_data["title"] = clean_title
+                notification_data["body"] = clean_body
+                
                 message = messaging.Message(
-                    notification=messaging.Notification(title=clean_title, body=clean_body),
-                    data=notification_data,
+                    data=notification_data,  # Data-only message (no notification payload)
                     token=token,
                     android=messaging.AndroidConfig(
                         priority="high",
-                        notification=android_notification,
+                        # Remove notification config - data-only messages don't use it
                     ),
                 )
 
