@@ -25,3 +25,5 @@ openai
 # Development dependencies
 # Ruff: Fast Python linter, formatter, and import sorter
 ruff
+
+tzdata
