@@ -28,6 +28,7 @@ from Utils.Logger import Logger as logger
 import api.admin_routes as admin_routes_module
 import api.auth as auth_module
 import api.auth_routes as auth_routes_module
+import api.cog_routes as cog_routes_module
 import api.config_routes as config_routes_module
 import api.hazehub_cogs_routes as hazehub_cogs_routes_module
 import api.helpers as helpers_module
@@ -148,6 +149,9 @@ rocket_league_routes_module.init_rocket_league_routes(app, Config, logger, decor
 
 # Initialize HazeHub and Cogs routes Blueprint
 hazehub_cogs_routes_module.init_hazehub_cogs_routes(app, Config, logger, cache, decorator_module, helpers_module)
+
+# Initialize Cog Management routes Blueprint
+cog_routes_module.init_cog_routes(app, logger, decorator_module)
 
 # Initialize notification routes Blueprint (includes WebSocket handlers)
 notification_routes_module.init_notification_routes(app, Config, logger, socketio, jwt_decode_lock)
