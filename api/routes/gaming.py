@@ -1,4 +1,4 @@
-"""
+﻿"""
 Gaming-related API routes.
 """
 
@@ -23,7 +23,7 @@ def _get_bot():
 @gaming_bp.route("/api/gaming/members", methods=["GET"])
 @token_required
 def get_gaming_members():
-    """Get all server members with their presence/activity data + app usage status (with cache)"""
+    """Get all server members with their presence/activity data + app usage status (with cache)."""
     try:
         cache_key = "gaming:members"
         cached_result = cache.get(cache_key)
@@ -87,9 +87,7 @@ def get_gaming_members():
         members_data.sort(key=lambda m: (m["status"] == "offline", m["display_name"].lower()))
 
         result = {"members": members_data, "total": len(members_data), "app_users_count": len(app_users)}
-
         cache.set(cache_key, result, ttl=30)
-
         return jsonify(result)
 
     except Exception as e:
@@ -100,7 +98,7 @@ def get_gaming_members():
 @gaming_bp.route("/api/gaming/request", methods=["POST"])
 @token_required
 def post_game_request():
-    """Post a game request to the gaming channel"""
+    """Post a game request to the gaming channel."""
     try:
         discord_id = request.discord_id
         if discord_id in ("legacy_user", "unknown"):
@@ -143,7 +141,8 @@ def post_game_request():
                 break
 
         content = (
-            f"🎮 **{current_member.display_name}** wants to play **{game_name}** with **{target_member.display_name}**!"
+            f"🎮 **{current_member.display_name}** wants to play **{game_name}** with "
+            f"**{target_member.display_name}**!"
         )
         if target_game:
             content += f"\n🕹️ {target_member.display_name} is currently playing **{target_game}**"
@@ -151,7 +150,20 @@ def post_game_request():
             content += f"\n💬 Message: {message_text}"
 
         async def send_request():
-            await gaming_channel.send(content)
+            embed = discord.Embed(
+                title="New Game Request",
+                description=content,
+                color=Config.PINK,
+            )
+            embed.add_field(name="Requested by", value=current_member.mention, inline=True)
+            embed.add_field(name="Target", value=target_member.mention, inline=True)
+            embed.add_field(name="Game", value=game_name, inline=False)
+            if target_game:
+                embed.add_field(name="Target currently playing", value=target_game, inline=False)
+            if message_text:
+                embed.add_field(name="Message", value=message_text, inline=False)
+
+            await gaming_channel.send(content, embed=embed)
 
         loop = bot.loop
         future = asyncio.run_coroutine_threadsafe(send_request(), loop)
