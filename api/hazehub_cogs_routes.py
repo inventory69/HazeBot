@@ -242,6 +242,9 @@ def get_latest_memes():
                     # Add requester if found
                     if requester:
                         meme_data["requester"] = requester
+                        logger.debug(f"✅ Set requester for meme {message_id_str}: {requester}")
+                    else:
+                        logger.debug(f"⚠️ No requester found for meme {message_id_str}")
 
                     # Set defaults
                     if "score" not in meme_data:
