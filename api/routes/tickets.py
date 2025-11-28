@@ -416,6 +416,9 @@ def notify_ticket_update(ticket_id, event_type, data):
 def get_ticket_messages(ticket_id):
     """Get messages from a ticket channel (last 50)."""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
@@ -424,7 +427,10 @@ def get_ticket_messages(ticket_id):
         if not ticket_cog:
             return jsonify({"error": "TicketSystem cog not loaded"}), 503
 
-        ticket = ticket_cog.tickets_data.get(ticket_id)
+        # Load tickets from storage
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
         if not ticket:
             return jsonify({"error": "Ticket not found"}), 404
 
@@ -477,6 +483,9 @@ def get_ticket_messages(ticket_id):
 def send_ticket_message(ticket_id):
     """Send a message to a ticket channel."""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
@@ -485,7 +494,9 @@ def send_ticket_message(ticket_id):
         if not ticket_cog:
             return jsonify({"error": "TicketSystem cog not loaded"}), 503
 
-        ticket = ticket_cog.tickets_data.get(ticket_id)
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
         if not ticket:
             return jsonify({"error": "Ticket not found"}), 404
 
