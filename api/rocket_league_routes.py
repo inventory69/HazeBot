@@ -28,23 +28,25 @@ def init_rocket_league_routes(app, config, log, auth_module):
     token_required = auth_module.token_required
     require_permission = auth_module.require_permission
 
-    # Apply decorators to view functions BEFORE blueprint registration
-    import sys
-
-    module = sys.modules[__name__]
-
-    # Wrap each function and update the blueprint's deferred functions
-    module.get_rl_accounts = token_required(require_permission("all")(module.get_rl_accounts))
-    module.delete_rl_account = token_required(require_permission("all")(module.delete_rl_account))
-    module.trigger_rank_check = token_required(require_permission("all")(module.trigger_rank_check))
-    module.get_rl_stats = token_required(module.get_rl_stats)
-    module.link_user_rl_account = token_required(module.link_user_rl_account)
-    module.unlink_user_rl_account = token_required(module.unlink_user_rl_account)
-    module.get_user_rl_account = token_required(module.get_user_rl_account)
-    module.post_user_rl_stats = token_required(module.post_user_rl_stats)
-
-    # Register blueprint AFTER decorators are applied
+    # Register blueprint WITHOUT decorators first
+    # (Blueprint routes are already defined with @rl_bp.route decorators)
     app.register_blueprint(rl_bp)
+
+    # NOW apply decorators to the already-registered view functions
+    # We need to modify Flask's view_functions dict directly
+    vf = app.view_functions
+    vf["rocket_league.get_rl_accounts"] = token_required(require_permission("all")(vf["rocket_league.get_rl_accounts"]))
+    vf["rocket_league.delete_rl_account"] = token_required(
+        require_permission("all")(vf["rocket_league.delete_rl_account"])
+    )
+    vf["rocket_league.trigger_rank_check"] = token_required(
+        require_permission("all")(vf["rocket_league.trigger_rank_check"])
+    )
+    vf["rocket_league.get_rl_stats"] = token_required(vf["rocket_league.get_rl_stats"])
+    vf["rocket_league.link_user_rl_account"] = token_required(vf["rocket_league.link_user_rl_account"])
+    vf["rocket_league.unlink_user_rl_account"] = token_required(vf["rocket_league.unlink_user_rl_account"])
+    vf["rocket_league.get_user_rl_account"] = token_required(vf["rocket_league.get_user_rl_account"])
+    vf["rocket_league.post_user_rl_stats"] = token_required(vf["rocket_league.post_user_rl_stats"])
 
 
 # ===== ADMIN RL ENDPOINTS =====
