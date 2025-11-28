@@ -55,11 +55,7 @@ def init_hazehub_cogs_routes(app, config, log, cache_module, auth_module, helper
     vf["hazehub_cogs.get_latest_rankups"] = token_required(vf["hazehub_cogs.get_latest_rankups"])
     vf["hazehub_cogs.toggle_upvote_meme"] = token_required(vf["hazehub_cogs.toggle_upvote_meme"])
     vf["hazehub_cogs.get_meme_reactions"] = token_required(vf["hazehub_cogs.get_meme_reactions"])
-    vf["hazehub_cogs.get_cogs"] = token_required(require_permission("all")(vf["hazehub_cogs.get_cogs"]))
-    vf["hazehub_cogs.load_cog"] = token_required(require_permission("all")(vf["hazehub_cogs.load_cog"]))
-    vf["hazehub_cogs.unload_cog"] = token_required(require_permission("all")(vf["hazehub_cogs.unload_cog"]))
-    vf["hazehub_cogs.reload_cog"] = token_required(require_permission("all")(vf["hazehub_cogs.reload_cog"]))
-    vf["hazehub_cogs.get_cog_logs"] = token_required(require_permission("all")(vf["hazehub_cogs.get_cog_logs"]))
+    # Cog management routes moved to cog_routes.py - decorators applied there
 
 
 # =====================================
