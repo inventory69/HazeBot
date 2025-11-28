@@ -53,24 +53,25 @@ def init_admin_routes(app, config, log, sessions_dict, activity_list, helpers_mo
     clear_cache = cache_module.clear_cache
     invalidate_cache = cache_module.invalidate_cache
 
-    # Apply decorators BEFORE blueprint registration
-    import sys
-
-    module = sys.modules[__name__]
-
-    module.get_active_sessions_endpoint = token_required(require_permission("all")(module.get_active_sessions_endpoint))
-    module.get_cache_stats_endpoint = token_required(require_permission("all")(module.get_cache_stats_endpoint))
-    module.clear_cache_endpoint = token_required(require_permission("all")(module.clear_cache_endpoint))
-    module.invalidate_cache_key_endpoint = token_required(
-        require_permission("all")(module.invalidate_cache_key_endpoint)
-    )
-    module.get_logs = token_required(require_permission("all")(module.get_logs))
-    module.get_available_cogs = token_required(require_permission("all")(module.get_available_cogs))
-    module.get_guild_channels = token_required(module.get_guild_channels)
-    module.get_guild_roles = token_required(module.get_guild_roles)
-
-    # Register blueprint AFTER decorators are applied
+    # Register blueprint WITHOUT decorators first
     app.register_blueprint(admin_bp)
+
+    # NOW apply decorators to already-registered view functions
+    vf = app.view_functions
+    vf["admin.get_active_sessions_endpoint"] = token_required(
+        require_permission("all")(vf["admin.get_active_sessions_endpoint"])
+    )
+    vf["admin.get_cache_stats_endpoint"] = token_required(
+        require_permission("all")(vf["admin.get_cache_stats_endpoint"])
+    )
+    vf["admin.clear_cache_endpoint"] = token_required(require_permission("all")(vf["admin.clear_cache_endpoint"]))
+    vf["admin.invalidate_cache_key_endpoint"] = token_required(
+        require_permission("all")(vf["admin.invalidate_cache_key_endpoint"])
+    )
+    vf["admin.get_logs"] = token_required(require_permission("all")(vf["admin.get_logs"]))
+    vf["admin.get_available_cogs"] = token_required(require_permission("all")(vf["admin.get_available_cogs"]))
+    vf["admin.get_guild_channels"] = token_required(vf["admin.get_guild_channels"])
+    vf["admin.get_guild_roles"] = token_required(vf["admin.get_guild_roles"])
 
 
 # ===== ACTIVE SESSIONS =====

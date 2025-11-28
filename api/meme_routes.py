@@ -43,25 +43,29 @@ def init_meme_routes(app, config, log, auth_module):
 
     module = sys.modules[__name__]
 
-    module.get_meme_sources = token_required(module.get_meme_sources)
-    module.get_meme_templates = token_required(module.get_meme_templates)
-    module.refresh_meme_templates = token_required(require_permission("all")(module.refresh_meme_templates))
-    module.test_meme_from_source = token_required(module.test_meme_from_source)
-    module.test_random_meme = token_required(module.test_random_meme)
-    module.test_daily_meme = token_required(module.test_daily_meme)
-    module.send_meme_to_discord = token_required(module.send_meme_to_discord)
-    module.generate_meme = token_required(module.generate_meme)
-    module.post_generated_meme_to_discord = token_required(module.post_generated_meme_to_discord)
-    module.get_daily_meme_config = token_required(module.get_daily_meme_config)
-    module.update_daily_meme_config = token_required(
-        require_permission("all")(log_config_action("daily_meme")(module.update_daily_meme_config))
-    )
-    module.reset_daily_meme_config = token_required(
-        require_permission("all")(log_config_action("daily_meme")(module.reset_daily_meme_config))
-    )
-
-    # Register blueprint AFTER decorators are applied
+    # Register blueprint WITHOUT decorators first
     app.register_blueprint(meme_bp)
+
+    # NOW apply decorators to already-registered view functions
+    vf = app.view_functions
+    vf["meme.get_meme_sources"] = token_required(vf["meme.get_meme_sources"])
+    vf["meme.get_meme_templates"] = token_required(vf["meme.get_meme_templates"])
+    vf["meme.refresh_meme_templates"] = token_required(
+        require_permission("all")(vf["meme.refresh_meme_templates"])
+    )
+    vf["meme.test_meme_from_source"] = token_required(vf["meme.test_meme_from_source"])
+    vf["meme.test_random_meme"] = token_required(vf["meme.test_random_meme"])
+    vf["meme.test_daily_meme"] = token_required(vf["meme.test_daily_meme"])
+    vf["meme.send_meme_to_discord"] = token_required(vf["meme.send_meme_to_discord"])
+    vf["meme.generate_meme"] = token_required(vf["meme.generate_meme"])
+    vf["meme.post_generated_meme_to_discord"] = token_required(vf["meme.post_generated_meme_to_discord"])
+    vf["meme.get_daily_meme_config"] = token_required(vf["meme.get_daily_meme_config"])
+    vf["meme.update_daily_meme_config"] = token_required(
+        require_permission("all")(log_config_action("daily_meme")(vf["meme.update_daily_meme_config"]))
+    )
+    vf["meme.reset_daily_meme_config"] = token_required(
+        require_permission("all")(log_config_action("daily_meme")(vf["meme.reset_daily_meme_config"]))
+    )
 
 
 # ===== MEME SOURCES =====

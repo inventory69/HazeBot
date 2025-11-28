@@ -45,18 +45,15 @@ def init_user_routes(app, config, log, cache_module, helpers_module, auth_module
     update_app_usage = helpers_module.update_app_usage
     token_required = auth_module.token_required
 
-    # Apply decorators BEFORE blueprint registration
-    import sys
-
-    module = sys.modules[__name__]
-
-    module.get_user_profile = token_required(module.get_user_profile)
-    module.update_user_preferences = token_required(module.update_user_preferences)
-    module.get_gaming_members = token_required(module.get_gaming_members)
-    module.post_game_request = token_required(module.post_game_request)
-
-    # Register blueprint AFTER decorators are applied
+    # Register blueprint WITHOUT decorators first
     app.register_blueprint(user_bp)
+
+    # NOW apply decorators to already-registered view functions
+    vf = app.view_functions
+    vf["user.get_user_profile"] = token_required(vf["user.get_user_profile"])
+    vf["user.update_user_preferences"] = token_required(vf["user.update_user_preferences"])
+    vf["user.get_gaming_members"] = token_required(vf["user.get_gaming_members"])
+    vf["user.post_game_request"] = token_required(vf["user.post_game_request"])
 
 
 # ===== USER PROFILE =====

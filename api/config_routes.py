@@ -44,66 +44,69 @@ def init_config_routes(app, config, log, helpers_module, auth_module):
     require_permission = auth_module.require_permission
     log_config_action = auth_module.log_config_action
 
-    # Apply decorators BEFORE blueprint registration
-    import sys
-
-    module = sys.modules[__name__]
-
-    module.get_config = token_required(module.get_config)
-    module.config_general = token_required(
-        require_permission("all")(log_config_action("general")(module.config_general))
-    )
-    module.reset_general_config = token_required(
-        require_permission("all")(log_config_action("general")(module.reset_general_config))
-    )
-    module.config_channels = token_required(
-        require_permission("all")(log_config_action("channels")(module.config_channels))
-    )
-    module.reset_channels_config = token_required(
-        require_permission("all")(log_config_action("channels")(module.reset_channels_config))
-    )
-    module.config_roles = token_required(require_permission("all")(log_config_action("roles")(module.config_roles)))
-    module.reset_roles_config = token_required(
-        require_permission("all")(log_config_action("roles")(module.reset_roles_config))
-    )
-    module.config_meme = token_required(require_permission("all")(log_config_action("meme")(module.config_meme)))
-    module.config_rocket_league = token_required(
-        require_permission("all")(log_config_action("rocket_league")(module.config_rocket_league))
-    )
-    module.reset_rocket_league_config = token_required(
-        require_permission("all")(log_config_action("rocket_league")(module.reset_rocket_league_config))
-    )
-    module.config_welcome = token_required(
-        require_permission("all")(log_config_action("welcome")(module.config_welcome))
-    )
-    module.reset_welcome_config = token_required(
-        require_permission("all")(log_config_action("welcome")(module.reset_welcome_config))
-    )
-    module.config_welcome_texts = token_required(
-        require_permission("all")(log_config_action("welcome_texts")(module.config_welcome_texts))
-    )
-    module.reset_welcome_texts_config = token_required(
-        require_permission("all")(log_config_action("welcome_texts")(module.reset_welcome_texts_config))
-    )
-    module.config_rocket_league_texts = token_required(
-        require_permission("all")(log_config_action("rocket_league_texts")(module.config_rocket_league_texts))
-    )
-    module.reset_rocket_league_texts_config = token_required(
-        require_permission("all")(log_config_action("rocket_league_texts")(module.reset_rocket_league_texts_config))
-    )
-    module.config_server_guide = token_required(
-        require_permission("all")(log_config_action("server_guide")(module.config_server_guide))
-    )
-    module.get_ticket_config = token_required(module.get_ticket_config)
-    module.update_ticket_config = token_required(
-        require_permission("all")(log_config_action("tickets")(module.update_ticket_config))
-    )
-    module.reset_ticket_config = token_required(
-        require_permission("all")(log_config_action("tickets")(module.reset_ticket_config))
-    )
-
-    # Register blueprint AFTER decorators are applied
+    # Register blueprint WITHOUT decorators first
     app.register_blueprint(config_bp)
+
+    # NOW apply decorators to already-registered view functions
+    vf = app.view_functions
+    vf["config.get_config"] = token_required(vf["config.get_config"])
+    vf["config.config_general"] = token_required(
+        require_permission("all")(log_config_action("general")(vf["config.config_general"]))
+    )
+    vf["config.reset_general_config"] = token_required(
+        require_permission("all")(log_config_action("general")(vf["config.reset_general_config"]))
+    )
+    vf["config.config_channels"] = token_required(
+        require_permission("all")(log_config_action("channels")(vf["config.config_channels"]))
+    )
+    vf["config.reset_channels_config"] = token_required(
+        require_permission("all")(log_config_action("channels")(vf["config.reset_channels_config"]))
+    )
+    vf["config.config_roles"] = token_required(
+        require_permission("all")(log_config_action("roles")(vf["config.config_roles"]))
+    )
+    vf["config.reset_roles_config"] = token_required(
+        require_permission("all")(log_config_action("roles")(vf["config.reset_roles_config"]))
+    )
+    vf["config.config_meme"] = token_required(
+        require_permission("all")(log_config_action("meme")(vf["config.config_meme"]))
+    )
+    vf["config.config_rocket_league"] = token_required(
+        require_permission("all")(log_config_action("rocket_league")(vf["config.config_rocket_league"]))
+    )
+    vf["config.reset_rocket_league_config"] = token_required(
+        require_permission("all")(log_config_action("rocket_league")(vf["config.reset_rocket_league_config"]))
+    )
+    vf["config.config_welcome"] = token_required(
+        require_permission("all")(log_config_action("welcome")(vf["config.config_welcome"]))
+    )
+    vf["config.reset_welcome_config"] = token_required(
+        require_permission("all")(log_config_action("welcome")(vf["config.reset_welcome_config"]))
+    )
+    vf["config.config_welcome_texts"] = token_required(
+        require_permission("all")(log_config_action("welcome_texts")(vf["config.config_welcome_texts"]))
+    )
+    vf["config.reset_welcome_texts_config"] = token_required(
+        require_permission("all")(log_config_action("welcome_texts")(vf["config.reset_welcome_texts_config"]))
+    )
+    vf["config.config_rocket_league_texts"] = token_required(
+        require_permission("all")(log_config_action("rocket_league_texts")(vf["config.config_rocket_league_texts"]))
+    )
+    vf["config.reset_rocket_league_texts_config"] = token_required(
+        require_permission("all")(
+            log_config_action("rocket_league_texts")(vf["config.reset_rocket_league_texts_config"])
+        )
+    )
+    vf["config.config_server_guide"] = token_required(
+        require_permission("all")(log_config_action("server_guide")(vf["config.config_server_guide"]))
+    )
+    vf["config.get_ticket_config"] = token_required(vf["config.get_ticket_config"])
+    vf["config.update_ticket_config"] = token_required(
+        require_permission("all")(log_config_action("tickets")(vf["config.update_ticket_config"]))
+    )
+    vf["config.reset_ticket_config"] = token_required(
+        require_permission("all")(log_config_action("tickets")(vf["config.reset_ticket_config"]))
+    )
 
 
 # ===== MAIN CONFIG ENDPOINT =====
