@@ -575,6 +575,7 @@ def notify_ticket_update(ticket_id, event_type, data):
         {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
         room=room,
     )
+    logger.info(f"📡 Broadcast to {room}: {event_type}")
 
 
 @tickets_bp.route("/api/tickets/<ticket_id>/messages", methods=["GET"])

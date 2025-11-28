@@ -26,6 +26,8 @@ from api.routes.gaming import gaming_bp
 from api.routes.memes import memes_bp
 from api.routes.rocket_league import rl_bp
 from api.routes.tickets import tickets_bp
+# Expose ticket helper functions for cogs expecting them on api.app
+from api.routes.tickets import notify_ticket_update, send_push_notification_for_ticket_event
 from api.utils.audit import log_config_action
 from api.utils.auth import require_permission, token_required
 from Utils.ConfigLoader import load_config_from_file
