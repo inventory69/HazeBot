@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, request
 # Will be initialized by init_config_routes()
 Config = None
 logger = None
-save_config_to_file = None
+_save_config_to_file_func = None
 log_action = None
 token_required = None
 require_permission = None
@@ -20,6 +20,12 @@ log_config_action = None
 
 # Create Blueprint
 config_bp = Blueprint("config", __name__)
+
+
+def save_config_to_file():
+    """Wrapper to call the helpers save_config_to_file with correct arguments"""
+    config_file = Path(__file__).parent.parent / Config.DATA_DIR / "api_config_overrides.json"
+    return _save_config_to_file_func(Config, config_file)
 
 
 def init_config_routes(app, config, log, helpers_module, auth_module):
@@ -33,12 +39,12 @@ def init_config_routes(app, config, log, helpers_module, auth_module):
         helpers_module: Module containing save_config_to_file, log_action
         auth_module: Module containing decorators (token_required, require_permission, log_config_action)
     """
-    global Config, logger, save_config_to_file, log_action
+    global Config, logger, _save_config_to_file_func, log_action
     global token_required, require_permission, log_config_action
 
     Config = config
     logger = log
-    save_config_to_file = helpers_module.save_config_to_file
+    _save_config_to_file_func = helpers_module.save_config_to_file
     log_action = helpers_module.log_action
     token_required = auth_module.token_required
     require_permission = auth_module.require_permission
