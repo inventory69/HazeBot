@@ -164,8 +164,50 @@ def get_tickets():
         loop = bot.loop
         tickets_data_list = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
 
-        # Convert list to dict keyed by ticket_id if needed
-        tickets_data = {t.get("ticket_id") or str(t.get("channel_id")): t for t in tickets_data_list}
+        tickets = tickets_data_list
+
+        # Filter by status if provided
+        status_filter = request.args.get("status")
+        if status_filter:
+            tickets = [t for t in tickets if t.get("status", "").lower() == status_filter.lower()]
+
+        guild = bot.get_guild(Config.GUILD_ID)
+        enriched_tickets = []
+
+        for ticket in tickets:
+            creator_id = ticket.get("user_id")
+            creator = guild.get_member(int(creator_id)) if guild and creator_id else None
+
+            claimed_by_id = ticket.get("claimed_by")
+            claimer = guild.get_member(int(claimed_by_id)) if guild and claimed_by_id else None
+
+            assigned_to_id = ticket.get("assigned_to")
+            assigned = guild.get_member(int(assigned_to_id)) if guild and assigned_to_id else None
+
+            enriched_ticket = {
+                "ticket_id": ticket.get("ticket_id"),
+                "ticket_num": ticket.get("ticket_num"),
+                "channel_id": str(ticket.get("channel_id")) if ticket.get("channel_id") else None,
+                "user_id": str(creator_id) if creator_id else None,
+                "username": creator.name if creator else "Unknown User",
+                "display_name": creator.display_name if creator else "Unknown User",
+                "avatar_url": str(creator.avatar.url) if creator and creator.avatar else None,
+                "type": ticket.get("type", "General"),
+                "status": ticket.get("status", "Open"),
+                "created_at": ticket.get("created_at"),
+                "closed_at": ticket.get("closed_at"),
+                "claimed_by": str(claimed_by_id) if claimed_by_id else None,
+                "claimed_by_name": claimer.display_name if claimer else None,
+                "claimed_by_avatar": str(claimer.avatar.url) if claimer and claimer.avatar else None,
+                "assigned_to": str(assigned_to_id) if assigned_to_id else None,
+                "assigned_to_name": assigned.display_name if assigned else None,
+                "assigned_to_avatar": str(assigned.avatar.url) if assigned and assigned.avatar else None,
+            }
+            enriched_tickets.append(enriched_ticket)
+
+        enriched_tickets.sort(key=lambda t: t.get("ticket_num", 0), reverse=True)
+
+        return jsonify({"tickets": enriched_tickets, "total": len(enriched_tickets)})
 
         status_filter = request.args.get("status")
         type_filter = request.args.get("type")
@@ -224,6 +266,13 @@ def get_my_tickets():
             if str(ticket_data.get("user_id")) == user_id:
                 enriched = ticket_data.copy()
                 enriched["ticket_id"] = ticket_id
+                # normalize string fields for frontend
+                if enriched.get("channel_id") is not None:
+                    enriched["channel_id"] = str(enriched["channel_id"])
+                if enriched.get("claimed_by") is not None:
+                    enriched["claimed_by"] = str(enriched["claimed_by"])
+                if enriched.get("assigned_to") is not None:
+                    enriched["assigned_to"] = str(enriched["assigned_to"])
                 my_tickets.append(enriched)
 
         return jsonify({"tickets": my_tickets, "total": len(my_tickets)})
