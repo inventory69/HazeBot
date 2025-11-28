@@ -149,6 +149,9 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
 def get_tickets():
     """Get all tickets with optional filters"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
@@ -157,7 +160,12 @@ def get_tickets():
         if not ticket_cog:
             return jsonify({"error": "TicketSystem cog not loaded"}), 503
 
-        tickets_data = ticket_cog.tickets_data
+        # Always load from storage to avoid relying on an attribute that may not exist
+        loop = bot.loop
+        tickets_data_list = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+
+        # Convert list to dict keyed by ticket_id if needed
+        tickets_data = {t.get("ticket_id") or str(t.get("channel_id")): t for t in tickets_data_list}
 
         status_filter = request.args.get("status")
         type_filter = request.args.get("type")
@@ -195,6 +203,9 @@ def get_tickets():
 def get_my_tickets():
     """Get tickets created by current user"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
@@ -203,7 +214,9 @@ def get_my_tickets():
         if not ticket_cog:
             return jsonify({"error": "TicketSystem cog not loaded"}), 503
 
-        tickets_data = ticket_cog.tickets_data
+        loop = bot.loop
+        tickets_data_list = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        tickets_data = {t.get("ticket_id") or str(t.get("channel_id")): t for t in tickets_data_list}
         user_id = str(request.discord_id)
 
         my_tickets = []
