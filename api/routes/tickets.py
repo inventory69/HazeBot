@@ -25,6 +25,124 @@ def _get_bot():
     return current_app.config.get("bot_instance")
 
 
+def _get_socketio():
+    # SocketIO instance stored by Flask-SocketIO in extensions
+    return current_app.extensions.get("socketio")
+
+
+async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_data, message_data=None):
+    """
+    Send push notifications for ticket events
+
+    Args:
+        ticket_id: Ticket ID
+        event_type: Type of event (new_ticket, new_message, ticket_assigned, etc.)
+        ticket_data: Ticket data dictionary
+        message_data: Optional message data for new_message events
+    """
+    try:
+        from Utils.notification_service import (
+            is_fcm_enabled,
+            send_notification,
+            send_notification_to_multiple_users,
+        )
+
+        if not is_fcm_enabled():
+            return
+
+        notify_user_ids = []
+        notification_type = None
+        title = ""
+        body = ""
+
+        if event_type == "new_ticket":
+            notification_type = "ticket_created"
+            title = f"🎫 New Ticket #{ticket_data.get('ticket_num', '?')}"
+            body = f"{ticket_data.get('user_name', 'Someone')} created a new ticket"
+
+            bot = _get_bot()
+            if bot:
+                guild = bot.get_guild(Config.GUILD_ID)
+                if guild:
+                    admin_role = guild.get_role(Config.ADMIN_ROLE_ID)
+                    mod_role = guild.get_role(Config.MODERATOR_ROLE_ID)
+                    if admin_role:
+                        notify_user_ids.extend([str(member.id) for member in admin_role.members])
+                    if mod_role:
+                        notify_user_ids.extend([str(member.id) for member in mod_role.members])
+                    notify_user_ids = list(set(notify_user_ids))
+
+        elif event_type == "new_message":
+            notification_type = "ticket_new_messages"
+
+            if message_data:
+                author_name = message_data.get("author_name", "Someone")
+                content = message_data.get("content", "")
+                title = f"💬 New message in Ticket #{ticket_data.get('ticket_num', '?')}"
+                body = f"{author_name}: {content[:100]}"
+
+                # Mentions in message -> send mention notifications
+                mention_ids = re.findall(r"<@!?(\\d+)>", content)
+                for mentioned_id in mention_ids:
+                    if mentioned_id != str(message_data.get("author_id")):
+                        await send_notification(
+                            mentioned_id,
+                            f"📢 You were mentioned in Ticket #{ticket_data.get('ticket_num', '?')}",
+                            f"{author_name} mentioned you: {content[:100]}",
+                            data={
+                                "ticket_id": ticket_id,
+                                "notification_type": "mention",
+                                "ticket_num": str(ticket_data.get("ticket_num", "")),
+                                "open_tab": "messages",
+                            },
+                            notification_type="ticket_mentions",
+                        )
+
+                author_id = str(message_data.get("author_id"))
+                ticket_creator_id = str(ticket_data.get("user_id"))
+                assigned_to = ticket_data.get("assigned_to")
+                claimed_by = ticket_data.get("claimed_by")
+
+                if author_id == ticket_creator_id:
+                    if assigned_to:
+                        notify_user_ids = [str(assigned_to)]
+                    elif claimed_by:
+                        notify_user_ids = [str(claimed_by)]
+                else:
+                    notify_user_ids = [ticket_creator_id]
+
+                notify_user_ids = [uid for uid in notify_user_ids if uid != author_id]
+
+        elif event_type == "ticket_assigned":
+            notification_type = "ticket_assigned"
+            assigned_to = ticket_data.get("assigned_to")
+            if assigned_to:
+                title = f"📌 Ticket #{ticket_data.get('ticket_num', '?')} assigned to you"
+                body = "You have been assigned to handle this ticket"
+                notify_user_ids = [str(assigned_to)]
+
+        if notify_user_ids and title and body:
+            payload_data = {
+                "ticket_id": ticket_id,
+                "notification_type": event_type,
+                "ticket_num": str(ticket_data.get("ticket_num", "")),
+            }
+            if notify_user_ids and ticket_data.get("user_id") and notify_user_ids[0] == str(ticket_data["user_id"]):
+                payload_data["open_tab"] = "messages"
+
+            if len(notify_user_ids) == 1:
+                await send_notification(
+                    notify_user_ids[0], title, body, data=payload_data, notification_type=notification_type
+                )
+            else:
+                await send_notification_to_multiple_users(
+                    notify_user_ids, title, body, data=payload_data, notification_type=notification_type
+                )
+    except Exception as e:
+        logger.error(f"❌ Error sending push notification: {e}")
+        logger.error(traceback.format_exc())
+
+
 @tickets_bp.route("/api/tickets", methods=["GET"])
 @token_required
 @require_permission("all")
@@ -217,6 +335,165 @@ def delete_ticket(ticket_id):
         return jsonify({"error": f"Failed to delete ticket: {str(e)}", "details": traceback.format_exc()}), 500
 
 
+def notify_ticket_update(ticket_id, event_type, data):
+    """Emit ticket updates via WebSocket to subscribed clients."""
+    socketio = _get_socketio()
+    if not socketio:
+        return
+    room = f"ticket_{ticket_id}"
+    socketio.emit(
+        "ticket_update",
+        {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
+        room=room,
+    )
+
+
+@tickets_bp.route("/api/tickets/<ticket_id>/messages", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_ticket_messages(ticket_id):
+    """Get messages from a ticket channel (last 50)."""
+    try:
+        bot = _get_bot()
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        ticket_cog = bot.get_cog("TicketSystem")
+        if not ticket_cog:
+            return jsonify({"error": "TicketSystem cog not loaded"}), 503
+
+        ticket = ticket_cog.tickets_data.get(ticket_id)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        channel = bot.get_channel(ticket.get("channel_id"))
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        async def fetch_messages():
+            messages = []
+            async for message in channel.history(limit=50, oldest_first=False):
+                if message.author.bot:
+                    important = (
+                        message.content.startswith("**[Admin Panel")
+                        or "Ticket" in message.content
+                        or "ticket" in message.content
+                    )
+                    if not important:
+                        continue
+
+                avatar_url = None
+                try:
+                    if message.author.display_avatar:
+                        avatar_url = str(message.author.display_avatar.url)
+                except Exception:
+                    avatar_url = None
+
+                messages.append(
+                    {
+                        "id": str(message.id),
+                        "author_id": str(message.author.id),
+                        "author_name": message.author.name,
+                        "author_avatar": avatar_url,
+                        "content": message.content,
+                        "timestamp": message.created_at.isoformat(),
+                        "is_bot": message.author.bot,
+                    }
+                )
+            return list(reversed(messages))
+
+        future = asyncio.run_coroutine_threadsafe(fetch_messages(), bot.loop)
+        msgs = future.result(timeout=10)
+        return jsonify({"messages": msgs})
+    except Exception as e:
+        logger.error(f"Error fetching ticket messages: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch messages: {str(e)}"}), 500
+
+
+@tickets_bp.route("/api/tickets/<ticket_id>/messages", methods=["POST"])
+@token_required
+def send_ticket_message(ticket_id):
+    """Send a message to a ticket channel."""
+    try:
+        bot = _get_bot()
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        ticket_cog = bot.get_cog("TicketSystem")
+        if not ticket_cog:
+            return jsonify({"error": "TicketSystem cog not loaded"}), 503
+
+        ticket = ticket_cog.tickets_data.get(ticket_id)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        data = request.get_json() or {}
+        message_content = data.get("content", "").strip()
+        if not message_content:
+            return jsonify({"error": "Message content required"}), 400
+
+        discord_id = getattr(request, "discord_id", None)
+        if not discord_id:
+            return jsonify({"error": "User information not found"}), 401
+
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        member = guild.get_member(int(discord_id))
+        if not member:
+            return jsonify({"error": "User not found in guild"}), 404
+
+        is_admin_or_mod = any(role.id in [Config.ADMIN_ROLE_ID, Config.MODERATOR_ROLE_ID] for role in member.roles)
+        if not is_admin_or_mod and str(ticket.get("user_id")) != str(discord_id):
+            return jsonify({"error": "You can only message your own tickets"}), 403
+
+        channel = bot.get_channel(ticket.get("channel_id"))
+        if not channel:
+            return jsonify({"error": "Ticket channel not found"}), 404
+
+        async def send_message():
+            content = (
+                f"**[Admin Panel - {request.username}]:** {message_content}"
+                if is_admin_or_mod
+                else message_content
+            )
+            msg = await channel.send(content)
+            avatar_url = None
+            try:
+                if member.display_avatar:
+                    avatar_url = str(member.display_avatar.url)
+            except Exception:
+                avatar_url = None
+
+            return {
+                "id": str(msg.id),
+                "author_id": str(member.id),
+                "author_name": member.name,
+                "author_avatar": avatar_url,
+                "content": content,
+                "timestamp": msg.created_at.isoformat(),
+                "is_bot": False,
+            }
+
+        future = asyncio.run_coroutine_threadsafe(send_message(), bot.loop)
+        message_data = future.result(timeout=10)
+
+        notify_ticket_update(ticket_id, "new_message", message_data)
+        try:
+            asyncio.run_coroutine_threadsafe(
+                send_push_notification_for_ticket_event(ticket_id, "new_message", ticket, message_data),
+                bot.loop,
+            )
+        except Exception:
+            pass
+
+        return jsonify({"success": True, "message": "Message sent successfully", "data": message_data})
+    except Exception as e:
+        logger.error(f"Error sending message to ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to send message: {str(e)}"}), 500
+
+
 @tickets_bp.route("/api/tickets/<ticket_id>/claim", methods=["POST"])
 @token_required
 @require_permission("all")
@@ -240,8 +517,17 @@ def claim_ticket(ticket_id):
             return jsonify({"error": "claimed_by is required"}), 400
 
         ticket_cog.tickets_data[ticket_id]["claimed_by"] = int(claimed_by)
-        ticket_cog.tickets_data[ticket_id]["status"] = "claimed"
+        ticket_cog.tickets_data[ticket_id]["status"] = "Claimed"
         ticket_cog.save_tickets()
+
+        notify_ticket_update(ticket_id, "status_change", {"status": "Claimed", "claimed_by": str(claimed_by)})
+        try:
+            asyncio.run_coroutine_threadsafe(
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                bot.loop,
+            )
+        except Exception:
+            pass
 
         return jsonify({"success": True, "message": "Ticket claimed"})
     except Exception as e:
@@ -273,6 +559,15 @@ def assign_ticket(ticket_id):
         ticket_cog.tickets_data[ticket_id]["assigned_to"] = int(assigned_to)
         ticket_cog.save_tickets()
 
+        notify_ticket_update(ticket_id, "status_change", {"assigned_to": str(assigned_to)})
+        try:
+            asyncio.run_coroutine_threadsafe(
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                bot.loop,
+            )
+        except Exception:
+            pass
+
         return jsonify({"success": True, "message": "Ticket assigned"})
     except Exception as e:
         return jsonify({"error": f"Failed to assign ticket: {str(e)}", "details": traceback.format_exc()}), 500
@@ -298,8 +593,10 @@ def close_ticket(ticket_id):
         data = request.get_json() or {}
         close_message = data.get("close_message", "Ticket closed by admin.")
 
-        ticket_cog.tickets_data[ticket_id]["status"] = "closed"
+        ticket_cog.tickets_data[ticket_id]["status"] = "Closed"
         ticket_cog.tickets_data[ticket_id]["closed_at"] = Config.get_utc_now().isoformat()
+        ticket_cog.tickets_data[ticket_id]["claimed_by"] = None
+        ticket_cog.tickets_data[ticket_id]["assigned_to"] = None
         ticket_cog.save_tickets()
 
         # Send close message
@@ -308,6 +605,15 @@ def close_ticket(ticket_id):
             channel = bot.get_channel(channel_id)
             if channel:
                 asyncio.run_coroutine_threadsafe(channel.send(close_message), bot.loop).result(timeout=5)
+        except Exception:
+            pass
+
+        notify_ticket_update(ticket_id, "status_change", {"status": "Closed"})
+        try:
+            asyncio.run_coroutine_threadsafe(
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                bot.loop,
+            )
         except Exception:
             pass
 
@@ -333,76 +639,26 @@ def reopen_ticket(ticket_id):
         if ticket_id not in ticket_cog.tickets_data:
             return jsonify({"error": "Ticket not found"}), 404
 
-        ticket_cog.tickets_data[ticket_id]["status"] = "open"
+        ticket_data = ticket_cog.tickets_data[ticket_id]
+        reopen_count = ticket_data.get("reopen_count", 0)
+        ticket_data["reopen_count"] = reopen_count + 1
+        ticket_data["status"] = "Open"
+        ticket_data["closed_at"] = None
         ticket_cog.save_tickets()
+
+        notify_ticket_update(ticket_id, "status_change", {"status": "Open"})
+        try:
+            asyncio.run_coroutine_threadsafe(
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                bot.loop,
+            )
+        except Exception:
+            pass
 
         return jsonify({"success": True, "message": "Ticket reopened"})
     except Exception as e:
         return jsonify({"error": f"Failed to reopen ticket: {str(e)}", "details": traceback.format_exc()}), 500
 
-
-@tickets_bp.route("/api/tickets/<ticket_id>/messages", methods=["GET"])
-@token_required
-def get_ticket_messages(ticket_id):
-    """Get ticket messages"""
-    try:
-        bot = _get_bot()
-        if not bot:
-            return jsonify({"error": "Bot not initialized"}), 503
-
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        messages_data = ticket_cog.ticket_messages.get(ticket_id, [])
-        return jsonify({"messages": messages_data})
-    except Exception as e:
-        return jsonify({"error": f"Failed to fetch messages: {str(e)}", "details": traceback.format_exc()}), 500
-
-
-@tickets_bp.route("/api/tickets/<ticket_id>/messages", methods=["POST"])
-@token_required
-def post_ticket_message(ticket_id):
-    """Post a new message to a ticket"""
-    try:
-        bot = _get_bot()
-        if not bot:
-            return jsonify({"error": "Bot not initialized"}), 503
-
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        data = request.get_json()
-        if not data or "content" not in data:
-            return jsonify({"error": "Message content is required"}), 400
-
-        if ticket_id not in ticket_cog.ticket_messages:
-            ticket_cog.ticket_messages[ticket_id] = []
-
-        # Create message with metadata
-        message_data = {
-            "id": len(ticket_cog.ticket_messages[ticket_id]) + 1,
-            "author_id": request.discord_id,
-            "author_name": request.username,
-            "author_avatar": None,
-            "content": data["content"],
-            "timestamp": datetime.utcnow().isoformat(),
-            "is_bot": False,
-        }
-
-        # Detect admin panel messages
-        if "[Admin Panel" in message_data["content"]:
-            match = re.search(r"\\[Admin Panel - ([^\\]]+)\\]", message_data["content"])
-            if match:
-                message_data["author_name"] = match.group(1)
-
-        ticket_cog.ticket_messages[ticket_id].append(message_data)
-        ticket_cog.save_messages()
-
-        return jsonify({"success": True, "message": "Message added", "data": message_data})
-    except Exception as e:
-        return jsonify({"error": f"Failed to post message: {str(e)}", "details": traceback.format_exc()}), 500
 
 
 @tickets_bp.route("/api/config/tickets", methods=["GET"])
@@ -589,12 +845,11 @@ async def notification_unregister_endpoint():
 
 @tickets_bp.route("/api/notifications/settings", methods=["GET"])
 async def notification_settings_get_endpoint():
-    """Get notification settings for authenticated user"""
+    """Get notification settings for authenticated user."""
     try:
         from Utils.notification_service import get_user_notification_settings
 
         auth_header = request.headers.get("Authorization")
-
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
 
@@ -612,9 +867,7 @@ async def notification_settings_get_endpoint():
             return jsonify({"error": "Invalid token"}), 401
 
         settings = await get_user_notification_settings(user_id)
-
         return jsonify(settings), 200
-
     except Exception as e:
         logger.error(f"Error getting notification settings: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to get settings: {str(e)}"}), 500
@@ -622,13 +875,12 @@ async def notification_settings_get_endpoint():
 
 @tickets_bp.route("/api/notifications/settings", methods=["PUT"])
 async def notification_settings_update_endpoint():
-    """Update notification settings for authenticated user"""
+    """Update notification settings for authenticated user."""
     try:
         from Utils.notification_service import update_user_notification_settings
 
         settings_data = request.get_json() or {}
         auth_header = request.headers.get("Authorization")
-
         if not auth_header or not auth_header.startswith("Bearer "):
             return jsonify({"error": "Missing or invalid Authorization header"}), 401
 
@@ -651,19 +903,14 @@ async def notification_settings_update_endpoint():
             "ticket_created",
             "ticket_assigned",
         }
-
         filtered_settings = {k: v for k, v in settings_data.items() if k in valid_settings}
-
         if not filtered_settings:
             return jsonify({"error": "No valid settings provided"}), 400
 
         success = await update_user_notification_settings(user_id, filtered_settings)
-
         if success:
             return jsonify({"message": "Settings updated successfully"}), 200
-        else:
-            return jsonify({"error": "Failed to update settings"}), 500
-
+        return jsonify({"error": "Failed to update settings"}), 500
     except Exception as e:
         logger.error(f"Error updating notification settings: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500

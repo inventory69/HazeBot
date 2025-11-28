@@ -140,20 +140,22 @@ def post_game_request():
                 target_game = activity.name
                 break
 
-        content = (
-            f"🎮 **{current_member.display_name}** wants to play **{game_name}** with "
-            f"**{target_member.display_name}**!"
+        description = (
+            f"🎮 {current_member.mention} wants to play **{game_name}** with {target_member.mention}!"
         )
         if target_game:
-            content += f"\n🕹️ {target_member.display_name} is currently playing **{target_game}**"
+            description += f"\n🕹️ {target_member.display_name} is currently playing **{target_game}**"
         if message_text:
-            content += f"\n💬 Message: {message_text}"
+            description += f"\n💬 Message: {message_text}"
 
         async def send_request():
+            from Cogs.GamingHub import GameRequestView
+
             embed = discord.Embed(
-                title="New Game Request",
-                description=content,
-                color=Config.PINK,
+                title="🎮 Game Request",
+                description=description,
+                color=discord.Color.green(),
+                timestamp=Config.get_utc_now(),
             )
             embed.add_field(name="Requested by", value=current_member.mention, inline=True)
             embed.add_field(name="Target", value=target_member.mention, inline=True)
@@ -163,13 +165,42 @@ def post_game_request():
             if message_text:
                 embed.add_field(name="Message", value=message_text, inline=False)
 
-            await gaming_channel.send(content, embed=embed)
+            embed.set_thumbnail(url=current_member.display_avatar.url)
+            embed.set_footer(text="Respond with the buttons below")
+
+            view = GameRequestView(
+                int(discord_id), int(target_user_id), game_name, Config.get_local_now().timestamp()
+            )
+            msg = await gaming_channel.send(content=f"🎮 {target_member.mention}", embed=embed, view=view)
+
+            gaming_hub_cog = bot.get_cog("GamingHub")
+            if gaming_hub_cog:
+                gaming_hub_cog.save_game_request(
+                    gaming_channel.id,
+                    msg.id,
+                    int(discord_id),
+                    int(target_user_id),
+                    game_name,
+                )
+            else:
+                logger.warning("GamingHub cog not loaded, game request view will not persist")
+
+            return msg
 
         loop = bot.loop
         future = asyncio.run_coroutine_threadsafe(send_request(), loop)
-        future.result(timeout=10)
+        message = future.result(timeout=10)
 
-        return jsonify({"success": True, "message": "Game request posted"})
+        logger.info(f"🎮 Game request posted: {current_member.name} -> {target_member.name} for {game_name}")
+
+        return jsonify(
+            {
+                "success": True,
+                "message": "Game request posted successfully",
+                "message_id": str(message.id),
+                "channel_id": str(gaming_channel.id),
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": f"Failed to post game request: {str(e)}", "details": traceback.format_exc()}), 500

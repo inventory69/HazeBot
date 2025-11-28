@@ -21,7 +21,26 @@ from api.utils.auth import require_permission, token_required
 memes_bp = Blueprint("memes", __name__)
 
 UPVOTES_FILE = Path(__file__).parent.parent / Config.DATA_DIR / "meme_upvotes.json"
-NEGATIVE_EMOJIS = {"👎", "😡", "😠", "❌", "🚫"}
+NEGATIVE_EMOJIS = {
+    "👎",
+    "😠",
+    "😡",
+    "🤬",
+    "💩",
+    "🖕",
+    "❌",
+    "⛔",
+    "🚫",
+    "💔",
+    "😤",
+    "😒",
+    "🙄",
+    "😑",
+    "😐",
+    "😶",
+    "🤐",
+    "😬",
+}
 
 
 def load_upvotes():
