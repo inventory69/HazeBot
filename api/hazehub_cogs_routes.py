@@ -603,9 +603,12 @@ def get_meme_reactions(message_id):
 
         return jsonify(
             {
+                "success": True,
                 "message_id": message_id,
-                "upvote_count": total_count,
+                "upvotes": total_count,  # Flutter expects "upvotes", not "upvote_count"
+                "upvote_count": total_count,  # Keep for backward compatibility
                 "has_upvoted": has_upvoted,
+                "has_discord_upvoted": has_discord_upvoted,  # Flutter needs this separately
                 "breakdown": {
                     "custom": custom_count,
                     "discord": discord_count,
