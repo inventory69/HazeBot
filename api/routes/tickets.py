@@ -50,6 +50,19 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
         if not is_fcm_enabled():
             return
 
+        # Skip push if someone is already connected to this ticket room via WebSocket
+        socketio = _get_socketio()
+        room = f"ticket_{ticket_id}"
+        try:
+            if socketio and socketio.server and room in socketio.server.manager.rooms.get("/", {}):
+                room_size = len(socketio.server.manager.rooms["/"][room])
+                if room_size > 0:
+                    logger.info(f"📡 Active WS clients in {room} ({room_size}) -> skipping push")
+                    return
+        except Exception:
+            # If room inspection fails, continue with push as fallback
+            pass
+
         notify_user_ids = []
         notification_type = None
         title = ""
