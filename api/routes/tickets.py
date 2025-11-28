@@ -208,34 +208,6 @@ def get_tickets():
         enriched_tickets.sort(key=lambda t: t.get("ticket_num", 0), reverse=True)
 
         return jsonify({"tickets": enriched_tickets, "total": len(enriched_tickets)})
-
-        status_filter = request.args.get("status")
-        type_filter = request.args.get("type")
-        claimed_by_filter = request.args.get("claimed_by")
-        assigned_to_filter = request.args.get("assigned_to")
-
-        if status_filter:
-            tickets_data = {k: v for k, v in tickets_data.items() if v.get("status") == status_filter}
-        if type_filter:
-            tickets_data = {k: v for k, v in tickets_data.items() if v.get("type") == type_filter}
-        if claimed_by_filter:
-            tickets_data = {k: v for k, v in tickets_data.items() if str(v.get("claimed_by")) == claimed_by_filter}
-        if assigned_to_filter:
-            tickets_data = {k: v for k, v in tickets_data.items() if str(v.get("assigned_to")) == assigned_to_filter}
-
-        ticket_list = []
-        for ticket_id, ticket_data in tickets_data.items():
-            enriched = ticket_data.copy()
-            enriched["ticket_id"] = ticket_id
-            if "user_id" in enriched:
-                enriched["user_id"] = str(enriched["user_id"])
-            if "claimed_by" in enriched and enriched["claimed_by"]:
-                enriched["claimed_by"] = str(enriched["claimed_by"])
-            if "assigned_to" in enriched and enriched["assigned_to"]:
-                enriched["assigned_to"] = str(enriched["assigned_to"])
-            ticket_list.append(enriched)
-
-        return jsonify({"tickets": ticket_list, "total": len(ticket_list)})
     except Exception as e:
         return jsonify({"error": f"Failed to fetch tickets: {str(e)}", "details": traceback.format_exc()}), 500
 
@@ -286,28 +258,177 @@ def get_my_tickets():
 def create_ticket():
     """Create a new ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets, load_counter, save_ticket, update_ticket, TICKETS_CATEGORY_ID, TicketControlView, create_ticket_embed, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+        import uuid
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
-
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
 
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        required_fields = ["type", "user_id", "user_name", "channel_id", "message_id", "ticket_num"]
-        missing = [f for f in required_fields if f not in data]
-        if missing:
-            return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+        ticket_type = data.get("type")
+        subject = data.get("subject")
+        description = data.get("description")
 
-        ticket_id = str(data.get("ticket_id") or data.get("message_id"))
-        ticket_cog.tickets_data[ticket_id] = data
-        ticket_cog.save_tickets()
+        if not ticket_type or not subject or not description:
+            return jsonify({"error": "Missing required fields: type, subject, description"}), 400
 
-        return jsonify({"success": True, "ticket": data})
+        config_file = Path(__file__).parent.parent / Config.DATA_DIR / "tickets_config.json"
+        if config_file.exists():
+            with open(config_file, "r", encoding="utf-8") as f:
+                ticket_config = json.load(f)
+                valid_categories = ticket_config.get("categories", ["Application", "Bug", "Support"])
+        else:
+            valid_categories = ["Application", "Bug", "Support"]
+
+        if ticket_type not in valid_categories:
+            return jsonify({"error": f"Invalid ticket type. Must be one of: {', '.join(valid_categories)}"}), 400
+
+        if len(subject) < 3 or len(subject) > 100:
+            return jsonify({"error": "Subject must be between 3 and 100 characters"}), 400
+        if len(description) < 10 or len(description) > 2000:
+            return jsonify({"error": "Description must be between 10 and 2000 characters"}), 400
+
+        discord_id = getattr(request, "discord_id", None)
+        if not discord_id or discord_id == "unknown":
+            return jsonify({"error": "User information not found"}), 401
+
+        user_id = int(discord_id)
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 500
+
+        member = guild.get_member(user_id)
+        if not member:
+            return jsonify({"error": "User not found in guild"}), 404
+
+        is_admin_or_mod = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in member.roles)
+
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+
+        if not is_admin_or_mod:
+            last_ticket = None
+            for t in tickets:
+                if t.get("user_id") == user_id:
+                    if not last_ticket or t.get("created_at") > last_ticket.get("created_at"):
+                        last_ticket = t
+            if last_ticket:
+                from datetime import datetime, timedelta
+
+                time_since_last = datetime.now() - datetime.fromisoformat(last_ticket["created_at"])
+                if time_since_last < timedelta(hours=1):
+                    remaining_minutes = int((timedelta(hours=1) - time_since_last).total_seconds() / 60)
+                    return jsonify(
+                        {"error": f"You can only create one ticket per hour. Please wait {remaining_minutes} minutes."}
+                    ), 429
+
+        initial_message = f"**Subject:** {subject}\n\n**Description:**\n{description}"
+
+        async def create_ticket_from_api():
+            import discord
+
+            tickets_list = await load_tickets()
+            category = guild.get_channel(TICKETS_CATEGORY_ID)
+            if not category or not isinstance(category, discord.CategoryChannel):
+                raise Exception("Tickets category not available")
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                member: discord.PermissionOverwrite(view_channel=True),
+                guild.me: discord.PermissionOverwrite(view_channel=True),
+            }
+            moderator_role = discord.utils.get(guild.roles, id=MODERATOR_ROLE_ID)
+            if moderator_role:
+                overwrites[moderator_role] = discord.PermissionOverwrite(view_channel=True)
+
+            existing_nums = [t.get("ticket_num", 0) for t in tickets_list]
+            max_existing = max(existing_nums) if existing_nums else 0
+            current_counter = await load_counter()
+            if current_counter <= max_existing:
+                ticket_num = max_existing + 1
+                await update_ticket(None, {"counter": ticket_num + 1}) if callable(update_ticket) else None
+            else:
+                ticket_num = current_counter
+                await update_ticket(None, {"counter": ticket_num + 1}) if callable(update_ticket) else None
+
+            channel = await guild.create_text_channel(
+                name=f"ticket-{ticket_num}-{ticket_type}-{member.name}",
+                overwrites=overwrites,
+                category=category,
+            )
+
+            ticket_data = {
+                "ticket_id": str(uuid.uuid4()),
+                "ticket_num": ticket_num,
+                "user_id": member.id,
+                "channel_id": channel.id,
+                "type": ticket_type,
+                "status": "Open",
+                "claimed_by": None,
+                "assigned_to": None,
+                "created_at": datetime.now().isoformat(),
+                "embed_message_id": None,
+                "reopen_count": 0,
+                "initial_message": initial_message,
+            }
+
+            await save_ticket(ticket_data)
+
+            embed = create_ticket_embed(ticket_data, guild.me)
+            view = TicketControlView()
+            for item in view.children:
+                if isinstance(item, discord.ui.Button) and item.label == "Reopen":
+                    item.disabled = True
+
+            msg = await channel.send(
+                f"{member.mention}, your ticket has been opened!",
+                embed=embed,
+                view=view,
+            )
+
+            ticket_data["embed_message_id"] = msg.id
+            await update_ticket(channel.id, {"embed_message_id": msg.id})
+
+            admin_role = discord.utils.get(guild.roles, id=ADMIN_ROLE_ID)
+            moderator_role = discord.utils.get(guild.roles, id=MODERATOR_ROLE_ID) if MODERATOR_ROLE_ID else None
+            roles_to_mention = []
+            if admin_role:
+                roles_to_mention.append(admin_role.mention)
+            if moderator_role:
+                roles_to_mention.append(moderator_role.mention)
+
+            if roles_to_mention:
+                await channel.send(f"{' '.join(roles_to_mention)} New ticket #{ticket_num} created by {member.mention}.")
+
+            if initial_message:
+                await channel.send(initial_message)
+
+            await channel.send("An admin or moderator will handle your request soon. Please wait patiently.")
+
+            return ticket_data
+
+        ticket_data = asyncio.run_coroutine_threadsafe(create_ticket_from_api(), loop).result(timeout=20)
+
+        async def notify_push():
+            ticket_data["user_name"] = member.display_name if member else "Unknown"
+            await send_push_notification_for_ticket_event(ticket_data["ticket_id"], "new_ticket", ticket_data)
+
+        asyncio.run_coroutine_threadsafe(notify_push(), loop)
+
+        return jsonify(
+            {
+                "success": True,
+                "ticket_id": ticket_data["ticket_id"],
+                "ticket_num": ticket_data["ticket_num"],
+                "channel_id": str(ticket_data["channel_id"]),
+                "message": f"Ticket #{ticket_data['ticket_num']} created successfully!",
+            }
+        ), 201
     except Exception as e:
         return jsonify({"error": f"Failed to create ticket: {str(e)}", "details": traceback.format_exc()}), 500
 
@@ -317,28 +438,49 @@ def create_ticket():
 def get_ticket(ticket_id):
     """Get a ticket by ID"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
 
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
 
-        ticket_data = ticket_cog.tickets_data.get(ticket_id)
-        if not ticket_data:
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
             return jsonify({"error": "Ticket not found"}), 404
 
-        enriched = ticket_data.copy()
-        enriched["ticket_id"] = ticket_id
-        if "user_id" in enriched:
-            enriched["user_id"] = str(enriched["user_id"])
-        if "claimed_by" in enriched and enriched["claimed_by"]:
-            enriched["claimed_by"] = str(enriched["claimed_by"])
-        if "assigned_to" in enriched and enriched["assigned_to"]:
-            enriched["assigned_to"] = str(enriched["assigned_to"])
+        guild = bot.get_guild(Config.GUILD_ID)
+        creator_id = ticket.get("user_id")
+        creator = guild.get_member(int(creator_id)) if guild and creator_id else None
 
-        return jsonify(enriched)
+        claimed_by_id = ticket.get("claimed_by")
+        claimer = guild.get_member(int(claimed_by_id)) if guild and claimed_by_id else None
+
+        assigned_to_id = ticket.get("assigned_to")
+        assigned = guild.get_member(int(assigned_to_id)) if guild and assigned_to_id else None
+
+        enriched_ticket = {
+            "ticket_id": ticket.get("ticket_id"),
+            "ticket_num": ticket.get("ticket_num"),
+            "channel_id": str(ticket.get("channel_id")) if ticket.get("channel_id") else None,
+            "user_id": str(creator_id) if creator_id else None,
+            "username": creator.name if creator else "Unknown User",
+            "display_name": creator.display_name if creator else "Unknown User",
+            "avatar_url": str(creator.avatar.url) if creator and creator.avatar else None,
+            "type": ticket.get("type", "General"),
+            "status": ticket.get("status", "Open"),
+            "created_at": ticket.get("created_at"),
+            "closed_at": ticket.get("closed_at"),
+            "claimed_by": str(claimed_by_id) if claimed_by_id else None,
+            "claimed_by_name": claimer.name if claimer else None,
+            "assigned_to": str(assigned_to_id) if assigned_to_id else None,
+            "assigned_to_name": assigned.name if assigned else None,
+        }
+
+        return jsonify(enriched_ticket)
     except Exception as e:
         return jsonify({"error": f"Failed to fetch ticket: {str(e)}", "details": traceback.format_exc()}), 500
 
@@ -349,25 +491,44 @@ def get_ticket(ticket_id):
 def update_ticket(ticket_id):
     """Update a ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets, update_ticket as update_ticket_data
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
-
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        if ticket_id not in ticket_cog.tickets_data:
-            return jsonify({"error": "Ticket not found"}), 404
 
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        ticket_cog.tickets_data[ticket_id].update(data)
-        ticket_cog.save_tickets()
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
 
-        return jsonify({"success": True, "ticket": ticket_cog.tickets_data[ticket_id]})
+        channel_id = ticket.get("channel_id")
+
+        updates = {}
+        if "status" in data:
+            updates["status"] = data["status"]
+        if "assigned_to" in data:
+            updates["assigned_to"] = int(data["assigned_to"]) if data["assigned_to"] else None
+        if "claimed_by" in data:
+            updates["claimed_by"] = int(data["claimed_by"]) if data["claimed_by"] else None
+        if "type" in data:
+            updates["type"] = data["type"]
+
+        asyncio.run_coroutine_threadsafe(update_ticket_data(channel_id, updates), loop).result(timeout=10)
+
+        log_action(
+            request.username,
+            "update_ticket",
+            {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "updates": list(updates.keys())},
+        )
+
+        return jsonify({"success": True, "message": "Ticket updated successfully"})
     except Exception as e:
         return jsonify({"error": f"Failed to update ticket: {str(e)}", "details": traceback.format_exc()}), 500
 
@@ -378,21 +539,27 @@ def update_ticket(ticket_id):
 def delete_ticket(ticket_id):
     """Delete a ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import delete_ticket as delete_ticket_storage, load_tickets
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
 
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        if ticket_id not in ticket_cog.tickets_data:
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
             return jsonify({"error": "Ticket not found"}), 404
 
-        del ticket_cog.tickets_data[ticket_id]
-        ticket_cog.save_tickets()
+        channel_id = ticket.get("channel_id")
+        asyncio.run_coroutine_threadsafe(delete_ticket_storage(channel_id), loop).result(timeout=10)
 
-        return jsonify({"success": True, "message": "Ticket deleted"})
+        log_action(
+            request.username, "delete_ticket", {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "status": "deleted"}
+        )
+
+        return jsonify({"success": True, "message": f"Ticket #{ticket.get('ticket_num')} deleted successfully"})
     except Exception as e:
         return jsonify({"error": f"Failed to delete ticket: {str(e)}", "details": traceback.format_exc()}), 500
 
@@ -573,30 +740,50 @@ def send_ticket_message(ticket_id):
 def claim_ticket(ticket_id):
     """Claim a ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
-
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        if ticket_id not in ticket_cog.tickets_data:
-            return jsonify({"error": "Ticket not found"}), 404
 
         data = request.get_json()
         claimed_by = data.get("claimed_by")
         if not claimed_by:
             return jsonify({"error": "claimed_by is required"}), 400
 
-        ticket_cog.tickets_data[ticket_id]["claimed_by"] = int(claimed_by)
-        ticket_cog.tickets_data[ticket_id]["status"] = "Claimed"
-        ticket_cog.save_tickets()
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        if ticket.get("status") == "Closed":
+            return jsonify({"error": "Cannot claim a closed ticket"}), 400
+
+        channel_id = ticket.get("channel_id")
+        channel = bot.get_channel(channel_id)
+        if channel:
+            claimer_name = f"User {claimed_by}"
+            guild = bot.get_guild(Config.GUILD_ID)
+            if guild:
+                claimer = guild.get_member(int(claimed_by))
+                if claimer:
+                    claimer_name = claimer.display_name
+
+            async def send_claim():
+                await channel.send(f"🎫 **Ticket claimed by {claimer_name}**\nStatus changed to: **Claimed**")
+
+            asyncio.run_coroutine_threadsafe(send_claim(), loop).result(timeout=10)
+
+        asyncio.run_coroutine_threadsafe(
+            update_ticket(channel_id, {"claimed_by": int(claimed_by), "status": "Claimed"}), loop
+        ).result(timeout=10)
 
         notify_ticket_update(ticket_id, "status_change", {"status": "Claimed", "claimed_by": str(claimed_by)})
         try:
             asyncio.run_coroutine_threadsafe(
-                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket),
                 bot.loop,
             )
         except Exception:
@@ -613,29 +800,52 @@ def claim_ticket(ticket_id):
 def assign_ticket(ticket_id):
     """Assign a ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
-
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        if ticket_id not in ticket_cog.tickets_data:
-            return jsonify({"error": "Ticket not found"}), 404
 
         data = request.get_json()
         assigned_to = data.get("assigned_to")
         if not assigned_to:
             return jsonify({"error": "assigned_to is required"}), 400
 
-        ticket_cog.tickets_data[ticket_id]["assigned_to"] = int(assigned_to)
-        ticket_cog.save_tickets()
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        if ticket.get("status") == "Closed":
+            return jsonify({"error": "Cannot assign a closed ticket"}), 400
+
+        channel_id = ticket.get("channel_id")
+        channel = bot.get_channel(channel_id)
+        if channel:
+            guild = bot.get_guild(Config.GUILD_ID)
+            assignee_display = f"User {assigned_to}"
+            assignee_mention = f"<@{assigned_to}>"
+            if guild:
+                assignee = guild.get_member(int(assigned_to))
+                if assignee:
+                    assignee_display = assignee.display_name
+                    assignee_mention = assignee.mention
+
+            async def send_assign():
+                await channel.send(f"👤 **Ticket assigned to {assignee_display}** ({assignee_mention})")
+
+            asyncio.run_coroutine_threadsafe(send_assign(), loop).result(timeout=10)
+
+        asyncio.run_coroutine_threadsafe(
+            update_ticket(channel_id, {"assigned_to": int(assigned_to)}), loop
+        ).result(timeout=10)
 
         notify_ticket_update(ticket_id, "status_change", {"assigned_to": str(assigned_to)})
         try:
             asyncio.run_coroutine_threadsafe(
-                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket),
                 bot.loop,
             )
         except Exception:
@@ -652,29 +862,33 @@ def assign_ticket(ticket_id):
 def close_ticket(ticket_id):
     """Close a ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
 
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        if ticket_id not in ticket_cog.tickets_data:
-            return jsonify({"error": "Ticket not found"}), 404
-
         data = request.get_json() or {}
         close_message = data.get("close_message", "Ticket closed by admin.")
 
-        ticket_cog.tickets_data[ticket_id]["status"] = "Closed"
-        ticket_cog.tickets_data[ticket_id]["closed_at"] = Config.get_utc_now().isoformat()
-        ticket_cog.tickets_data[ticket_id]["claimed_by"] = None
-        ticket_cog.tickets_data[ticket_id]["assigned_to"] = None
-        ticket_cog.save_tickets()
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
+            return jsonify({"error": "Ticket not found"}), 404
+
+        channel_id = ticket.get("channel_id")
+        asyncio.run_coroutine_threadsafe(
+            update_ticket(
+                channel_id,
+                {"status": "Closed", "closed_at": Config.get_utc_now().isoformat(), "claimed_by": None, "assigned_to": None},
+            ),
+            loop,
+        ).result(timeout=10)
 
         # Send close message
         try:
-            channel_id = int(ticket_cog.tickets_data[ticket_id].get("channel_id"))
             channel = bot.get_channel(channel_id)
             if channel:
                 asyncio.run_coroutine_threadsafe(channel.send(close_message), bot.loop).result(timeout=5)
@@ -684,7 +898,7 @@ def close_ticket(ticket_id):
         notify_ticket_update(ticket_id, "status_change", {"status": "Closed"})
         try:
             asyncio.run_coroutine_threadsafe(
-                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket),
                 bot.loop,
             )
         except Exception:
@@ -701,28 +915,33 @@ def close_ticket(ticket_id):
 def reopen_ticket(ticket_id):
     """Reopen a ticket"""
     try:
+        import asyncio
+        from Cogs.TicketSystem import load_tickets, update_ticket
+
         bot = _get_bot()
         if not bot:
             return jsonify({"error": "Bot not initialized"}), 503
 
-        ticket_cog = bot.get_cog("TicketSystem")
-        if not ticket_cog:
-            return jsonify({"error": "TicketSystem cog not loaded"}), 503
-
-        if ticket_id not in ticket_cog.tickets_data:
+        loop = bot.loop
+        tickets = asyncio.run_coroutine_threadsafe(load_tickets(), loop).result(timeout=10)
+        ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+        if not ticket:
             return jsonify({"error": "Ticket not found"}), 404
 
-        ticket_data = ticket_cog.tickets_data[ticket_id]
-        reopen_count = ticket_data.get("reopen_count", 0)
-        ticket_data["reopen_count"] = reopen_count + 1
-        ticket_data["status"] = "Open"
-        ticket_data["closed_at"] = None
-        ticket_cog.save_tickets()
+        reopen_count = ticket.get("reopen_count", 0)
+        channel_id = ticket.get("channel_id")
+        asyncio.run_coroutine_threadsafe(
+            update_ticket(
+                channel_id,
+                {"status": "Open", "closed_at": None, "reopen_count": reopen_count + 1},
+            ),
+            loop,
+        ).result(timeout=10)
 
         notify_ticket_update(ticket_id, "status_change", {"status": "Open"})
         try:
             asyncio.run_coroutine_threadsafe(
-                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket_cog.tickets_data[ticket_id]),
+                send_push_notification_for_ticket_event(ticket_id, "ticket_assigned", ticket),
                 bot.loop,
             )
         except Exception:
