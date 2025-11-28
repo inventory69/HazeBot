@@ -310,7 +310,9 @@ def get_latest_rankups():
 
             rankups = []
             checked_count = 0
-            async for message in channel.history(limit=500):  # Increased limit to find more rank-ups among other messages
+            async for message in channel.history(
+                limit=500
+            ):  # Increased limit to find more rank-ups among other messages
                 checked_count += 1
                 # Check message content and embeds for rank-up keywords
                 message_text = message.content.lower()

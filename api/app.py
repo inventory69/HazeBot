@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import threading
+import types
 from datetime import datetime
 from pathlib import Path
 
@@ -118,8 +119,6 @@ require_permission = auth_module.require_permission
 log_config_action = auth_module.log_config_action
 
 # Create a simple object to pass decorators to Blueprint init functions
-import types
-
 decorator_module = types.SimpleNamespace(
     token_required=token_required, require_permission=require_permission, log_config_action=log_config_action
 )

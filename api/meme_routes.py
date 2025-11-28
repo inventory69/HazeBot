@@ -38,11 +38,6 @@ def init_meme_routes(app, config, log, auth_module):
     require_permission = auth_module.require_permission
     log_config_action = auth_module.log_config_action
 
-    # Apply decorators BEFORE blueprint registration
-    import sys
-
-    module = sys.modules[__name__]
-
     # Register blueprint WITHOUT decorators first
     app.register_blueprint(meme_bp)
 
@@ -50,9 +45,7 @@ def init_meme_routes(app, config, log, auth_module):
     vf = app.view_functions
     vf["meme.get_meme_sources"] = token_required(vf["meme.get_meme_sources"])
     vf["meme.get_meme_templates"] = token_required(vf["meme.get_meme_templates"])
-    vf["meme.refresh_meme_templates"] = token_required(
-        require_permission("all")(vf["meme.refresh_meme_templates"])
-    )
+    vf["meme.refresh_meme_templates"] = token_required(require_permission("all")(vf["meme.refresh_meme_templates"]))
     vf["meme.test_meme_from_source"] = token_required(vf["meme.test_meme_from_source"])
     vf["meme.test_random_meme"] = token_required(vf["meme.test_random_meme"])
     vf["meme.test_daily_meme"] = token_required(vf["meme.test_daily_meme"])
