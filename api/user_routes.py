@@ -167,26 +167,29 @@ def get_user_profile():
             pass
 
         # Build profile response
-        profile = {
-            "discord_id": str(discord_id),
-            "username": member.name,
-            "display_name": member.display_name,
-            "discriminator": member.discriminator,
-            "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
-            "role": user_role,
-            "role_name": user_role_name,
-            "opt_in_roles": opt_in_roles,
-            "rl_rank": rl_rank,
-            "notifications": {
-                "changelog_opt_in": has_changelog,
-                "meme_opt_in": has_meme,
-            },
-            "warnings_count": warnings_count,
-            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
-            "created_at": member.created_at.isoformat() if member.created_at else None,
-        }
-
-        return jsonify(profile)
+        return jsonify(
+            {
+                "success": True,
+                "profile": {
+                    "discord_id": str(discord_id),
+                    "username": member.name,
+                    "display_name": member.display_name,
+                    "discriminator": member.discriminator,
+                    "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
+                    "role": user_role,
+                    "role_name": user_role_name,
+                    "opt_in_roles": opt_in_roles,
+                    "rl_rank": rl_rank,
+                    "notifications": {
+                        "changelog_opt_in": has_changelog,
+                        "meme_opt_in": has_meme,
+                    },
+                    "warnings_count": warnings_count,
+                    "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+                    "created_at": member.created_at.isoformat() if member.created_at else None,
+                },
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}\n{traceback.format_exc()}")
