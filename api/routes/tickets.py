@@ -608,21 +608,76 @@ def get_ticket_messages(ticket_id):
         async def fetch_messages():
             messages = []
             async for message in channel.history(limit=50, oldest_first=False):
+                # Skip bot system messages unless they are meaningful
                 if message.author.bot:
-                    important = (
-                        message.content.startswith("**[Admin Panel")
-                        or "Ticket" in message.content
-                        or "ticket" in message.content
-                    )
-                    if not important:
+                    if not (
+                        message.content.startswith("**Initial details")
+                        or message.content.startswith("**[Admin Panel")
+                        or "Ticket successfully closed" in message.content
+                        or "Ticket claimed by" in message.content
+                        or "Ticket assigned to" in message.content
+                        or "Ticket has been reopened" in message.content
+                    ):
                         continue
 
                 avatar_url = None
-                try:
-                    if message.author.display_avatar:
-                        avatar_url = str(message.author.display_avatar.url)
-                except Exception:
-                    avatar_url = None
+                is_admin = False
+                user_role = None  # 'admin', 'moderator', or None
+
+                # Check roles on the author
+                if hasattr(message.author, "roles") and message.author.roles:
+                    for role in message.author.roles:
+                        if role.id == Config.ADMIN_ROLE_ID:
+                            is_admin = True
+                            user_role = "admin"
+                            break
+                        if role.id == Config.MODERATOR_ROLE_ID:
+                            is_admin = True
+                            user_role = "moderator"
+                            break
+
+                # Admin panel proxy message -> resolve real admin avatar/role
+                if message.content.startswith("**[Admin Panel"):
+                    is_admin = True
+                    admin_match = re.search(r"\[Admin Panel - ([^\]]+)\]", message.content)
+                    if admin_match:
+                        admin_username = admin_match.group(1)
+                        guild = message.guild
+                        admin_member = None
+                        for member in guild.members:
+                            if (
+                                member.name == admin_username
+                                or member.display_name == admin_username
+                                or getattr(member, "global_name", None) == admin_username
+                            ):
+                                admin_member = member
+                                break
+
+                        if admin_member:
+                            if hasattr(admin_member, "roles") and admin_member.roles:
+                                for role in admin_member.roles:
+                                    if role.id == Config.ADMIN_ROLE_ID:
+                                        user_role = "admin"
+                                        break
+                                    if role.id == Config.MODERATOR_ROLE_ID:
+                                        user_role = "moderator"
+                                        break
+                            try:
+                                if admin_member.display_avatar:
+                                    avatar_url = str(admin_member.display_avatar.url)
+                                elif getattr(admin_member, "avatar", None):
+                                    avatar_url = str(admin_member.avatar.url)
+                            except Exception:
+                                avatar_url = None
+
+                if avatar_url is None:
+                    try:
+                        if message.author.display_avatar:
+                            avatar_url = str(message.author.display_avatar.url)
+                        elif getattr(message.author, "avatar", None):
+                            avatar_url = str(message.author.avatar.url)
+                    except Exception:
+                        avatar_url = None
 
                 messages.append(
                     {
@@ -633,6 +688,8 @@ def get_ticket_messages(ticket_id):
                         "content": message.content,
                         "timestamp": message.created_at.isoformat(),
                         "is_bot": message.author.bot,
+                        "is_admin": is_admin,
+                        "role": user_role,
                     }
                 )
             return list(reversed(messages))
@@ -706,6 +763,12 @@ def send_ticket_message(ticket_id):
             except Exception:
                 avatar_url = None
 
+            user_role = None
+            if any(role.id == Config.ADMIN_ROLE_ID for role in member.roles):
+                user_role = "admin"
+            elif any(role.id == Config.MODERATOR_ROLE_ID for role in member.roles):
+                user_role = "moderator"
+
             return {
                 "id": str(msg.id),
                 "author_id": str(member.id),
@@ -714,6 +777,8 @@ def send_ticket_message(ticket_id):
                 "content": content,
                 "timestamp": msg.created_at.isoformat(),
                 "is_bot": False,
+                "is_admin": is_admin_or_mod,
+                "role": user_role,
             }
 
         future = asyncio.run_coroutine_threadsafe(send_message(), bot.loop)
