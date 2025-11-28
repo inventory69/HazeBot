@@ -59,18 +59,24 @@ def init_ticket_routes(
 
     # NOW apply decorators to already-registered view functions
     vf = app.view_functions
-    vf["ticket.get_tickets"] = token_required(require_permission("all")(vf["ticket.get_tickets"]))
-    vf["ticket.get_my_tickets"] = token_required(vf["ticket.get_my_tickets"])
-    vf["ticket.create_ticket_endpoint"] = token_required(vf["ticket.create_ticket_endpoint"])
-    vf["ticket.get_ticket"] = token_required(vf["ticket.get_ticket"])
-    vf["ticket.update_ticket_endpoint"] = token_required(vf["ticket.update_ticket_endpoint"])
-    vf["ticket.delete_ticket_endpoint"] = token_required(require_permission("all")(vf["ticket.delete_ticket_endpoint"]))
-    vf["ticket.claim_ticket_endpoint"] = token_required(require_permission("all")(vf["ticket.claim_ticket_endpoint"]))
-    vf["ticket.assign_ticket_endpoint"] = token_required(require_permission("all")(vf["ticket.assign_ticket_endpoint"]))
-    vf["ticket.close_ticket_endpoint"] = token_required(require_permission("all")(vf["ticket.close_ticket_endpoint"]))
-    vf["ticket.reopen_ticket_endpoint"] = token_required(require_permission("all")(vf["ticket.reopen_ticket_endpoint"]))
-    vf["ticket.get_ticket_messages_endpoint"] = token_required(vf["ticket.get_ticket_messages_endpoint"])
-    vf["ticket.send_ticket_message_endpoint"] = token_required(vf["ticket.send_ticket_message_endpoint"])
+    vf["tickets.get_tickets"] = token_required(require_permission("all")(vf["tickets.get_tickets"]))
+    vf["tickets.get_my_tickets"] = token_required(vf["tickets.get_my_tickets"])
+    vf["tickets.create_ticket_endpoint"] = token_required(vf["tickets.create_ticket_endpoint"])
+    vf["tickets.get_ticket"] = token_required(vf["tickets.get_ticket"])
+    vf["tickets.update_ticket_endpoint"] = token_required(vf["tickets.update_ticket_endpoint"])
+    vf["tickets.delete_ticket_endpoint"] = token_required(
+        require_permission("all")(vf["tickets.delete_ticket_endpoint"])
+    )
+    vf["tickets.claim_ticket_endpoint"] = token_required(require_permission("all")(vf["tickets.claim_ticket_endpoint"]))
+    vf["tickets.assign_ticket_endpoint"] = token_required(
+        require_permission("all")(vf["tickets.assign_ticket_endpoint"])
+    )
+    vf["tickets.close_ticket_endpoint"] = token_required(require_permission("all")(vf["tickets.close_ticket_endpoint"]))
+    vf["tickets.reopen_ticket_endpoint"] = token_required(
+        require_permission("all")(vf["tickets.reopen_ticket_endpoint"])
+    )
+    vf["tickets.get_ticket_messages_endpoint"] = token_required(vf["tickets.get_ticket_messages_endpoint"])
+    vf["tickets.send_ticket_message_endpoint"] = token_required(vf["tickets.send_ticket_message_endpoint"])
 
 
 # ============================================================================
