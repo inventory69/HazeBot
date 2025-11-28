@@ -177,8 +177,10 @@ def get_user_profile():
             "role_name": user_role_name,
             "opt_in_roles": opt_in_roles,
             "rl_rank": rl_rank,
-            "changelog_opt_in": has_changelog,
-            "meme_opt_in": has_meme,
+            "notifications": {
+                "changelog_opt_in": has_changelog,
+                "meme_opt_in": has_meme,
+            },
             "warnings_count": warnings_count,
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
