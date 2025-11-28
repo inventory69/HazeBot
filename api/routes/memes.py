@@ -15,6 +15,7 @@ from flask import Blueprint, current_app, jsonify, request
 import Config
 from Utils.EmbedUtils import set_pink_footer
 from Utils.Logger import Logger as logger
+from api.cache import cache
 from api.utils.auth import require_permission, token_required
 
 memes_bp = Blueprint("memes", __name__)
@@ -489,6 +490,286 @@ def send_meme_to_discord():
         import traceback
 
         return jsonify({"error": f"Failed to send meme to Discord: {e}", "details": traceback.format_exc()}), 500
+
+
+@memes_bp.route("/api/hazehub/latest-memes", methods=["GET"])
+@token_required
+def get_latest_memes():
+    """Latest memes with custom + Discord upvotes."""
+    try:
+        limit = min(request.args.get("limit", 10, type=int), 50)
+        cache_key = f"hazehub:latest_memes:{limit}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
+        bot = current_app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+
+        meme_channel_id = Config.MEME_CHANNEL_ID
+        if not meme_channel_id:
+            return jsonify({"error": "Meme channel not configured"}), 400
+
+        custom_upvotes = load_upvotes()
+
+        async def fetch_memes():
+            channel = bot.get_channel(meme_channel_id)
+            if not channel:
+                return None
+
+            memes = []
+            async for message in channel.history(limit=min(limit * 10, 100)):
+                if not message.embeds:
+                    continue
+                embed = message.embeds[0]
+                message_id_str = str(message.id)
+                meme_data = {
+                    "message_id": message_id_str,
+                    "timestamp": message.created_at.isoformat(),
+                    "title": embed.title or "Untitled Meme",
+                    "image_url": embed.image.url if embed.image else None,
+                    "url": embed.url or None,
+                    "color": embed.color.value if embed.color else None,
+                }
+
+                custom_count = len(custom_upvotes.get(message_id_str, []))
+                discord_count = 0
+                for reaction in message.reactions:
+                    emoji_str = str(reaction.emoji)
+                    if emoji_str in NEGATIVE_EMOJIS:
+                        continue
+                    count = reaction.count
+                    if reaction.me:
+                        count = max(0, count - 1)
+                    discord_count += count
+
+                total_upvotes = custom_count + discord_count
+                meme_data["upvotes"] = total_upvotes
+                meme_data["custom_upvotes"] = custom_count
+                meme_data["discord_upvotes"] = discord_count
+
+                requester = None
+                if message.content:
+                    import re
+
+                    match = re.search(r"Meme sent from Admin Panel by <@!?(\d+)>", message.content)
+                    if not match:
+                        match = re.search(r"Meme requested by <@!?(\d+)>", message.content)
+                    if match:
+                        user_id = match.group(1)
+                        try:
+                            guild = bot.get_guild(Config.get_guild_id())
+                            if guild:
+                                member = guild.get_member(int(user_id))
+                                requester = (
+                                    member.display_name or member.name if member else f"User {user_id}"
+                                )
+                            else:
+                                requester = f"User {user_id}"
+                        except (ValueError, AttributeError):
+                            requester = f"User {user_id}"
+
+                if embed.fields:
+                    for field in embed.fields:
+                        field_name = field.name.lower()
+                        if "upvote" in field_name:
+                            try:
+                                score_str = field.value.replace(",", "").strip()
+                                meme_data["score"] = int("".join(filter(str.isdigit, score_str)))
+                            except (ValueError, AttributeError):
+                                meme_data["score"] = 0
+                        elif "source" in field_name:
+                            meme_data["source"] = field.value
+                        elif "author" in field_name or "created by" in field_name:
+                            author = field.value
+                            if author.startswith("u/"):
+                                author = author[2:]
+                            import re
+
+                            mention_match = re.search(r"<@!?(\d+)>", author)
+                            if mention_match:
+                                user_id = mention_match.group(1)
+                                try:
+                                    guild = bot.get_guild(Config.get_guild_id())
+                                    if guild:
+                                        member = guild.get_member(int(user_id))
+                                        if member:
+                                            author = member.display_name or member.name
+                                            meme_data["is_custom"] = True
+                                        else:
+                                            author = f"User {user_id}"
+                                    else:
+                                        author = f"User {user_id}"
+                                except (ValueError, AttributeError):
+                                    author = f"User {user_id}"
+                            meme_data["author"] = author
+                        elif "requested by" in field_name:
+                            field_requester = field.value
+                            import re
+                            mention_match = re.search(r"<@!?(\d+)>", field_requester)
+                            if mention_match:
+                                user_id = mention_match.group(1)
+                                try:
+                                    guild = bot.get_guild(Config.get_guild_id())
+                                    if guild:
+                                        member = guild.get_member(int(user_id))
+                                        if member:
+                                            field_requester = member.display_name or member.name
+                                        else:
+                                            field_requester = f"User {user_id}"
+                                    else:
+                                        field_requester = f"User {user_id}"
+                                except (ValueError, AttributeError):
+                                    field_requester = f"User {user_id}"
+                            requester = field_requester
+                        elif "daily meme" in field_name:
+                            meme_data["is_daily"] = True
+
+                if requester:
+                    meme_data["requester"] = requester
+                if "score" not in meme_data:
+                    meme_data["score"] = 0
+                if "author" not in meme_data:
+                    meme_data["author"] = "Unknown"
+                if "source" not in meme_data:
+                    meme_data["source"] = "Meme Generator" if meme_data.get("is_custom") else "Unknown"
+
+                memes.append(meme_data)
+                if len(memes) >= limit:
+                    break
+            return memes
+
+        memes = asyncio.run_coroutine_threadsafe(fetch_memes(), bot.loop).result(timeout=10)
+        if memes is None:
+            return jsonify({"error": "Meme channel not found"}), 404
+
+        result = {"success": True, "memes": memes, "count": len(memes)}
+        cache.set(cache_key, result, ttl=60)
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching latest memes: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch memes: {e}"}), 500
+
+
+@memes_bp.route("/api/hazehub/latest-rankups", methods=["GET"])
+@token_required
+def get_latest_rankups():
+    """Latest rank-ups from RL channel."""
+    try:
+        limit = min(request.args.get("limit", 10, type=int), 50)
+        cache_key = f"hazehub:latest_rankups:{limit}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return jsonify(cached)
+
+        bot = current_app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+
+        rl_channel_id = Config.RL_CHANNEL_ID
+        if not rl_channel_id:
+            return jsonify({"error": "Rocket League channel not configured"}), 400
+
+        async def fetch_rankups():
+            channel = bot.get_channel(rl_channel_id)
+            if not channel:
+                return None
+
+            rankups = []
+            async for message in channel.history(limit=100):
+                message_text = message.content.lower()
+                is_rankup = any(
+                    keyword in message_text
+                    for keyword in ["rank promotion", "promotion notification", "rank has improved"]
+                )
+
+                if not is_rankup and message.embeds:
+                    embed = message.embeds[0]
+                    title = (embed.title or "").lower()
+                    description = (embed.description or "").lower()
+                    is_rankup = any(
+                        keyword in title or keyword in description
+                        for keyword in ["rank promotion", "promotion", "rank has improved", "congratulations"]
+                    )
+
+                if is_rankup and message.embeds:
+                    import re
+
+                    rankup_data = {
+                        "message_id": str(message.id),
+                        "timestamp": message.created_at.isoformat(),
+                    }
+
+                    embed = message.embeds[0]
+                    rankup_data["title"] = embed.title or ""
+                    rankup_data["description"] = embed.description or ""
+                    rankup_data["thumbnail"] = embed.thumbnail.url if embed.thumbnail else None
+                    rankup_data["image_url"] = embed.image.url if embed.image else None
+                    rankup_data["color"] = embed.color.value if embed.color else None
+
+                    if embed.description:
+                        user_match = re.search(r"<@!?(\d+)>", embed.description)
+                        if user_match:
+                            user_id = user_match.group(1)
+                            try:
+                                guild = bot.get_guild(Config.get_guild_id())
+                                if guild:
+                                    member = guild.get_member(int(user_id))
+                                    rankup_data["user"] = (
+                                        member.display_name or member.name if member else f"User {user_id}"
+                                    )
+                                else:
+                                    rankup_data["user"] = f"User {user_id}"
+                            except (ValueError, AttributeError):
+                                rankup_data["user"] = f"User {user_id}"
+
+                        mode_match = re.search(r"Your (\d+v\d+) rank", embed.description)
+                        if mode_match:
+                            rankup_data["mode"] = mode_match.group(1)
+
+                        rank_match = re.search(r"improved to (.+?)!", embed.description)
+                        if rank_match:
+                            rank_text = rank_match.group(1).strip()
+                            rank_text = re.sub(r"<:\w+:\d+>", "", rank_text).strip()
+                            rank_text = re.sub(r":\w+:", "", rank_text).strip()
+                            rankup_data["new_rank"] = rank_text or "New Rank"
+
+                    if message.content and not rankup_data.get("user"):
+                        user_match = re.search(r"<@!?(\d+)>", message.content)
+                        if user_match:
+                            user_id = user_match.group(1)
+                            try:
+                                guild = bot.get_guild(Config.get_guild_id())
+                                if guild:
+                                    member = guild.get_member(int(user_id))
+                                    rankup_data["user"] = (
+                                        member.display_name or member.name if member else f"User {user_id}"
+                                    )
+                                else:
+                                    rankup_data["user"] = f"User {user_id}"
+                            except (ValueError, AttributeError):
+                                rankup_data["user"] = f"User {user_id}"
+
+                    rankups.append(rankup_data)
+                    if len(rankups) >= limit:
+                        break
+            return rankups
+
+        rankups = asyncio.run_coroutine_threadsafe(fetch_rankups(), bot.loop).result(timeout=10)
+        if rankups is None:
+            return jsonify({"error": "Rocket League channel not found"}), 404
+
+        result = {"success": True, "rankups": rankups, "count": len(rankups)}
+        cache.set(cache_key, result, ttl=60)
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+
+        logger.error(f"Error fetching latest rank-ups: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch rank-ups: {e}"}), 500
 
 
 @memes_bp.route("/api/memes/<message_id>/upvote", methods=["POST"])
