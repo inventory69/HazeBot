@@ -115,6 +115,8 @@ def get_active_sessions_endpoint():
                     "ip": session_data.get("ip", "Unknown"),
                     "user_agent": session_data.get("user_agent", "Unknown"),
                     "last_endpoint": session_data.get("endpoint", "unknown"),
+                    "app_version": session_data.get("app_version", "Unknown"),
+                    "platform": session_data.get("platform", "Unknown"),
                 }
             )
         except Exception:

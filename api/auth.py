@@ -177,6 +177,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "ip": real_ip,
                 "user_agent": request.headers.get("User-Agent", "Unknown"),
                 "endpoint": request.endpoint or "unknown",
+                "app_version": request.headers.get("X-App-Version", "Unknown"),
+                "platform": request.headers.get("X-Platform", "Unknown"),
             }
             active_sessions[request.session_id] = session_info
 
