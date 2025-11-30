@@ -325,7 +325,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
     try:
         from flask import current_app
 
-        from Utils.notification_service import is_fcm_enabled, send_notification_to_user
+        from Utils.notification_service import is_fcm_enabled, send_notification
 
         if not is_fcm_enabled():
             return
@@ -405,7 +405,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
         # Send notification to each recipient
         for user_id in recipients:
             try:
-                await send_notification_to_user(
+                await send_notification(
                     user_id,
                     title,
                     body,
