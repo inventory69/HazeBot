@@ -910,7 +910,7 @@ class TicketSystem(commands.Cog):
 
         # Notify WebSocket clients
         try:
-            from api.app import notify_ticket_update
+            from api.notification_routes import notify_ticket_update
 
             notify_ticket_update(ticket["ticket_id"], "new_message", message_data)
             logger.info(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
@@ -920,7 +920,7 @@ class TicketSystem(commands.Cog):
         # Send push notifications
         try:
             logger.info(f"📱 About to send push notification for ticket {ticket['ticket_id']}")
-            from api.app import send_push_notification_for_ticket_event
+            from api.notification_routes import send_push_notification_for_ticket_event
             import asyncio
 
             asyncio.create_task(
