@@ -182,7 +182,7 @@ curl -X PUT http://localhost:5000/api/config/general \
 
 - Bot Setup: [BOT_SETUP.md](BOT_SETUP.md)
 - Admin Panel: [ADMIN_PANEL_SETUP.md](ADMIN_PANEL_SETUP.md)
-- API reference: [api/README.md](api/README.md)
+- API reference: [../api/README.md](../api/README.md)
 
 ## Security Reminder
 

@@ -19,7 +19,7 @@ HazeBot is a comprehensive Discord bot built with Python and discord.py, featuri
 - 🌐 **REST API** - Modular Blueprint architecture (300 lines vs 6500)
 - 📱 **Admin Panel** - Flutter cross-platform app with Material Design 3
 
-**[📖 View Full Feature List](FEATURES.md)**
+**[📖 View Full Feature List](docs/FEATURES.md)**
 
 ---
 
@@ -42,7 +42,7 @@ python Main.py                 # Bot only
 python start_with_api.py       # Bot + API (Port 5070)
 ```
 
-**📖 Detailed Instructions:** [BOT_SETUP.md](BOT_SETUP.md)
+**📖 Detailed Instructions:** [docs/BOT_SETUP.md](docs/BOT_SETUP.md)
 
 ---
 
@@ -73,15 +73,15 @@ python start_with_api.py       # Bot + API (Port 5070)
 
 ## 📚 Documentation
 
-- 📖 **[Features](FEATURES.md)** - Complete feature list & commands
-- 🔧 **[Bot Setup Guide](BOT_SETUP.md)** - Discord bot installation & configuration
-- 📱 **[Admin Panel Setup](ADMIN_PANEL_SETUP.md)** - Web/mobile interface setup
-- 🏗️ **[Architecture](ARCHITECTURE.md)** - Technical architecture & structure
-- 📋 **[Requirements](REQUIREMENTS.md)** - Dependencies & system requirements
+- 📖 **[Features](docs/FEATURES.md)** - Complete feature list & commands
+- 🔧 **[Bot Setup Guide](docs/BOT_SETUP.md)** - Discord bot installation & configuration
+- 📱 **[Admin Panel Setup](docs/ADMIN_PANEL_SETUP.md)** - Web/mobile interface setup
+- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture & structure
+- 📋 **[Requirements](docs/REQUIREMENTS.md)** - Dependencies & system requirements
 - 🌐 **[REST API](api/README.md)** - REST API endpoints & Blueprint details
 - 📱 **[Admin Panel](https://github.com/inventory69/HazeBot-Admin)** - Flutter app setup & documentation
-- 🚀 **[Deployment](DEPLOYMENT_CHECKLIST.md)** - Production deployment
-- 🤝 **[Contributing](CONTRIBUTING.md)** - Development guidelines
+- 🚀 **[Deployment](docs/DEPLOYMENT_CHECKLIST.md)** - Production deployment
+- 🤝 **[Contributing](docs/CONTRIBUTING.md)** - Development guidelines
 
 ---
 
@@ -94,13 +94,13 @@ python start_with_api.py       # Bot + API (Port 5070)
 
 **Optional:** OpenAI API (AI formatting), FlareSolverr (Rocket League), SMTP (email transcripts)
 
-**[📋 Full Requirements List](REQUIREMENTS.md)**
+**[📋 Full Requirements List](docs/REQUIREMENTS.md)**
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are welcome! See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
 
 **Quick Steps:**
 1. Fork the repository
@@ -125,6 +125,6 @@ Built with 💖 for The Chillventory community
 - AI features by [OpenAI GPT](https://openai.com/)
 - Special thanks to all contributors
 
-**Questions?** Open an issue on GitHub or check the [documentation](BOT_SETUP.md)!
+**Questions?** Open an issue on GitHub or check the [documentation](docs/BOT_SETUP.md)!
 
 *Made with 💖 for The Chillventory* 🌿

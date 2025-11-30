@@ -318,6 +318,6 @@ Comprehensive documentation of all HazeBot features and commands.
 
 - **[Bot Setup Guide](BOT_SETUP.md)** - Discord bot installation & configuration
 - **[Admin Panel Setup](ADMIN_PANEL_SETUP.md)** - Web/mobile interface setup
-- **[API Documentation](api/README.md)** - REST API endpoints
+- **[API Documentation](../api/README.md)** - REST API endpoints
 - **[Deployment Guide](DEPLOYMENT_CHECKLIST.md)** - Production deployment
 - **[Contributing](CONTRIBUTING.md)** - Development guidelines
