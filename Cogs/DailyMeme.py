@@ -287,6 +287,71 @@ class DailyMeme(commands.Cog):
         self.shown_memes[url] = datetime.now().timestamp()
         self.save_shown_memes()
 
+    def normalize_lemmy_community(self, community_input: str) -> str | None:
+        """
+        Normalize Lemmy community input to standard format: instance@community
+
+        Accepts:
+        - "lemmy.world@memes" → "lemmy.world@memes"
+        - "memes@lemmy.world" → "lemmy.world@memes"
+        - "memes" → searches configured communities for matching name
+
+        Returns None if not found in configured communities
+        """
+        community_input = community_input.lower().strip()
+
+        # Remove lemmy: prefix if present
+        if community_input.startswith("lemmy:"):
+            community_input = community_input.replace("lemmy:", "", 1)
+
+        # Check if already in correct format (instance@community)
+        if "@" in community_input:
+            parts = community_input.split("@", 1)
+
+            # Check if format is instance@community or community@instance
+            if "." in parts[0]:
+                # Likely instance@community (correct format)
+                normalized = community_input
+            else:
+                # Likely community@instance (reverse format)
+                normalized = f"{parts[1]}@{parts[0]}"
+
+            # Verify against configured communities
+            if normalized in self.meme_lemmy:
+                return normalized
+            else:
+                # Try original if normalized not found
+                if community_input in self.meme_lemmy:
+                    return community_input
+                return None
+        else:
+            # No @, search for community name in configured list
+            for configured_community in self.meme_lemmy:
+                if "@" in configured_community:
+                    community_name = configured_community.split("@")[1]
+                    if community_name == community_input:
+                        return configured_community
+            return None
+
+    def format_lemmy_display(self, lemmy_source: str) -> str:
+        """
+        Format Lemmy source for user-friendly display
+
+        Input: "lemmy:lemmy.world@memes" or "lemmy.world@memes"
+        Output: "memes@lemmy.world" (Discord/Mastodon-style format)
+        """
+        # Remove lemmy: prefix
+        if lemmy_source.startswith("lemmy:"):
+            lemmy_source = lemmy_source.replace("lemmy:", "", 1)
+
+        # Parse instance@community
+        if "@" in lemmy_source:
+            instance, community = lemmy_source.split("@", 1)
+            # Return in user-friendly format: community@instance
+            return f"{community}@{instance}"
+
+        return lemmy_source
+
     async def _setup_cog(self) -> None:
         """Setup the cog - called on ready and after reload"""
         # Create HTTP session if not exists
@@ -788,8 +853,8 @@ class DailyMeme(commands.Cog):
         source_name = f"r/{meme['subreddit']}"  # Default to subreddit format
         # Add custom mappings for non-reddit sources here if needed
         if meme["subreddit"].startswith("lemmy:"):
-            # Format: "lemmy:instance@community" -> "instance@community"
-            source_name = meme["subreddit"].replace("lemmy:", "")
+            # ✅ Use new display formatter for user-friendly format (community@instance)
+            source_name = self.format_lemmy_display(meme["subreddit"])
         # e.g., if meme["subreddit"] == "othersource": source_name = "Other Source"
 
         embed.add_field(name="📍 Source", value=source_name, inline=True)
@@ -858,8 +923,8 @@ class DailyMeme(commands.Cog):
         source_name = f"r/{meme['subreddit']}"  # Default to subreddit format
         # Add custom mappings for non-reddit sources here if needed
         if meme["subreddit"].startswith("lemmy:"):
-            # Format: "lemmy:instance@community" -> "instance@community"
-            source_name = meme["subreddit"].replace("lemmy:", "")
+            # ✅ Use new display formatter for user-friendly format (community@instance)
+            source_name = self.format_lemmy_display(meme["subreddit"])
 
         embed.add_field(name="📍 Source", value=source_name, inline=True)
         embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
@@ -970,17 +1035,19 @@ class DailyMeme(commands.Cog):
 
             # Determine if it's Lemmy or Reddit
             if "@" in source:
-                # Lemmy community
-                lemmy_source = source.lower()
-                if lemmy_source not in self.meme_lemmy:
+                # Lemmy community - normalize format
+                normalized = self.normalize_lemmy_community(source)
+
+                if normalized is None:
                     await ctx.send(
                         f"❌ `{source}` is not configured. Use `!lemmycommunities` to see available communities."
                     )
                     return
 
-                await ctx.send(f"🔍 Fetching meme from {lemmy_source}...")
-                memes = await self.fetch_lemmy_meme(lemmy_source)
-                source_display = lemmy_source
+                lemmy_display = self.format_lemmy_display(normalized)
+                await ctx.send(f"🔍 Fetching meme from {lemmy_display}...")
+                memes = await self.fetch_lemmy_meme(normalized)
+                source_display = lemmy_display
             else:
                 # Reddit subreddit - normalize the input
                 subreddit = source.lower().strip().replace("r/", "")
@@ -1007,12 +1074,15 @@ class DailyMeme(commands.Cog):
             meme = random.choice(memes)
 
             # Convert to the format expected by post_meme
+            # Use normalized Lemmy format if it's a Lemmy community
+            subreddit_field = source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{normalized}"
+
             meme_data = {
                 "title": meme.get("title", "Meme"),
                 "permalink": meme.get("url"),
                 "url": meme.get("url"),
                 "upvotes": meme.get("score", 0),
-                "subreddit": source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{source}",
+                "subreddit": subreddit_field,
                 "author": meme.get("author", "Unknown"),
                 "nsfw": meme.get("nsfw", False),
             }
@@ -1058,7 +1128,8 @@ class DailyMeme(commands.Cog):
                 value=(
                     "• **🎭 Get Random Meme** - Random from all sources\n"
                     "• **🎯 Choose Source** - Pick specific subreddit/community\n"
-                    "• Or use: `!meme <source>` - e.g., `!meme memes` or `!meme lemmy.world@memes`\n"
+                    "• Or use: `!meme <source>` - e.g., `!meme memes` or `!meme memes@lemmy.world`\n"
+                    "*Supports both formats: `instance@community` or `community@instance`*\n"
                     "*10 second cooldown between requests*"
                 ),
                 inline=False,
@@ -1124,18 +1195,20 @@ class DailyMeme(commands.Cog):
 
             # Determine if it's Lemmy or Reddit
             if "@" in source:
-                # Lemmy community
-                lemmy_source = source.lower()
-                if lemmy_source not in self.meme_lemmy:
+                # Lemmy community - normalize format
+                normalized = self.normalize_lemmy_community(source)
+
+                if normalized is None:
                     await interaction.response.send_message(
                         f"❌ `{source}` is not in the configured Lemmy communities.",
                         ephemeral=True,
                     )
                     return
 
-                await interaction.response.send_message(f"🔍 Fetching meme from {lemmy_source}...", ephemeral=True)
-                memes = await self.fetch_lemmy_meme(lemmy_source)
-                source_display = lemmy_source
+                lemmy_display = self.format_lemmy_display(normalized)
+                await interaction.response.send_message(f"🔍 Fetching meme from {lemmy_display}...", ephemeral=True)
+                memes = await self.fetch_lemmy_meme(normalized)
+                source_display = lemmy_display
             else:
                 # Reddit subreddit - normalize the input
                 subreddit = source.lower().strip().replace("r/", "")
@@ -1164,12 +1237,15 @@ class DailyMeme(commands.Cog):
             meme = random.choice(memes)
 
             # Convert to the format expected by post_meme
+            # Use normalized Lemmy format if it's a Lemmy community
+            subreddit_field = source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{normalized}"
+
             meme_data = {
                 "title": meme.get("title", "Meme"),
                 "permalink": meme.get("url"),
                 "url": meme.get("url"),
                 "upvotes": meme.get("score", 0),
-                "subreddit": source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{source}",
+                "subreddit": subreddit_field,
                 "author": meme.get("author", "Unknown"),
                 "nsfw": meme.get("nsfw", False),
             }

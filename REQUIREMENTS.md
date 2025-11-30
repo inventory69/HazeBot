@@ -113,7 +113,7 @@ SMTP_FROM=your-email@gmail.com
 #### Firebase (Admin Panel Only)
 **Purpose:** Authentication and push notifications for Flutter admin panel
 
-**Setup:** See [HazeBot-Admin/FIREBASE_SETUP.md](../HazeBot-Admin/FIREBASE_SETUP.md)
+**Setup:** See [HazeBot-Admin FIREBASE_SETUP.md](https://github.com/inventory69/HazeBot-Admin/blob/main/FIREBASE_SETUP.md)
 
 ---
 
@@ -283,6 +283,7 @@ sudo kill -9 <PID>
 
 ## Next Steps
 
-- 📖 [Setup Guide](SETUP_GUIDE.md) - Complete installation instructions
+- 📖 [Bot Setup Guide](BOT_SETUP.md) - Discord bot installation & configuration
+- 📱 [Admin Panel Setup](ADMIN_PANEL_SETUP.md) - Web/mobile interface setup
 - 🏗️ [Architecture](ARCHITECTURE.md) - Technical architecture details
 - 🚀 [Deployment](DEPLOYMENT_CHECKLIST.md) - Production deployment

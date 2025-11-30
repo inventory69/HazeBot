@@ -168,21 +168,21 @@ curl -X PUT http://localhost:5000/api/config/general \
    - Set API_DEBUG=false (default)
 
 2. **For production:**
-   - See SETUP_GUIDE.md for deployment instructions
+   - See [Admin Panel Setup](ADMIN_PANEL_SETUP.md) for deployment instructions
    - Use HTTPS (not HTTP)
    - Configure firewall
    - Use gunicorn instead of Flask dev server
 
 3. **For Android:**
-   - Follow SETUP_GUIDE.md to build APK
+   - Follow [Admin Panel Setup](ADMIN_PANEL_SETUP.md) to build APK
    - Update API URL in Flutter app
    - Sign the APK for distribution
 
 ## Help
 
-- Full documentation: See SETUP_GUIDE.md
-- API reference: See api/README.md
-- Flutter docs: See hazebot_admin/README.md
+- Bot Setup: [BOT_SETUP.md](BOT_SETUP.md)
+- Admin Panel: [ADMIN_PANEL_SETUP.md](ADMIN_PANEL_SETUP.md)
+- API reference: [api/README.md](api/README.md)
 
 ## Security Reminder
 

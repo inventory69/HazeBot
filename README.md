@@ -42,7 +42,7 @@ python Main.py                 # Bot only
 python start_with_api.py       # Bot + API (Port 5070)
 ```
 
-**📖 Detailed Instructions:** [SETUP_GUIDE.md](SETUP_GUIDE.md)
+**📖 Detailed Instructions:** [BOT_SETUP.md](BOT_SETUP.md)
 
 ---
 
@@ -74,11 +74,12 @@ python start_with_api.py       # Bot + API (Port 5070)
 ## 📚 Documentation
 
 - 📖 **[Features](FEATURES.md)** - Complete feature list & commands
-- 🔧 **[Setup Guide](SETUP_GUIDE.md)** - Installation & configuration
+- 🔧 **[Bot Setup Guide](BOT_SETUP.md)** - Discord bot installation & configuration
+- 📱 **[Admin Panel Setup](ADMIN_PANEL_SETUP.md)** - Web/mobile interface setup
 - 🏗️ **[Architecture](ARCHITECTURE.md)** - Technical architecture & structure
 - 📋 **[Requirements](REQUIREMENTS.md)** - Dependencies & system requirements
-- 🌐 **[API Docs](api/README.md)** - REST API endpoints & Blueprint details
-- 📱 **[Admin Panel](../HazeBot-Admin/README.md)** - Flutter app setup
+- 🌐 **[REST API](api/README.md)** - REST API endpoints & Blueprint details
+- 📱 **[Admin Panel](https://github.com/inventory69/HazeBot-Admin)** - Flutter app setup & documentation
 - 🚀 **[Deployment](DEPLOYMENT_CHECKLIST.md)** - Production deployment
 - 🤝 **[Contributing](CONTRIBUTING.md)** - Development guidelines
 
@@ -124,6 +125,6 @@ Built with 💖 for The Chillventory community
 - AI features by [OpenAI GPT](https://openai.com/)
 - Special thanks to all contributors
 
-**Questions?** Open an issue on GitHub or check the [documentation](SETUP_GUIDE.md)!
+**Questions?** Open an issue on GitHub or check the [documentation](BOT_SETUP.md)!
 
 *Made with 💖 for The Chillventory* 🌿

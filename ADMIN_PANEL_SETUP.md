@@ -1,6 +1,8 @@
-# HazeBot Web Interface & Android App Setup Guide
+# HazeBot Admin Panel Setup Guide
 
-This guide will help you set up the Flask API backend and Flutter frontend for managing HazeBot configuration.
+This guide covers setting up the Flask API backend and Flutter web/mobile interface for managing HazeBot.
+
+> **⚠️ Prerequisites:** HazeBot Discord bot must be set up first! See **[Bot Setup Guide](BOT_SETUP.md)** for complete instructions.
 
 ## Architecture Overview
 
