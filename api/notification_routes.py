@@ -323,14 +323,14 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
         message_data: Optional message data (for new_message events)
     """
     try:
-        from flask import current_app
-
         from Utils.notification_service import is_fcm_enabled, send_notification
 
         if not is_fcm_enabled():
             return
 
-        bot = current_app.config.get("bot_instance")
+        # Access bot instance from Config (set by set_bot_instance in api/app.py)
+        # This works in async contexts without needing Flask app context
+        bot = getattr(Config, 'bot', None)
         if not bot:
             return
 

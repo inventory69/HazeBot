@@ -200,6 +200,8 @@ def internal_error(e):
 def set_bot_instance(bot):
     """Set the bot instance for the API to use"""
     app.config["bot_instance"] = bot
+    # Also store in Config for access from async contexts (like push notifications)
+    Config.bot = bot
 
 
 # ============================================================================
