@@ -19,22 +19,11 @@ def init_helpers(config):
     Config = config
 
 
-# Configure logging - suppress 200 OK responses
-class NoSuccessRequestsFilter(logging.Filter):
-    def filter(self, record):
-        # Filter out successful requests (200 OK)
-        msg = record.getMessage()
-        # Check if it's a 200 response with any HTTP method
-        if " 200 " in msg and any(
-            method in msg for method in ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-        ):
-            return False
-        return True
-
-
-# Apply filter to werkzeug logger (Flask's request logger)
+# Suppress werkzeug HTTP request logs completely
+# Set level to WARNING to only show errors, not INFO (HTTP requests)
 werkzeug_logger = logging.getLogger("werkzeug")
-werkzeug_logger.addFilter(NoSuccessRequestsFilter())
+werkzeug_logger.setLevel(logging.WARNING)
+werkzeug_logger.propagate = True  # Still propagate warnings/errors to parent
 
 
 # Upvotes storage helpers

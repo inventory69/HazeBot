@@ -164,27 +164,6 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
         cog_logger.setLevel(level)
         Logger.info(f"🎯 Set log level for {cog_name} to {logging.getLevelName(level)}")
 
-    # Suppress werkzeug HTTP request logs (Flask/API)
-    # Create a filter that blocks werkzeug's HTTP request logs
-    class WerkzeugFilter(logging.Filter):
-        def filter(self, record):
-            # Block werkzeug INFO logs that contain HTTP status codes
-            if record.name == "werkzeug" and record.levelno == logging.INFO:
-                msg = record.getMessage()
-                # Check if it's an HTTP request log (contains IP, HTTP method, and status code)
-                if " - - [" in msg and ('" 2' in msg or '" 3' in msg):  # 2xx and 3xx status codes
-                    return False
-            return True
-    
-    # Apply filter to all handlers to catch werkzeug logs
-    werkzeug_filter = WerkzeugFilter()
-    ConsoleHandler.addFilter(werkzeug_filter)
-    FileHandler.addFilter(werkzeug_filter)
-    
-    # Also set werkzeug logger level (belt and suspenders approach)
-    werkzeug_logger = logging.getLogger("werkzeug")
-    werkzeug_logger.setLevel(logging.WARNING)
-
     return Console, Logger, ConsoleHandler
 
 
