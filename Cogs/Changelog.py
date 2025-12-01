@@ -1,11 +1,14 @@
-import discord
-from discord.ext import commands
-import openai
+import logging
 import os
 from datetime import datetime
-from Config import PINK, CHANGELOG_ROLE_ID, CHANGELOG_CHANNEL_ID
+
+import discord
+import openai
+from discord.ext import commands
+
+import Config
+from Config import CHANGELOG_CHANNEL_ID, CHANGELOG_ROLE_ID
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +17,8 @@ class ChangelogCog(commands.Cog):
     """
     📝 Changelog Cog: Generates Discord-Markdown changelogs from PR text using GPT-4.1-nano.
     """
+
+    __cog_name__ = "Changelog"
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -86,7 +91,7 @@ PR-Text:
         embed = discord.Embed(
             title=f"🆕 {title} – {date}",
             description=changelog + "\n\u200b",  # Adds a small space before the footer
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         return embed

@@ -1,15 +1,18 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import os
 import json
-from typing import Dict, List, Callable, Any
-from Config import PINK, RL_TIER_ORDER, ACTIVITY_FILE, get_guild_id, get_data_dir
-from Utils.EmbedUtils import set_pink_footer
-from Cogs.RocketLeague import load_rl_accounts, RANK_EMOJIS
-from Utils.CacheUtils import cache
-from Cogs.TicketSystem import load_tickets
 import logging
+import os
+from typing import Any, Callable, Dict, List
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import Config
+from Cogs.RocketLeague import RANK_EMOJIS, load_rl_accounts
+from Cogs.TicketSystem import load_tickets
+from Config import ACTIVITY_FILE, RL_TIER_ORDER, get_data_dir, get_guild_id
+from Utils.CacheUtils import cache
+from Utils.EmbedUtils import set_pink_footer
 
 # Configure logger
 logging.basicConfig(level=logging.INFO)
@@ -83,7 +86,7 @@ class Leaderboard(commands.Cog):
     def create_leaderboard_embed(
         self, title: str, data_list: List[tuple], value_formatter: Callable[[Any], str] = lambda x: x
     ) -> discord.Embed:
-        embed = discord.Embed(title=f"🏆 {title}", color=PINK)
+        embed = discord.Embed(title=f"🏆 {title}", color=Config.PINK)
         if not data_list:
             embed.add_field(name="No Data", value="No entries found.", inline=False)
         else:
@@ -154,7 +157,7 @@ class Leaderboard(commands.Cog):
     # Create overview embed with all leaderboards
     async def create_overview_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title="🏆 Leaderboard Overview", description="Top performers in various categories", color=PINK
+            title="🏆 Leaderboard Overview", description="Top performers in various categories", color=Config.PINK
         )
 
         # Rocket League Rankings
@@ -265,7 +268,7 @@ class Leaderboard(commands.Cog):
             embed = discord.Embed(
                 title="❌ Invalid Category",
                 description="Use: rl_overall, rl_1v1, rl_2v2, rl_3v3, rl_4v4, tickets, messages, images, meme_requests, memes_generated",
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
 

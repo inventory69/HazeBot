@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HazeBot Admin Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 15px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: #1e293b;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 1.8em;
+            margin: 0;
+        }
+
+        .last-update {
+            color: #94a3b8;
+            font-size: 0.85em;
+        }
+
+        .controls {
+            background: #1e293b;
+            padding: 12px 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-bottom: 15px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .controls button, .controls select {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.3s;
+        }
+
+        .controls button:hover {
+            background: #764ba2;
+        }
+
+        .controls select {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            color: #cbd5e1;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .stat-card {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 5px 0;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-sublabel {
+            color: #64748b;
+            font-size: 0.75em;
+            margin-top: 3px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .chart-container {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-container canvas {
+            max-height: 280px;
+        }
+
+        .chart-container.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-container.full-width canvas {
+            max-height: 200px;
+        }
+
+        .chart-title {
+            font-size: 1.1em;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .chart-wrapper {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+
+        .table-container {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #334155;
+            color: #e2e8f0;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+
+        td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #334155;
+            font-size: 0.85em;
+        }
+
+        tr:hover {
+            background: #334155;
+        }
+
+        .error {
+            background: #991b1b;
+            color: #fecaca;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 HazeBot Admin Analytics</h1>
+            <p class="last-update">Last updated: <span id="lastUpdate">Loading...</span></p>
+        </header>
+
+        <div class="controls">
+            <button onclick="loadData()">🔄 Refresh Data</button>
+            <label>
+                <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+                Auto-refresh every 30s
+            </label>
+            <label>
+                Time Range:
+                <select id="timeRange" onchange="loadData()">
+                    <option value="7">Last 7 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="0">All time</option>
+                </select>
+            </label>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Users</div>
+                <div class="stat-value" id="totalUsers">-</div>
+                <div class="stat-sublabel" id="activeUsers7d">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Sessions</div>
+                <div class="stat-value" id="totalSessions">-</div>
+                <div class="stat-sublabel" id="sessionsToday">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Session</div>
+                <div class="stat-value" id="avgDuration">-</div>
+                <div class="stat-sublabel">minutes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Actions</div>
+                <div class="stat-value" id="totalActions">-</div>
+                <div class="stat-sublabel" id="actionsToday">-</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container full-width">
+                <h3 class="chart-title">📈 User Growth (Daily)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="userGrowthChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3 class="chart-title">📱 Device Distribution</h3>
+                <div class="chart-wrapper">
+                    <canvas id="deviceChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3 class="chart-title">🔥 Top Features</h3>
+                <div class="chart-wrapper">
+                    <canvas id="endpointsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container full-width">
+                <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <h3 class="chart-title">🕐 Recent Sessions</h3>
+            <table id="sessionsTable">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>User</th>
+                        <th>Device</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                        <th>Top Feature</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionsTableBody">
+                    <tr><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        let charts = {};
+
+        // Initialize
+        loadData();
+
+        async function loadData() {
+            try {
+                const timeRange = parseInt(document.getElementById('timeRange').value);
+                
+                // Try to load from local file first (for local testing)
+                let data;
+                try {
+                    const response = await fetch('../TestData/app_analytics.json');
+                    data = await response.json();
+                } catch (e) {
+                    // Fallback to Data folder
+                    const response = await fetch('../Data/app_analytics.json');
+                    data = await response.json();
+                }
+
+                processData(data, timeRange);
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+                document.getElementById('error').style.display = 'none';
+            } catch (error) {
+                console.error('Failed to load analytics data:', error);
+                document.getElementById('error').textContent = 
+                    `Failed to load analytics data: ${error.message}. Make sure the analytics JSON file exists in Data/ or TestData/ folder.`;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        function processData(data, daysFilter) {
+            const now = new Date();
+            const cutoffDate = daysFilter > 0 ? new Date(now - daysFilter * 24 * 60 * 60 * 1000) : null;
+
+            // Filter sessions by date
+            let sessions = data.sessions || [];
+            if (cutoffDate) {
+                sessions = sessions.filter(s => new Date(s.started_at) >= cutoffDate);
+            }
+
+            // Calculate stats
+            const uniqueUsers = new Set(sessions.map(s => s.discord_id)).size;
+            const totalSessions = sessions.length;
+            const totalDuration = sessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0);
+            const avgDuration = totalSessions > 0 ? (totalDuration / totalSessions).toFixed(1) : 0;
+            const totalActions = sessions.reduce((sum, s) => sum + (s.actions_count || 0), 0);
+
+            // Active users (7d)
+            const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            const activeUsers7d = new Set(
+                sessions.filter(s => new Date(s.started_at) >= sevenDaysAgo).map(s => s.discord_id)
+            ).size;
+
+            // Today's stats
+            const today = new Date().toISOString().split('T')[0];
+            const todaySessions = sessions.filter(s => s.started_at.startsWith(today));
+            const sessionsToday = todaySessions.length;
+            const actionsToday = todaySessions.reduce((sum, s) => sum + (s.actions_count || 0), 0);
+
+            // Update stat cards
+            document.getElementById('totalUsers').textContent = uniqueUsers;
+            document.getElementById('activeUsers7d').textContent = `${activeUsers7d} active (7d)`;
+            document.getElementById('totalSessions').textContent = totalSessions;
+            document.getElementById('sessionsToday').textContent = `${sessionsToday} today`;
+            document.getElementById('avgDuration').textContent = avgDuration;
+            document.getElementById('totalActions').textContent = totalActions;
+            document.getElementById('actionsToday').textContent = `${actionsToday} today`;
+
+            // Generate charts
+            updateUserGrowthChart(sessions);
+            updateDeviceChart(sessions);
+            updateEndpointsChart(sessions);
+            updateHourlyChart(sessions);
+            updateSessionsTable(sessions);
+        }
+
+        function updateUserGrowthChart(sessions) {
+            const dailyUsers = {};
+            
+            sessions.forEach(session => {
+                const date = session.started_at.split('T')[0];
+                if (!dailyUsers[date]) {
+                    dailyUsers[date] = new Set();
+                }
+                dailyUsers[date].add(session.discord_id);
+            });
+
+            const sortedDates = Object.keys(dailyUsers).sort();
+            const data = sortedDates.map(date => ({
+                x: date,
+                y: dailyUsers[date].size
+            }));
+
+            if (charts.userGrowth) charts.userGrowth.destroy();
+            
+            const ctx = document.getElementById('userGrowthChart').getContext('2d');
+            charts.userGrowth = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Daily Active Users',
+                        data: data,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM dd'
+                                }
+                            },
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { 
+                                stepSize: 1,
+                                color: '#94a3b8'
+                            },
+                            grid: { color: '#334155' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateDeviceChart(sessions) {
+            const devices = {};
+            
+            sessions.forEach(session => {
+                const platform = session.platform || 'Unknown';
+                devices[platform] = (devices[platform] || 0) + 1;
+            });
+
+            const labels = Object.keys(devices);
+            const data = Object.values(devices);
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0'
+            ];
+
+            if (charts.device) charts.device.destroy();
+            
+            const ctx = document.getElementById('deviceChart').getContext('2d');
+            charts.device = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#e2e8f0', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateEndpointsChart(sessions) {
+            const endpoints = {};
+            
+            sessions.forEach(session => {
+                const used = session.endpoints_used || {};
+                Object.entries(used).forEach(([endpoint, count]) => {
+                    // Clean endpoint name (remove blueprint prefix)
+                    const cleanName = endpoint.split('.').pop().replace(/_/g, ' ');
+                    endpoints[cleanName] = (endpoints[cleanName] || 0) + count;
+                });
+            });
+
+            // Get top 10
+            const sorted = Object.entries(endpoints)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const labels = sorted.map(e => e[0]);
+            const data = sorted.map(e => e[1]);
+
+            if (charts.endpoints) charts.endpoints.destroy();
+            
+            const ctx = document.getElementById('endpointsChart').getContext('2d');
+            charts.endpoints = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'API Calls',
+                        data: data,
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: '#334155' }
+                        },
+                        y: {
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateHourlyChart(sessions) {
+            const hourly = new Array(24).fill(0);
+            
+            sessions.forEach(session => {
+                const hour = new Date(session.started_at).getHours();
+                hourly[hour]++;
+            });
+
+            if (charts.hourly) charts.hourly.destroy();
+            
+            const ctx = document.getElementById('hourlyChart').getContext('2d');
+            charts.hourly = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Sessions',
+                        data: hourly,
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8', font: { size: 10 } },
+                            grid: { display: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                color: '#94a3b8'
+                            },
+                            grid: { color: '#334155' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateSessionsTable(sessions) {
+            const tbody = document.getElementById('sessionsTableBody');
+            tbody.innerHTML = '';
+
+            // Get last 20 sessions
+            const recent = sessions.slice(-20).reverse();
+
+            recent.forEach(session => {
+                const row = tbody.insertRow();
+                
+                // Time
+                const time = new Date(session.started_at).toLocaleString();
+                row.insertCell().textContent = time;
+
+                // User
+                row.insertCell().textContent = session.username;
+
+                // Device
+                const device = `${session.platform} - ${session.device_info}`;
+                row.insertCell().textContent = device;
+
+                // Duration
+                const duration = session.duration_minutes > 0 
+                    ? `${session.duration_minutes} min` 
+                    : '<1 min';
+                row.insertCell().textContent = duration;
+
+                // Actions
+                row.insertCell().textContent = session.actions_count || 0;
+
+                // Top feature
+                const endpoints = session.endpoints_used || {};
+                const topEndpoint = Object.entries(endpoints)
+                    .sort((a, b) => b[1] - a[1])[0];
+                const topFeature = topEndpoint 
+                    ? topEndpoint[0].split('.').pop().replace(/_/g, ' ')
+                    : '-';
+                row.insertCell().textContent = topFeature;
+            });
+        }
+
+        function toggleAutoRefresh() {
+            const enabled = document.getElementById('autoRefresh').checked;
+            
+            if (enabled) {
+                autoRefreshInterval = setInterval(loadData, 30000); // 30 seconds
+            } else {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

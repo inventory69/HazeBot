@@ -1,16 +1,15 @@
-import discord
-from discord.ext import commands
 import json
+import logging
 import os
 import shlex
-from typing import List, Dict, Any
-from Config import (
-    PINK,
-    ADMIN_ROLE_ID,
-    get_data_dir,
-)
+from typing import Any, Dict, List
+
+import discord
+from discord.ext import commands
+
+import Config
+from Config import ADMIN_ROLE_ID, get_data_dir
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +84,7 @@ class CreateTicketButton(discord.ui.Button):
             embed = discord.Embed(
                 title="🎫 Create Support Ticket",
                 description="Choose the type of support ticket:",
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=interaction.client.user)
 
@@ -109,7 +108,7 @@ class SlashCommandButton(discord.ui.Button):
         embed = discord.Embed(
             title="🔧 Execute Command",
             description=f"Click the button below to execute `{command_name}`:",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=interaction.client.user)
 
@@ -135,7 +134,7 @@ class PrefixCommandButton(discord.ui.Button):
         embed = discord.Embed(
             title="🔧 Execute Command",
             description=f"Click the button below to execute `{command_name}`:",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=interaction.client.user)
 
@@ -307,7 +306,7 @@ class SupportButtons(commands.Cog):
         embed = discord.Embed(
             title=embed_title,
             description=embed_description,
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
 
@@ -387,7 +386,7 @@ class SupportButtons(commands.Cog):
                         embed = discord.Embed(
                             title=button_info.get("embed_title", "🛠️ Support"),
                             description=button_info.get("embed_description", "Need help? Use the buttons below:"),
-                            color=PINK,
+                            color=Config.PINK,
                         )
                         set_pink_footer(embed, bot=self.bot.user)
 

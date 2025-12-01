@@ -5,10 +5,13 @@
 # cogs and modules. Settings are organized by category for easy maintenance.
 # ============================================================================
 
-import discord
 import logging
-from dotenv import load_dotenv
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import discord
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -27,8 +30,14 @@ BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN" if PROD_MODE else "TEST_DISCORD_BOT_TO
 # Guild ID selection based on PROD_MODE
 GUILD_ID = int(os.getenv("DISCORD_GUILD_ID" if PROD_MODE else "DISCORD_TEST_GUILD_ID", "0"))
 
+# Guild Name (optional, for display in admin interface)
+GUILD_NAME = os.getenv("DISCORD_GUILD_NAME" if PROD_MODE else "DISCORD_TEST_GUILD_NAME", None)
+
 # Data directory selection based on PROD_MODE
 DATA_DIR = "Data" if PROD_MODE else "TestData"
+
+# Timezone configuration for consistent datetime display
+TIMEZONE = os.getenv("TIMEZONE", "Europe/Berlin")
 
 
 # Helper functions
@@ -40,6 +49,31 @@ def get_guild_id():
 def get_data_dir():
     """Returns the current data directory based on PROD_MODE"""
     return DATA_DIR
+
+
+def get_local_now():
+    """Returns current datetime in the configured timezone"""
+    return datetime.now(ZoneInfo(TIMEZONE))
+
+
+def get_utc_now():
+    """Returns current datetime in UTC (for Discord embeds and API responses)"""
+    return datetime.now(ZoneInfo("UTC"))
+
+
+def local_to_utc(dt):
+    """Convert a naive or local datetime to UTC"""
+    if dt.tzinfo is None:
+        # Assume it's in the configured timezone
+        dt = dt.replace(tzinfo=ZoneInfo(TIMEZONE))
+    return dt.astimezone(ZoneInfo("UTC"))
+
+
+def utc_to_local(dt):
+    """Convert a UTC datetime to the configured timezone"""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt.astimezone(ZoneInfo(TIMEZONE))
 
 
 # ============================================================================
@@ -56,9 +90,13 @@ FuzzyMatchingThreshold = 0.6  # similarity threshold (0.0-1.0)
 Intents = discord.Intents.default()
 Intents.members = True
 Intents.message_content = True
+Intents.presences = True  # Required for member status and activities
 
 # Color Scheme
 PINK = discord.Color(0xAD1457)
+
+# Embed Footer Text
+EMBED_FOOTER_TEXT = "Powered by Haze World 💖"
 
 # Role Display Names
 ROLE_NAMES = {
@@ -84,10 +122,12 @@ COG_LOG_LEVELS = {
 
 # Cog prefixes for logging (emoji + label)
 COG_PREFIXES = {
+    "APIServer": "🌐 [APIServer]",
     "CogManager": "🔧 [CogManager]",
     "Changelog": "📝 [Changelog]",
     "DailyMeme": "🎭 [DailyMeme]",
     "DiscordLogging": "📡 [DiscordLogging]",
+    "GamingHub": "🎮 [GamingHub]",
     "Leaderboard": "🏆 [Leaderboard]",
     "MemeGenerator": "🎨 [MemeGenerator]",
     "ModPerks": "🛡️ [ModPerks]",
@@ -148,6 +188,7 @@ PROD_IDS = {
     "MEME_CHANNEL_ID": 1433414228840284252,
     "SERVER_GUIDE_CHANNEL_ID": 1428693601268928582,
     "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
+    "GAMING_CHANNEL_ID": 1425472657293443236,  # TODO: Replace with actual gaming channel ID
     # Categories
     "TICKETS_CATEGORY_ID": 1426113555974979625,
 }
@@ -190,6 +231,7 @@ TEST_IDS = {
     "MEME_CHANNEL_ID": 1433416191204003960,
     "SERVER_GUIDE_CHANNEL_ID": 1429723224320770078,
     "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
+    "GAMING_CHANNEL_ID": 1429804818481938463,  # TODO: Replace with actual gaming channel ID
     # Categories
     "TICKETS_CATEGORY_ID": 1429723767445389352,
 }
@@ -226,6 +268,7 @@ RL_CHANNEL_ID = CURRENT_IDS["RL_CHANNEL_ID"]
 MEME_CHANNEL_ID = CURRENT_IDS.get("MEME_CHANNEL_ID")
 MEME_ROLE_ID = CURRENT_IDS.get("MEME_ROLE_ID")
 SERVER_GUIDE_CHANNEL_ID = CURRENT_IDS.get("SERVER_GUIDE_CHANNEL_ID")
+GAMING_CHANNEL_ID = CURRENT_IDS.get("GAMING_CHANNEL_ID")
 
 # Welcome System
 WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]

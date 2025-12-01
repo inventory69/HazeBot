@@ -1,12 +1,14 @@
-import discord
-from discord.ext import commands, tasks
-import logging
 import asyncio
-from collections import deque
+import logging
 import os
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
-from Config import PINK, ADMIN_ROLE_ID, COG_PREFIXES
+import discord
+from discord.ext import commands, tasks
+
+import Config
+from Config import ADMIN_ROLE_ID, COG_PREFIXES
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +303,7 @@ class DiscordLogging(commands.Cog):
         embed = discord.Embed(
             title="📡 Discord Logging",
             description=f"Discord logging has been **{status}**",
-            color=PINK if self.enabled else discord.Color.red(),
+            color=Config.PINK if self.enabled else discord.Color.red(),
         )
         await ctx.send(embed=embed)
         logger.info(f"Discord logging {status} by {ctx.author}")
@@ -323,7 +325,7 @@ class DiscordLogging(commands.Cog):
         embed = discord.Embed(
             title="🧪 Testing Discord Logging",
             description="Sending test log messages...",
-            color=PINK,
+            color=Config.PINK,
         )
         await ctx.send(embed=embed)
 

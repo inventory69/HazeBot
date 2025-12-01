@@ -1,9 +1,10 @@
 import asyncio
 import json
 import os
-from typing import Any, Callable, Dict, Optional, TypeVar
-from functools import wraps
 import time
+from functools import wraps
+from typing import Any, Callable, Dict, Optional, TypeVar
+
 from Utils.Logger import Logger  # ← Hinzugefügt
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -93,7 +94,19 @@ class FileCache:
         os.makedirs(cache_dir, exist_ok=True)
 
     def _get_cache_path(self, key: str) -> str:
-        return os.path.join(self.cache_dir, f"{key}.json")
+        # Replace invalid Windows filename characters (: < > " / \ | ? *)
+        safe_key = (
+            key.replace(":", "_")
+            .replace("<", "_")
+            .replace(">", "_")
+            .replace('"', "_")
+            .replace("/", "_")
+            .replace("\\", "_")
+            .replace("|", "_")
+            .replace("?", "_")
+            .replace("*", "_")
+        )
+        return os.path.join(self.cache_dir, f"{safe_key}.json")
 
     def get(self, key: str) -> Optional[Any]:
         path = self._get_cache_path(key)

@@ -1,33 +1,32 @@
-import aiohttp
-import requests
-import os
-import json
-import random
 import asyncio
+import json
+import logging
+import os
+import random
 from concurrent.futures import ThreadPoolExecutor
-from discord.ext import commands, tasks
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Tuple
+
+import aiohttp
 import discord
-from discord import app_commands
+import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Optional, Tuple, Any
+from discord import app_commands
+from discord.ext import commands, tasks
+
+import Config
 from Config import (
-    PINK,
-    RL_TIER_ORDER,
-    RL_ACCOUNTS_FILE,
     RANK_EMOJIS,
-    get_guild_id,
+    RL_ACCOUNTS_FILE,
     RL_CHANNEL_ID,
+    RL_CONGRATS_REPLIES,
     RL_CONGRATS_VIEWS_FILE,
     RL_RANK_PROMOTION_CONFIG,
-    RL_CONGRATS_REPLIES,
-    RL_RANK_CHECK_INTERVAL_HOURS,
-    RL_RANK_CACHE_TTL_SECONDS,
+    RL_TIER_ORDER,
+    get_guild_id,
 )
-
-from Utils.EmbedUtils import set_pink_footer
 from Utils.CacheUtils import file_cache
-from datetime import datetime, timedelta, timezone
-import logging
+from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +173,7 @@ class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
         embed = discord.Embed(
             title="🔗 Confirm Rocket League Account Linking",
             description=f"Player found: **{stats['username']}**\nPlatform: **{platform.upper()}**\n\nDo you want to link this account?",
-            color=PINK,
+            color=Config.PINK,
         )
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
@@ -323,6 +322,7 @@ class ConfirmLinkView(discord.ui.View):
             "username": self.username,
             "ranks": self.stats["tier_names"],  # Keep for compatibility
             "rank_display": self.stats["rank_display"],  # Add full display with emojis
+            "icon_urls": self.stats.get("icon_urls", {}),  # Add icon URLs
         }
         save_rl_accounts(accounts)
         await self.message.edit(
@@ -374,8 +374,15 @@ class RocketLeague(commands.Cog):
         """Setup the cog - called on ready and after reload"""
         # Only start once
         if not self.check_ranks.is_running():
+            # Change the loop interval dynamically based on Config
+            interval_hours = Config.RL_RANK_CHECK_INTERVAL_HOURS
+            cache_ttl = Config.RL_RANK_CACHE_TTL_SECONDS
+            logger.info(f"🔍 DEBUG: Config values at cog setup - Interval: {interval_hours}h, Cache TTL: {cache_ttl}s")
+            self.check_ranks.change_interval(hours=interval_hours)
             self.check_ranks.start()
-            logger.info(f"Rank check task started. Using FlareSolverr URL: {self.flaresolverr_url}")
+            logger.info(
+                f"Rank check task started with {interval_hours}h interval. Using FlareSolverr URL: {self.flaresolverr_url}"
+            )
 
         self.bot.add_view(RocketLeagueHubView())
         logger.info("RocketLeague hub view restored.")
@@ -612,7 +619,7 @@ class RocketLeague(commands.Cog):
             return result
 
         # Cache using configured TTL
-        return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=RL_RANK_CACHE_TTL_SECONDS)
+        return await file_cache.get_or_set(cache_key, fetch_and_cache, ttl=Config.RL_RANK_CACHE_TTL_SECONDS)
 
     async def _get_rl_account(self, user_id: int, platform: Optional[str], username: Optional[str]) -> Tuple[str, str]:
         """
@@ -628,6 +635,15 @@ class RocketLeague(commands.Cog):
             username = user_account["username"]
         elif not username:
             raise ValueError("❌ Provide username or set account.")
+        elif not platform:
+            # Username provided but no platform - check if user has a saved account
+            if user_account:
+                platform = user_account["platform"]
+            else:
+                raise ValueError(
+                    "❌ Please specify a platform (steam, epic, psn, xbl, switch) or set your account with /setrlaccount"
+                )
+
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             raise ValueError("❌ Invalid platform.")
         return platform.lower(), username
@@ -638,7 +654,7 @@ class RocketLeague(commands.Cog):
         """
         embed = discord.Embed(
             title=f"Rocket League Stats for {stats['username']} ({platform.upper()})",
-            color=PINK,
+            color=Config.PINK,
         )
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
@@ -697,8 +713,11 @@ class RocketLeague(commands.Cog):
                 last_fetched_str = data.get("last_fetched")
                 if last_fetched_str:
                     last_fetched = datetime.fromisoformat(last_fetched_str)
+                    # Remove timezone info to make comparison work
+                    if last_fetched.tzinfo is not None:
+                        last_fetched = last_fetched.replace(tzinfo=None)
                     time_since_last = now - last_fetched
-                    if time_since_last < timedelta(hours=RL_RANK_CHECK_INTERVAL_HOURS):
+                    if time_since_last < timedelta(hours=Config.RL_RANK_CHECK_INTERVAL_HOURS):
                         logger.debug(
                             f"Skipping {data['username']} - last checked {time_since_last.total_seconds() / 60:.1f} minutes ago"
                         )
@@ -715,7 +734,8 @@ class RocketLeague(commands.Cog):
 
             stats = await self.get_player_stats(platform, username, force_refresh=force)
             if stats:
-                new_ranks = stats["tier_names"]
+                new_ranks = stats["tier_names"]  # For comparison (tier names only)
+                new_rank_display = stats.get("rank_display", {})  # For storage (with divisions and emojis)
                 new_icon_urls = stats.get("icon_urls", {})
 
                 # Log fetched ranks
@@ -778,7 +798,7 @@ class RocketLeague(commands.Cog):
                             embed = discord.Embed(
                                 title=config["embed_title"],
                                 description=embed_description,
-                                color=PINK,
+                                color=Config.PINK,
                             )
                             if icon_url:
                                 embed.set_thumbnail(url=icon_url)
@@ -802,7 +822,8 @@ class RocketLeague(commands.Cog):
                 else:
                     logger.warning(f"User {user_id} not found in bot cache, cannot send rank promotion")
                 # Update ranks and last_fetched
-                data["ranks"] = new_ranks
+                data["ranks"] = new_ranks  # Store tier names for comparison
+                data["rank_display"] = new_rank_display  # Store full display with divisions and emojis
                 data["icon_urls"] = new_icon_urls
                 data["last_fetched"] = now.isoformat()
                 save_rl_accounts(accounts)
@@ -811,7 +832,7 @@ class RocketLeague(commands.Cog):
                 logger.warning(f"Failed to fetch stats for {username} ({platform})")
         logger.info("Rank check completed.")
 
-    @tasks.loop(hours=RL_RANK_CHECK_INTERVAL_HOURS)
+    @tasks.loop(hours=1)  # Will be changed dynamically in cog_load
     async def check_ranks(self) -> None:
         """
         Check for rank promotions at configured interval.
@@ -893,7 +914,7 @@ class RocketLeague(commands.Cog):
         embed = discord.Embed(
             title="🔗 Confirm Rocket League Account Linking",
             description=f"Player found: **{stats['username']}**\nPlatform: **{platform.upper()}**\n\nDo you want to link this account?",
-            color=PINK,
+            color=Config.PINK,
         )
         if stats.get("highest_icon_url"):
             embed.set_thumbnail(url=stats["highest_icon_url"])
@@ -1038,7 +1059,7 @@ class RocketLeague(commands.Cog):
                 "**Supported Platforms:**\n"
                 "Steam, Epic, PSN, Xbox, Nintendo Switch"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Check if user has account linked
@@ -1166,6 +1187,53 @@ class RocketLeague(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Error restoring view: {e}")
             logger.error(f"Error restoring congrats view: {e}")
+
+    async def post_stats_to_channel(self, user_id: int) -> Dict[str, Any]:
+        """
+        Post RL stats to the configured RL channel (used by API).
+        Uses the same logic as /rlstats command.
+        Returns dict with success status and message.
+        """
+        try:
+            # Get user
+            user = self.bot.get_user(user_id)
+            if not user:
+                return {"success": False, "message": "User not found"}
+
+            # Get configured RL channel
+            guild = self.bot.get_guild(get_guild_id())
+            if not guild:
+                return {"success": False, "message": "Guild not found"}
+
+            channel = guild.get_channel(RL_CHANNEL_ID)
+            if not channel:
+                return {"success": False, "message": "Rocket League channel not configured"}
+
+            # Check permissions
+            if not channel.permissions_for(guild.me).send_messages:
+                return {"success": False, "message": "Bot has no permission to send messages in RL channel"}
+
+            # Get platform and username from linked account
+            try:
+                platform, username = await self._get_rl_account(user_id, None, None)
+            except ValueError as e:
+                return {"success": False, "message": str(e)}
+
+            # Fetch stats (uses cache like /rlstats)
+            stats = await self.get_player_stats(platform, username)
+            if not stats:
+                return {"success": False, "message": "Player not found or error fetching stats"}
+
+            # Create and send embed (exactly like /rlstats)
+            embed = await self._create_rl_embed(stats, platform)
+            message = await channel.send(embed=embed)
+            logger.info(f"RL stats posted to RL channel for {username} by user {user_id} via API")
+
+            return {"success": True, "message": "Stats posted successfully", "message_id": message.id}
+
+        except Exception as e:
+            logger.error(f"Error posting RL stats to channel: {e}")
+            return {"success": False, "message": f"Error: {str(e)}"}
 
 
 async def setup(bot: commands.Bot) -> None:

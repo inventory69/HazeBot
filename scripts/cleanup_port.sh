@@ -1,0 +1,32 @@
+#!/bin/bash
+# Cleanup script to kill processes on port 5070
+
+PORT=5070
+
+echo "🔍 Checking for processes on port $PORT..."
+
+# Find PID using the port
+PID=$(lsof -ti :$PORT 2>/dev/null)
+
+if [ -z "$PID" ]; then
+    echo "✅ Port $PORT is free"
+    exit 0
+fi
+
+echo "⚠️  Found process(es) on port $PORT: $PID"
+echo "🔨 Killing process(es)..."
+
+# Kill the process
+kill -9 $PID 2>/dev/null
+
+# Wait a moment
+sleep 1
+
+# Verify
+if lsof -ti :$PORT >/dev/null 2>&1; then
+    echo "❌ Failed to free port $PORT"
+    exit 1
+else
+    echo "✅ Port $PORT is now free"
+    exit 0
+fi

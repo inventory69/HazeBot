@@ -1,23 +1,25 @@
+import logging
+from typing import Any, Optional
+
 import discord
-from discord.ext import commands
 from discord import app_commands
-from typing import Optional, Any
+from discord.ext import commands
+
+import Config
+from Cogs.Leaderboard import get_user_activity
+from Cogs.ModPerks import load_mod_data
+from Cogs.RocketLeague import RANK_EMOJIS, get_highest_rl_rank
+from Cogs.TicketSystem import load_tickets
 from Config import (
-    PINK,
     ADMIN_ROLE_ID,
+    CHANGELOG_ROLE_ID,
+    INTEREST_ROLE_IDS,
+    MEME_ROLE_ID,
     MODERATOR_ROLE_ID,
     NORMAL_ROLE_ID,
-    INTEREST_ROLE_IDS,
-    CHANGELOG_ROLE_ID,
-    MEME_ROLE_ID,
     get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
-from Cogs.RocketLeague import get_highest_rl_rank, RANK_EMOJIS
-from Cogs.ModPerks import load_mod_data
-from Cogs.TicketSystem import load_tickets
-from Cogs.Leaderboard import get_user_activity
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,9 +49,10 @@ async def get_resolved_ticket_count(user_id: int) -> int:
 # Helper to load meme requests
 def load_meme_requests() -> dict:
     """Load meme requests from file"""
-    from Config import get_data_dir
-    import os
     import json
+    import os
+
+    from Config import get_data_dir
 
     file_path = os.path.join(get_data_dir(), "meme_requests.json")
     try:
@@ -64,9 +67,10 @@ def load_meme_requests() -> dict:
 # Helper to load memes generated
 def load_memes_generated() -> dict:
     """Load memes generated from file"""
-    from Config import get_data_dir
-    import os
     import json
+    import os
+
+    from Config import get_data_dir
 
     file_path = os.path.join(get_data_dir(), "memes_generated.json")
     try:
@@ -87,7 +91,7 @@ class Profile(commands.Cog):
         self.bot = bot
 
     async def create_profile_embed(self, member: discord.Member) -> discord.Embed:
-        embed = discord.Embed(title=f"👤 Profile: {member.display_name}", color=PINK)
+        embed = discord.Embed(title=f"👤 Profile: {member.display_name}", color=Config.PINK)
         embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
         embed.add_field(name="Joined At", value=member.joined_at.strftime("%B %d, %Y"), inline=True)
         embed.add_field(

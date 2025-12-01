@@ -1,10 +1,11 @@
+import json
+import logging
+import os
+
 import discord
 from discord.ext import commands
-import json
-import os
-import logging
 
-from Config import PINK
+import Config
 from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
@@ -377,7 +378,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="📥 Load Cog", description="Select a cog to load from the dropdown below:", color=PINK
+                title="📥 Load Cog", description="Select a cog to load from the dropdown below:", color=Config.PINK
             )
 
             # Show list of all unloaded cogs (show class names)
@@ -493,7 +494,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="📤 Unload Cog", description="Select a cog to unload from the dropdown below:", color=PINK
+                title="📤 Unload Cog", description="Select a cog to unload from the dropdown below:", color=Config.PINK
             )
 
             # Show list of all loaded cogs
@@ -557,6 +558,10 @@ class CogManager(commands.Cog):
                 description="**CogManager** cannot be unloaded - it's required for cog management!",
                 color=discord.Color.red(),
             )
+        else:
+            error_embed = None
+
+        if error_embed:
             set_pink_footer(error_embed, bot=self.bot.user)
 
             if interaction:
@@ -643,7 +648,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="🔄 Reload Cog", description="Select a cog to reload from the dropdown below:", color=PINK
+                title="🔄 Reload Cog", description="Select a cog to reload from the dropdown below:", color=Config.PINK
             )
 
             # Show list of all available cogs (no limit)
@@ -783,7 +788,7 @@ class CogManager(commands.Cog):
             disabled = self.get_disabled_cogs()
             loaded = [cog for cog in self.bot.cogs.keys()]
 
-            embed = discord.Embed(title="🔧 Cog Status", color=PINK)
+            embed = discord.Embed(title="🔧 Cog Status", color=Config.PINK)
 
             # Loaded cogs
             loaded_text = "\n".join([f"✅ {cog}" for cog in loaded]) or "None"
@@ -814,7 +819,7 @@ class CogManager(commands.Cog):
                 return
 
             embed = discord.Embed(
-                title="📋 View Cog Logs", description="Select a cog to view its recent logs:", color=PINK
+                title="📋 View Cog Logs", description="Select a cog to view its recent logs:", color=Config.PINK
             )
 
             # Show list of all available cogs (no limit)
@@ -944,7 +949,7 @@ class CogManager(commands.Cog):
                 embed = discord.Embed(
                     title=f"📋 Logs: {cog_name}",
                     description=f"No logs found for this cog in recent history.\n*Searching for: `{actual_cog_name}`*",
-                    color=PINK,
+                    color=Config.PINK,
                 )
                 set_pink_footer(embed, bot=self.bot.user)
 
@@ -999,7 +1004,7 @@ class CogManager(commands.Cog):
             embed = discord.Embed(
                 title=f"📋 Logs: {cog_name}",
                 description=f"Showing last {len(recent_logs)} log entries from recent history",
-                color=PINK,
+                color=Config.PINK,
             )
 
             # Add statistics
@@ -1069,6 +1074,92 @@ class CogManager(commands.Cog):
 
         # Let other errors be handled by global error handler
         raise error
+
+    async def reload_cog_api(self, cog_name: str) -> tuple[bool, str]:
+        """API method to reload a cog. Returns (success, message)"""
+        if cog_name.lower() == "cogmanager":
+            return False, "Cannot reload CogManager"
+
+        try:
+            # Get the mapping to find the file name
+            cog_mapping = self.get_all_cog_files()
+
+            # If cog_name is a class name, find the corresponding file name
+            file_name = cog_name
+            class_name = cog_name
+            for fname, cname in cog_mapping.items():
+                if cname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+                elif fname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+
+            # Reload using the file name
+            extension_name = f"Cogs.{file_name}"
+            await self.bot.unload_extension(extension_name)
+            await self.bot.load_extension(extension_name)
+
+            logger.info(f"Cog {class_name} (from {file_name}.py) reloaded via API")
+            return True, f"Cog '{class_name}' reloaded successfully"
+
+        except Exception as e:
+            logger.error(f"Failed to reload cog {cog_name}: {e}")
+            return False, f"Failed to reload cog: {str(e)}"
+
+    async def load_cog_api(self, cog_name: str) -> tuple[bool, str]:
+        """API method to load a cog. Returns (success, message)"""
+        try:
+            # Load the extension using the file name
+            await self.bot.load_extension(f"Cogs.{cog_name}")
+            self.enable_cog(cog_name)
+
+            # Get the actual class name that was loaded
+            cog_mapping = self.get_all_cog_files()
+            class_name = cog_mapping.get(cog_name, cog_name)
+
+            logger.info(f"Cog {class_name} (from {cog_name}.py) loaded via API")
+            return True, f"Cog '{class_name}' loaded successfully"
+
+        except Exception as e:
+            logger.error(f"Failed to load cog {cog_name}: {e}")
+            return False, f"Failed to load cog: {str(e)}"
+
+    async def unload_cog_api(self, cog_name: str) -> tuple[bool, str]:
+        """API method to unload a cog. Returns (success, message)"""
+        # Check if trying to unload CogManager
+        if cog_name.lower() == "cogmanager":
+            return False, "Cannot unload CogManager"
+
+        try:
+            # Get the mapping to find the file name
+            cog_mapping = self.get_all_cog_files()
+
+            # If cog_name is a class name, find the corresponding file name
+            file_name = cog_name
+            class_name = cog_name
+            for fname, cname in cog_mapping.items():
+                if cname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+                elif fname == cog_name:
+                    file_name = fname
+                    class_name = cname
+                    break
+
+            # Unload using the file name
+            await self.bot.unload_extension(f"Cogs.{file_name}")
+            self.disable_cog(file_name)
+
+            logger.info(f"Cog {class_name} (from {file_name}.py) unloaded via API")
+            return True, f"Cog '{class_name}' unloaded successfully"
+
+        except Exception as e:
+            logger.error(f"Failed to unload cog {cog_name}: {e}")
+            return False, f"Failed to unload cog: {str(e)}"
 
 
 async def setup(bot: commands.Bot):

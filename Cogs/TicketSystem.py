@@ -1,26 +1,28 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
+import asyncio
 import json
+import logging
 import os
+import re
+import smtplib
 import uuid
 from datetime import datetime, timedelta
 from email.message import EmailMessage
-import smtplib
-import asyncio
-import re
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import Config
 from Config import (
-    PINK,
     ADMIN_ROLE_ID,
     MODERATOR_ROLE_ID,
     TICKETS_CATEGORY_ID,
     TRANSCRIPT_CHANNEL_ID,
-    get_guild_id,
     get_data_dir,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +232,7 @@ def create_ticket_embed(ticket_data: Dict[str, Any], bot_user: discord.User) -> 
     embed = discord.Embed(
         title=f"🎫 Ticket #{ticket_num}",
         description=f"**Type:** {ticket_data['type']}\n**Status:** {ticket_data['status']}\n**Creator:** <@{ticket_data['user_id']}>",
-        color=PINK,
+        color=Config.PINK,
     )
     if ticket_data.get("claimed_by"):
         embed.add_field(name="Handler", value=f"<@{ticket_data['claimed_by']}>", inline=True)
@@ -244,7 +246,7 @@ def create_transcript_embed(transcript: str, bot_user: discord.User) -> discord.
     embed = discord.Embed(
         title="Ticket Transcript",
         description="The transcript has been created and sent via email.",
-        color=PINK,
+        color=Config.PINK,
     )
     embed.add_field(name="Transcript", value=transcript[:1024], inline=False)  # Limit length
     set_pink_footer(embed, bot=bot_user)
@@ -544,7 +546,7 @@ async def close_ticket_async(
         title=f"🎫 Ticket #{ticket['ticket_num']} - Transcript",
         description=f"**Type:** {ticket['type']}\n**Creator:** <@{ticket['user_id']}>\
             \n**Status:** Closed",
-        color=PINK,
+        color=Config.PINK,
     )
 
     # Add ticket details
@@ -587,7 +589,7 @@ async def close_ticket_async(
             close_embed = discord.Embed(
                 title=f"Ticket #{ticket['ticket_num']} - Closing Message",
                 description=close_message,
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(close_embed, bot=bot.user)
             await creator.send(embed=close_embed)
@@ -796,7 +798,7 @@ class TicketSystem(commands.Cog):
         embed = discord.Embed(
             title="🎫 Ticket System Help",
             description="Create a new ticket for support, bugs, or applications.\nUse `!ticket` or `/ticket`.",
-            color=PINK,
+            color=Config.PINK,
         )
         embed.add_field(
             name="Commands",
@@ -862,6 +864,74 @@ class TicketSystem(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         await self._restore_ticket_views()
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        """Listen for messages in ticket channels and notify WebSocket clients"""
+        # Ignore bot messages or non-ticket channels
+        if message.author.bot or not message.channel:
+            return
+
+        # Check if this is a ticket channel
+        tickets = await load_tickets()
+        ticket = next((t for t in tickets if t["channel_id"] == message.channel.id), None)
+        if not ticket:
+            return
+
+        # Get avatar URL with fallback
+        avatar_url = None
+        try:
+            if message.author.display_avatar:
+                avatar_url = str(message.author.display_avatar.url)
+            elif message.author.avatar:
+                avatar_url = str(message.author.avatar.url)
+        except (AttributeError, Exception) as e:
+            logger.debug(f"Could not get avatar for user {message.author.id}: {e}")
+
+        # Check if author has admin role
+        is_admin = False
+        if hasattr(message.author, "roles") and message.author.roles:
+            for role in message.author.roles:
+                if role.id == Config.ADMIN_ROLE_ID or role.id == Config.MODERATOR_ROLE_ID:
+                    is_admin = True
+                    break
+
+        # Prepare message data
+        message_data = {
+            "id": str(message.id),
+            "author_id": str(message.author.id),
+            "author_name": message.author.name,
+            "author_avatar": avatar_url,
+            "content": message.content,
+            "timestamp": message.created_at.isoformat(),
+            "is_bot": message.author.bot,
+            "is_admin": is_admin,
+        }
+
+        # Notify WebSocket clients
+        try:
+            from api.notification_routes import notify_ticket_update
+
+            notify_ticket_update(ticket["ticket_id"], "new_message", message_data)
+            logger.info(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
+        except Exception as e:
+            logger.error(f"Failed to send WebSocket notification: {e}")
+
+        # Send push notifications
+        try:
+            logger.info(f"📱 About to send push notification for ticket {ticket['ticket_id']}")
+            from api.notification_routes import send_push_notification_for_ticket_event
+            import asyncio
+
+            asyncio.create_task(
+                send_push_notification_for_ticket_event(ticket["ticket_id"], "new_message", ticket, message_data)
+            )
+            logger.info(f"📱 Push notification task created for ticket {ticket['ticket_num']}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send push notification: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
 
     async def cog_load(self) -> None:
         """Called when the cog is loaded (including reloads)"""

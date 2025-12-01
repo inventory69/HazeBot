@@ -1,20 +1,20 @@
 # 📦 Built-in modules
 import logging
+from typing import Tuple
 
 # 📥 Custom modules
 from rich.console import Console as RichConsole
 from rich.highlighter import RegexHighlighter
-from rich.traceback import install as Install
 from rich.logging import RichHandler
 from rich.theme import Theme
-from typing import Tuple
+from rich.traceback import install as Install
 
 # ⚙️ Settings
 from Config import (
-    LogLevel,
-    CommandPrefix,
-    COG_PREFIXES,
     COG_LOG_LEVELS,  # Import per-cog log levels
+    COG_PREFIXES,
+    CommandPrefix,
+    LogLevel,
 )  # Assuming CommandPrefix is available in HazeWorldBot Config
 
 

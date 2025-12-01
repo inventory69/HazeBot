@@ -1,26 +1,27 @@
-import discord
-from discord.ext import commands, tasks
-from discord import app_commands
-import aiohttp
-import os
+import asyncio
 import json
+import logging
+import os
 import random
 from datetime import datetime, time
-import logging
-import asyncio
-from bs4 import BeautifulSoup
 
+import aiohttp
+import discord
+from bs4 import BeautifulSoup
+from discord import app_commands
+from discord.ext import commands, tasks
+
+import Config
 from Config import (
-    PINK,
-    get_guild_id,
-    get_data_dir,
-    MEME_CHANNEL_ID,
-    MEME_ROLE_ID,
-    MEME_SUBREDDITS_FILE,
-    DEFAULT_MEME_SUBREDDITS,
-    MEME_LEMMY_FILE,
     DEFAULT_MEME_LEMMY,
+    DEFAULT_MEME_SUBREDDITS,
+    MEME_CHANNEL_ID,
+    MEME_LEMMY_FILE,
+    MEME_ROLE_ID,
     MEME_SOURCES,
+    MEME_SUBREDDITS_FILE,
+    get_data_dir,
+    get_guild_id,
 )
 from Utils.EmbedUtils import set_pink_footer
 
@@ -86,10 +87,11 @@ class DailyMeme(commands.Cog):
             "minute": 0,
             "channel_id": MEME_CHANNEL_ID,
             "allow_nsfw": True,
-            "ping_role_id": MEME_ROLE_ID,
+            "role_id": MEME_ROLE_ID,  # Changed from ping_role_id for consistency
             # Selection preferences
-            "use_subreddits": [],  # Empty = use all configured
-            "use_lemmy": [],  # Empty = use all configured
+            # Note: None = use all, [] = use none, ["a", "b"] = use specific
+            "use_subreddits": None,  # None = use all configured
+            "use_lemmy": None,  # None = use all configured
             "min_score": 100,  # Minimum upvotes
             "max_sources": 5,  # How many subreddits/communities to fetch from
             "pool_size": 50,  # Pick from top X memes
@@ -99,6 +101,9 @@ class DailyMeme(commands.Cog):
             if os.path.exists(self.daily_config_file):
                 with open(self.daily_config_file, "r") as f:
                     config = json.load(f)
+                    # Migration: rename ping_role_id to role_id if it exists
+                    if "ping_role_id" in config and "role_id" not in config:
+                        config["role_id"] = config.pop("ping_role_id")
                     # Merge with defaults (in case new settings are added)
                     return {**default_config, **config}
         except Exception as e:
@@ -282,6 +287,71 @@ class DailyMeme(commands.Cog):
         self.shown_memes[url] = datetime.now().timestamp()
         self.save_shown_memes()
 
+    def normalize_lemmy_community(self, community_input: str) -> str | None:
+        """
+        Normalize Lemmy community input to standard format: instance@community
+
+        Accepts:
+        - "lemmy.world@memes" → "lemmy.world@memes"
+        - "memes@lemmy.world" → "lemmy.world@memes"
+        - "memes" → searches configured communities for matching name
+
+        Returns None if not found in configured communities
+        """
+        community_input = community_input.lower().strip()
+
+        # Remove lemmy: prefix if present
+        if community_input.startswith("lemmy:"):
+            community_input = community_input.replace("lemmy:", "", 1)
+
+        # Check if already in correct format (instance@community)
+        if "@" in community_input:
+            parts = community_input.split("@", 1)
+
+            # Check if format is instance@community or community@instance
+            if "." in parts[0]:
+                # Likely instance@community (correct format)
+                normalized = community_input
+            else:
+                # Likely community@instance (reverse format)
+                normalized = f"{parts[1]}@{parts[0]}"
+
+            # Verify against configured communities
+            if normalized in self.meme_lemmy:
+                return normalized
+            else:
+                # Try original if normalized not found
+                if community_input in self.meme_lemmy:
+                    return community_input
+                return None
+        else:
+            # No @, search for community name in configured list
+            for configured_community in self.meme_lemmy:
+                if "@" in configured_community:
+                    community_name = configured_community.split("@")[1]
+                    if community_name == community_input:
+                        return configured_community
+            return None
+
+    def format_lemmy_display(self, lemmy_source: str) -> str:
+        """
+        Format Lemmy source for user-friendly display
+
+        Input: "lemmy:lemmy.world@memes" or "lemmy.world@memes"
+        Output: "memes@lemmy.world" (Discord/Mastodon-style format)
+        """
+        # Remove lemmy: prefix
+        if lemmy_source.startswith("lemmy:"):
+            lemmy_source = lemmy_source.replace("lemmy:", "", 1)
+
+        # Parse instance@community
+        if "@" in lemmy_source:
+            instance, community = lemmy_source.split("@", 1)
+            # Return in user-friendly format: community@instance
+            return f"{community}@{instance}"
+
+        return lemmy_source
+
     async def _setup_cog(self) -> None:
         """Setup the cog - called on ready and after reload"""
         # Create HTTP session if not exists
@@ -291,9 +361,12 @@ class DailyMeme(commands.Cog):
         # Configure and start the daily meme task with saved settings
         hour = self.daily_config.get("hour", 12)
         minute = self.daily_config.get("minute", 0)
-        # Assuming local time is CET (UTC+1), convert to UTC for server
-        adjusted_hour = (hour - 1) % 24
-        self.daily_meme_task.change_interval(time=time(hour=adjusted_hour, minute=minute))
+        # Convert local time to UTC for discord.py task scheduling
+        from zoneinfo import ZoneInfo
+
+        local_time = datetime.now(ZoneInfo(Config.TIMEZONE)).replace(hour=hour, minute=minute)
+        utc_time = local_time.astimezone(ZoneInfo("UTC"))
+        self.daily_meme_task.change_interval(time=time(hour=utc_time.hour, minute=utc_time.minute))
 
         if self.daily_config.get("enabled", True) and not self.daily_meme_task.is_running():
             self.daily_meme_task.start()
@@ -631,14 +704,15 @@ class DailyMeme(commands.Cog):
             max_sources = self.daily_config.get("max_sources", 5)
             min_score = self.daily_config.get("min_score", 100)
             pool_size = self.daily_config.get("pool_size", 50)
-            configured_subreddits = self.daily_config.get("use_subreddits", [])
-            configured_lemmy = self.daily_config.get("use_lemmy", [])
+            configured_subreddits = self.daily_config.get("use_subreddits")
+            configured_lemmy = self.daily_config.get("use_lemmy")
         else:
             max_sources = max_sources or 3
             min_score = min_score or 0
             pool_size = pool_size or 50
-            configured_subreddits = []
-            configured_lemmy = []
+            # None means use all available sources (not restricted)
+            configured_subreddits = None
+            configured_lemmy = None
 
         # Try to get hot memes from specified or all sources
         all_memes = []
@@ -659,41 +733,53 @@ class DailyMeme(commands.Cog):
                         all_memes.extend(memes)
                 else:
                     # Use configured subreddits or all available
-                    subreddits_pool = configured_subreddits if configured_subreddits else self.meme_subreddits
-                    if not subreddits_pool:
+                    # None = use all, empty list [] = use none, list with items = use those
+                    if configured_subreddits is None:
                         subreddits_pool = self.meme_subreddits
+                    else:
+                        subreddits_pool = configured_subreddits
 
-                    # Fetch from random subset of subreddits for speed (use cache if available)
-                    selected_subs = random.sample(subreddits_pool, min(max_sources, len(subreddits_pool)))
-                    logger.debug(f"📊 Fetching from {len(selected_subs)} random subreddits: {selected_subs}")
+                    if not subreddits_pool:
+                        # Skip if explicitly set to empty
+                        logger.debug("📊 Subreddit fetching skipped (none selected)")
+                    else:
+                        # Fetch from random subset of subreddits for speed (use cache if available)
+                        selected_subs = random.sample(subreddits_pool, min(max_sources, len(subreddits_pool)))
+                        logger.debug(f"📊 Fetching from {len(selected_subs)} random subreddits: {selected_subs}")
+
+                        # Parallel fetching for speed
+                        fetch_tasks = [self.fetch_reddit_meme(sub, sort="hot") for sub in selected_subs]
+                        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+                        for memes in results:
+                            if memes and not isinstance(memes, Exception):
+                                all_memes.extend(memes)
+
+            elif src == "lemmy":
+                # Use configured Lemmy communities or all available
+                # None = use all, empty list [] = use none, list with items = use those
+                if configured_lemmy is None:
+                    lemmy_pool = self.meme_lemmy
+                else:
+                    lemmy_pool = configured_lemmy
+
+                if not lemmy_pool:
+                    # Skip if explicitly set to empty
+                    logger.debug("📊 Lemmy fetching skipped (none selected)")
+                else:
+                    # Fetch from random subset of Lemmy communities for speed
+                    selected_communities = random.sample(lemmy_pool, min(max_sources, len(lemmy_pool)))
+                    logger.debug(
+                        f"📊 Fetching from {len(selected_communities)} random Lemmy communities: {selected_communities}"
+                    )
 
                     # Parallel fetching for speed
-                    fetch_tasks = [self.fetch_reddit_meme(sub, sort="hot") for sub in selected_subs]
+                    fetch_tasks = [self.fetch_lemmy_meme(community) for community in selected_communities]
                     results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
                     for memes in results:
                         if memes and not isinstance(memes, Exception):
                             all_memes.extend(memes)
-
-            elif src == "lemmy":
-                # Use configured Lemmy communities or all available
-                lemmy_pool = configured_lemmy if configured_lemmy else self.meme_lemmy
-                if not lemmy_pool:
-                    lemmy_pool = self.meme_lemmy
-
-                # Fetch from random subset of Lemmy communities for speed
-                selected_communities = random.sample(lemmy_pool, min(max_sources, len(lemmy_pool)))
-                logger.debug(
-                    f"📊 Fetching from {len(selected_communities)} random Lemmy communities: {selected_communities}"
-                )
-
-                # Parallel fetching for speed
-                fetch_tasks = [self.fetch_lemmy_meme(community) for community in selected_communities]
-                results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
-
-                for memes in results:
-                    if memes and not isinstance(memes, Exception):
-                        all_memes.extend(memes)
 
             # Add more source types here (e.g., elif src == "newsource":)
 
@@ -746,13 +832,18 @@ class DailyMeme(commands.Cog):
         return selected_meme
 
     async def post_meme(
-        self, meme: dict, channel: discord.TextChannel, mention: str = "", requested_by: discord.Member = None
+        self,
+        meme: dict,
+        channel: discord.TextChannel,
+        mention: str = "",
+        requested_by: discord.Member = None,
+        is_daily: bool = False,
     ):
         """Post a meme to the channel"""
         embed = discord.Embed(
             title=meme["title"][:256],  # Discord title limit
             url=meme["permalink"],
-            color=PINK,
+            color=Config.PINK,
             timestamp=datetime.now(),
         )
         embed.set_image(url=meme["url"])
@@ -762,12 +853,18 @@ class DailyMeme(commands.Cog):
         source_name = f"r/{meme['subreddit']}"  # Default to subreddit format
         # Add custom mappings for non-reddit sources here if needed
         if meme["subreddit"].startswith("lemmy:"):
-            # Format: "lemmy:instance@community" -> "instance@community"
-            source_name = meme["subreddit"].replace("lemmy:", "")
+            # ✅ Use new display formatter for user-friendly format (community@instance)
+            source_name = self.format_lemmy_display(meme["subreddit"])
         # e.g., if meme["subreddit"] == "othersource": source_name = "Other Source"
 
         embed.add_field(name="📍 Source", value=source_name, inline=True)
         embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
+
+        # Add requester field if a user requested it, or mark as daily meme
+        if requested_by:
+            embed.add_field(name="📤 Requested by", value=requested_by.mention, inline=True)
+        elif is_daily:
+            embed.add_field(name="📅 Daily Meme", value="Automated Post", inline=True)
 
         if meme.get("nsfw"):
             embed.add_field(name="⚠️", value="NSFW Content", inline=False)
@@ -817,7 +914,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title=meme["title"][:256],
             url=meme["permalink"],
-            color=PINK,
+            color=Config.PINK,
         )
         embed.set_image(url=meme["url"])
         embed.add_field(name="👍 Upvotes", value=f"{meme['upvotes']:,}", inline=True)
@@ -826,8 +923,8 @@ class DailyMeme(commands.Cog):
         source_name = f"r/{meme['subreddit']}"  # Default to subreddit format
         # Add custom mappings for non-reddit sources here if needed
         if meme["subreddit"].startswith("lemmy:"):
-            # Format: "lemmy:instance@community" -> "instance@community"
-            source_name = meme["subreddit"].replace("lemmy:", "")
+            # ✅ Use new display formatter for user-friendly format (community@instance)
+            source_name = self.format_lemmy_display(meme["subreddit"])
 
         embed.add_field(name="📍 Source", value=source_name, inline=True)
         embed.add_field(name="👤 Author", value=f"u/{meme['author']}", inline=True)
@@ -866,9 +963,9 @@ class DailyMeme(commands.Cog):
 
             if meme:
                 # Check if we should ping the role
-                ping_role_id = self.daily_config.get("ping_role_id")
-                mention = f"<@&{ping_role_id}>" if ping_role_id else ""
-                await self.post_meme(meme, channel, mention=mention)
+                role_id = self.daily_config.get("role_id")
+                mention = f"<@&{role_id}>" if role_id else ""
+                await self.post_meme(meme, channel, mention=mention, is_daily=True)
             else:
                 logger.error("Failed to fetch daily meme")
                 await channel.send("❌ Sorry, couldn't fetch today's meme. Try again later!")
@@ -881,9 +978,12 @@ class DailyMeme(commands.Cog):
         # Update task time
         hour = self.daily_config.get("hour", 12)
         minute = self.daily_config.get("minute", 0)
-        # Assuming local time is CET (UTC+1), convert to UTC for server
-        adjusted_hour = (hour - 1) % 24
-        self.daily_meme_task.change_interval(time=time(hour=adjusted_hour, minute=minute))
+        # Convert local time to UTC for discord.py task scheduling
+        from zoneinfo import ZoneInfo
+
+        local_time = datetime.now(ZoneInfo(Config.TIMEZONE)).replace(hour=hour, minute=minute)
+        utc_time = local_time.astimezone(ZoneInfo("UTC"))
+        self.daily_meme_task.change_interval(time=time(hour=utc_time.hour, minute=utc_time.minute))
 
         if self.daily_meme_task.is_running():
             # Task is already running, just update the interval
@@ -935,17 +1035,19 @@ class DailyMeme(commands.Cog):
 
             # Determine if it's Lemmy or Reddit
             if "@" in source:
-                # Lemmy community
-                lemmy_source = source.lower()
-                if lemmy_source not in self.meme_lemmy:
+                # Lemmy community - normalize format
+                normalized = self.normalize_lemmy_community(source)
+
+                if normalized is None:
                     await ctx.send(
                         f"❌ `{source}` is not configured. Use `!lemmycommunities` to see available communities."
                     )
                     return
 
-                await ctx.send(f"🔍 Fetching meme from {lemmy_source}...")
-                memes = await self.fetch_lemmy_meme(lemmy_source)
-                source_display = lemmy_source
+                lemmy_display = self.format_lemmy_display(normalized)
+                await ctx.send(f"🔍 Fetching meme from {lemmy_display}...")
+                memes = await self.fetch_lemmy_meme(normalized)
+                source_display = lemmy_display
             else:
                 # Reddit subreddit - normalize the input
                 subreddit = source.lower().strip().replace("r/", "")
@@ -972,12 +1074,15 @@ class DailyMeme(commands.Cog):
             meme = random.choice(memes)
 
             # Convert to the format expected by post_meme
+            # Use normalized Lemmy format if it's a Lemmy community
+            subreddit_field = source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{normalized}"
+
             meme_data = {
                 "title": meme.get("title", "Meme"),
                 "permalink": meme.get("url"),
                 "url": meme.get("url"),
                 "upvotes": meme.get("score", 0),
-                "subreddit": source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{source}",
+                "subreddit": subreddit_field,
                 "author": meme.get("author", "Unknown"),
                 "nsfw": meme.get("nsfw", False),
             }
@@ -1000,7 +1105,7 @@ class DailyMeme(commands.Cog):
                 if not is_admin_or_mod
                 else "**Mod/Admin Access:** Full management + no cooldown"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         if is_admin_or_mod:
@@ -1023,7 +1128,8 @@ class DailyMeme(commands.Cog):
                 value=(
                     "• **🎭 Get Random Meme** - Random from all sources\n"
                     "• **🎯 Choose Source** - Pick specific subreddit/community\n"
-                    "• Or use: `!meme <source>` - e.g., `!meme memes` or `!meme lemmy.world@memes`\n"
+                    "• Or use: `!meme <source>` - e.g., `!meme memes` or `!meme memes@lemmy.world`\n"
+                    "*Supports both formats: `instance@community` or `community@instance`*\n"
                     "*10 second cooldown between requests*"
                 ),
                 inline=False,
@@ -1089,18 +1195,20 @@ class DailyMeme(commands.Cog):
 
             # Determine if it's Lemmy or Reddit
             if "@" in source:
-                # Lemmy community
-                lemmy_source = source.lower()
-                if lemmy_source not in self.meme_lemmy:
+                # Lemmy community - normalize format
+                normalized = self.normalize_lemmy_community(source)
+
+                if normalized is None:
                     await interaction.response.send_message(
                         f"❌ `{source}` is not in the configured Lemmy communities.",
                         ephemeral=True,
                     )
                     return
 
-                await interaction.response.send_message(f"🔍 Fetching meme from {lemmy_source}...", ephemeral=True)
-                memes = await self.fetch_lemmy_meme(lemmy_source)
-                source_display = lemmy_source
+                lemmy_display = self.format_lemmy_display(normalized)
+                await interaction.response.send_message(f"🔍 Fetching meme from {lemmy_display}...", ephemeral=True)
+                memes = await self.fetch_lemmy_meme(normalized)
+                source_display = lemmy_display
             else:
                 # Reddit subreddit - normalize the input
                 subreddit = source.lower().strip().replace("r/", "")
@@ -1129,12 +1237,15 @@ class DailyMeme(commands.Cog):
             meme = random.choice(memes)
 
             # Convert to the format expected by post_meme
+            # Use normalized Lemmy format if it's a Lemmy community
+            subreddit_field = source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{normalized}"
+
             meme_data = {
                 "title": meme.get("title", "Meme"),
                 "permalink": meme.get("url"),
                 "url": meme.get("url"),
                 "upvotes": meme.get("score", 0),
-                "subreddit": source.lower().strip().replace("r/", "") if "@" not in source else f"lemmy:{source}",
+                "subreddit": subreddit_field,
                 "author": meme.get("author", "Unknown"),
                 "nsfw": meme.get("nsfw", False),
             }
@@ -1160,7 +1271,7 @@ class DailyMeme(commands.Cog):
                 if not is_admin_or_mod
                 else "**Mod/Admin Access:** Full management + no cooldown"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         if is_admin_or_mod:
@@ -1233,7 +1344,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🎭 Meme Subreddits Configuration",
             description=f"Currently using **{len(self.meme_subreddits)}** subreddits for meme sourcing.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Split into chunks of 10 for better display
@@ -1335,7 +1446,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🔄 Subreddits Reset",
             description=f"Reset to default configuration with **{len(self.meme_subreddits)}** subreddits.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         subreddit_list = "\n".join([f"• r/{sub}" for sub in sorted(self.meme_subreddits)])
@@ -1357,7 +1468,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🎭 Lemmy Communities Configuration",
             description=f"Currently using **{len(self.meme_lemmy)}** Lemmy communities for meme sourcing.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Split into chunks for better display
@@ -1465,7 +1576,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🔄 Lemmy Communities Reset",
             description=f"Reset to default configuration with **{len(self.meme_lemmy)}** Lemmy communities.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         community_list = "\n".join([f"• {comm}" for comm in sorted(self.meme_lemmy)])
@@ -1487,7 +1598,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🎭 Active Meme Sources",
             description=f"Currently using **{len(self.meme_sources)}** meme sources.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Show enabled sources (extend source_display when adding new sources)
@@ -1579,7 +1690,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="🔄 Sources Reset",
             description=f"Reset to default configuration with **{len(self.meme_sources)}** sources.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Extend source_display when adding new sources
@@ -1612,7 +1723,7 @@ class DailyMeme(commands.Cog):
         embed = discord.Embed(
             title="⚙️ Daily Meme Configuration",
             description="Configure when and how the daily meme is posted.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Status
@@ -1633,7 +1744,7 @@ class DailyMeme(commands.Cog):
         embed.add_field(name="🔞 NSFW", value=nsfw_status, inline=True)
 
         # Ping Role
-        role_id = config.get("ping_role_id")
+        role_id = config.get("role_id")
         role_display = f"<@&{role_id}>" if role_id else "None"
         embed.add_field(name="🔔 Ping Role", value=role_display, inline=True)
 

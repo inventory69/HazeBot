@@ -1,18 +1,14 @@
+import hashlib
+import json
+import logging
+import os
+
 import discord
 from discord.ext import commands
-from Config import (
-    ADMIN_ROLE_ID,
-    PINK,
-    MEME_CHANNEL_ID,
-    SERVER_GUIDE_CHANNEL_ID,
-    SERVER_GUIDE_CONFIG,
-    DATA_DIR,
-)
+
+import Config
+from Config import ADMIN_ROLE_ID, DATA_DIR, MEME_CHANNEL_ID, SERVER_GUIDE_CHANNEL_ID, SERVER_GUIDE_CONFIG
 from Utils.EmbedUtils import set_pink_footer
-import logging
-import json
-import hashlib
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +48,7 @@ class CommandButtonView(discord.ui.View):
                 embed = discord.Embed(
                     title="🎫 Create Support Ticket",
                     description="Choose the type of support ticket:",
-                    color=PINK,
+                    color=Config.PINK,
                 )
                 set_pink_footer(embed, bot=interaction.client.user)
 
@@ -149,7 +145,7 @@ class CommandButtonView(discord.ui.View):
                     "**Mod/Admin Access:** Full management + no cooldown\n**Memes will be posted to the meme channel!**"
                 )
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         if is_admin_or_mod:
@@ -231,7 +227,7 @@ class ServerGuide(commands.Cog):
 
         embed = discord.Embed(
             title=config["title"],
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Add banner image

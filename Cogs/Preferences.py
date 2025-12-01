@@ -1,10 +1,13 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-from typing import Any
-from Config import PINK, CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
-from Utils.EmbedUtils import set_pink_footer
 import logging
+from typing import Any
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import Config
+from Config import CHANGELOG_ROLE_ID, MEME_ROLE_ID, get_guild_id
+from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,8 @@ class PreferencesSystem(commands.Cog):
     🛠️ Preferences System Cog: Allows members to set personal preferences like changelog notifications.
     Modular and persistent with JSON.
     """
+
+    __cog_name__ = "Preferences"
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -52,7 +57,7 @@ class PreferencesSystem(commands.Cog):
         embed = discord.Embed(
             title="🛠️ Preferences Menu",
             description="Customize your notification preferences.",
-            color=PINK,
+            color=Config.PINK,
         )
 
         embed.add_field(

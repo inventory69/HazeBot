@@ -1,9 +1,10 @@
 # 📦 Built-in modules
 import os
+from typing import Dict, Optional
 
 # 📥 Custom modules
 from dotenv import load_dotenv
-from typing import Dict, Optional
+
 from Utils.Logger import Logger
 
 

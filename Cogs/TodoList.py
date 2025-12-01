@@ -1,20 +1,17 @@
-from discord.ext import commands
-from discord import app_commands
-import discord
-import os
-import json
-import openai
 import asyncio
-from typing import Dict, List, Any, Optional
-from Config import (
-    PINK,
-    ADMIN_ROLE_ID,
-    MODERATOR_ROLE_ID,
-    get_guild_id,
-    get_data_dir,
-)
-from Utils.EmbedUtils import set_pink_footer
+import json
 import logging
+import os
+from typing import Any, Dict, List, Optional
+
+import discord
+import openai
+from discord import app_commands
+from discord.ext import commands
+
+import Config
+from Config import ADMIN_ROLE_ID, MODERATOR_ROLE_ID, get_data_dir, get_guild_id
+from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +84,18 @@ async def load_todo_data() -> Dict[str, Any]:
             # Validate current_page is within bounds
             if channel_data["current_page"] >= len(channel_data["pages"]):
                 channel_data["current_page"] = 0
+
+        # Migrate to assignment fields
+        for channel_id, channel_data in data["channels"].items():
+            for page in channel_data.get("pages", []):
+                for item in page.get("items", []):
+                    # Add assignment fields if missing
+                    if "assigned_to_id" not in item:
+                        item["assigned_to_id"] = None
+                        item["assigned_to_name"] = None
+                        item["assigned_by_id"] = None
+                        item["assigned_by_name"] = None
+                        item["assigned_at"] = None
 
         return data
     except Exception as e:
@@ -302,7 +311,7 @@ class TodoPageNavigationView(discord.ui.View):
         embed = discord.Embed(
             title="⚙️ Page Management",
             description=description,
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
 
@@ -333,7 +342,7 @@ class TodoPageNavigationView(discord.ui.View):
                             try:
                                 old_message = await channel.fetch_message(message_id)
                                 await old_message.delete()
-                                
+
                                 # Remove from persistent views
                                 if cog:
                                     cog._remove_persistent_view(self.channel_id, message_id)
@@ -721,7 +730,7 @@ class TodoConfirmView(discord.ui.View):
 
         # Send confirmation via followup
         await interaction.followup.send("✅ To-do item added successfully!", ephemeral=True)
-        
+
         # Delete the view message (the original preview with buttons)
         if self.view_message:
             try:
@@ -738,7 +747,7 @@ class TodoConfirmView(discord.ui.View):
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_message("❌ Cancelled. Item was not added.", ephemeral=True)
-        
+
         # Delete the view message (the original preview with buttons)
         if self.view_message:
             try:
@@ -825,7 +834,7 @@ class TodoModal(discord.ui.Modal, title="✏️ Update To-Do List"):
                     f"**Description:** {formatted_task['description']}\n\n"
                     "Do you want to add this to the to-do list?"
                 ),
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
 
@@ -1014,7 +1023,7 @@ Rules:
         total_pages: Optional[int] = None,
     ) -> discord.Embed:
         """Create a formatted to-do list embed."""
-        embed = discord.Embed(color=PINK)
+        embed = discord.Embed(color=Config.PINK)
 
         # Use page title if provided, otherwise use default
         if page_title:
@@ -1044,6 +1053,16 @@ Rules:
                 if item.get("description"):
                     description_parts.append(f"{item['description']}")
                 description_parts.append(f"👤 *Added by {item.get('author_name', 'Unknown')}*")
+                # Add assignment info
+                assigned_to = item.get("assigned_to_name")
+                if assigned_to:
+                    assigned_by = item.get("assigned_by_name")
+                    if assigned_by:
+                        # Admin assigned
+                        description_parts.append(f"📌 *Assigned to {assigned_to} by {assigned_by}*")
+                    else:
+                        # Self-claimed
+                        description_parts.append(f"🙋 *Claimed by {assigned_to}*")
                 description_parts.append("")  # Empty line
 
         # Add medium priority items
@@ -1054,6 +1073,16 @@ Rules:
                 if item.get("description"):
                     description_parts.append(f"{item['description']}")
                 description_parts.append(f"👤 *Added by {item.get('author_name', 'Unknown')}*")
+                # Add assignment info
+                assigned_to = item.get("assigned_to_name")
+                if assigned_to:
+                    assigned_by = item.get("assigned_by_name")
+                    if assigned_by:
+                        # Admin assigned
+                        description_parts.append(f"📌 *Assigned to {assigned_to} by {assigned_by}*")
+                    else:
+                        # Self-claimed
+                        description_parts.append(f"🙋 *Claimed by {assigned_to}*")
                 description_parts.append("")  # Empty line
 
         # Add low priority items
@@ -1064,6 +1093,16 @@ Rules:
                 if item.get("description"):
                     description_parts.append(f"{item['description']}")
                 description_parts.append(f"👤 *Added by {item.get('author_name', 'Unknown')}*")
+                # Add assignment info
+                assigned_to = item.get("assigned_to_name")
+                if assigned_to:
+                    assigned_by = item.get("assigned_by_name")
+                    if assigned_by:
+                        # Admin assigned
+                        description_parts.append(f"📌 *Assigned to {assigned_to} by {assigned_by}*")
+                    else:
+                        # Self-claimed
+                        description_parts.append(f"🙋 *Claimed by {assigned_to}*")
                 description_parts.append("")  # Empty line
 
         if not items:
@@ -1113,7 +1152,7 @@ class TodoManageView(discord.ui.View):
         embed = discord.Embed(
             title="Select Priority",
             description="Choose the priority level for the new to-do item:",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         view = PrioritySelectView(self.bot, self.channel_id, action="add", management_message=self.management_message)
@@ -1150,7 +1189,7 @@ class TodoManageView(discord.ui.View):
             view = TodoEditSelectView(self.bot, self.channel_id, items)
 
             embed = discord.Embed(
-                title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=PINK
+                title="✏️ Edit To-Do Item", description="Select the item you want to edit:", color=Config.PINK
             )
             set_pink_footer(embed, bot=self.bot.user)
 
@@ -1253,6 +1292,445 @@ class TodoManageView(discord.ui.View):
             logger.error(f"Error clearing to-do items: {e}")
             await interaction.followup.send(f"❌ Error clearing items: {str(e)}", ephemeral=True)
 
+    @discord.ui.button(label="Assign Task", style=discord.ButtonStyle.primary, emoji="👥", row=2)
+    async def assign_task(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        """Assign a task to another user (Admin/Mod only)."""
+        if not is_mod_or_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
+            return
+
+        # Load data
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        current_page_idx = channel_data.get("current_page", 0)
+        pages = channel_data.get("pages", [])
+
+        if 0 <= current_page_idx < len(pages):
+            items = pages[current_page_idx].get("items", [])
+
+            if not items:
+                await interaction.response.send_message("❌ No items on current page!", ephemeral=True, delete_after=10)
+                return
+
+            # Show item selector
+            view = TodoAssignSelectView(self.bot, self.channel_id, items, current_page_idx)
+            embed = discord.Embed(
+                title="👥 Assign Task to User",
+                description="Select a task to assign to another user:",
+                color=Config.PINK,
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=60)
+
+    @discord.ui.button(label="Claim Task", style=discord.ButtonStyle.success, emoji="🙋", row=2)
+    async def claim_task(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        """Claim a task for yourself (Admin/Mod only)."""
+        if not is_mod_or_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
+            return
+
+        # Load data
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        current_page_idx = channel_data.get("current_page", 0)
+        pages = channel_data.get("pages", [])
+
+        if 0 <= current_page_idx < len(pages):
+            items = pages[current_page_idx].get("items", [])
+
+            if not items:
+                await interaction.response.send_message("❌ No items on current page!", ephemeral=True, delete_after=10)
+                return
+
+            # Show item selector for claiming
+            view = TodoClaimSelectView(self.bot, self.channel_id, items, current_page_idx, interaction.user)
+            embed = discord.Embed(
+                title="🙋 Claim Task for Yourself",
+                description="Select a task to claim for yourself:",
+                color=Config.PINK,
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=60)
+
+    @discord.ui.button(label="Unassign Task", style=discord.ButtonStyle.secondary, emoji="❌", row=2)
+    async def unassign_task(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        """Remove assignment from a task (Admin/Mod only)."""
+        if not is_mod_or_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ You do not have permission to use this.",
+                ephemeral=True,
+                delete_after=10,
+            )
+            return
+
+        # Load data
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        current_page_idx = channel_data.get("current_page", 0)
+        pages = channel_data.get("pages", [])
+
+        if 0 <= current_page_idx < len(pages):
+            items = pages[current_page_idx].get("items", [])
+
+            # Filter only assigned items
+            assigned_items = [(idx, item) for idx, item in enumerate(items) if item.get("assigned_to_id") is not None]
+
+            if not assigned_items:
+                await interaction.response.send_message(
+                    "❌ No assigned tasks on current page!", ephemeral=True, delete_after=10
+                )
+                return
+
+            # Show unassign selector
+            view = TodoUnassignSelectView(self.bot, self.channel_id, assigned_items, current_page_idx)
+            embed = discord.Embed(
+                title="❌ Unassign Task", description="Select a task to remove assignment:", color=Config.PINK
+            )
+            set_pink_footer(embed, bot=self.bot.user)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=60)
+
+
+# === Select views for task assignment ===
+class TodoAssignSelectView(discord.ui.View):
+    """View for selecting a task to assign to another user."""
+
+    def __init__(self, bot: commands.Bot, channel_id: int, items: List[Dict], page_idx: int) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.channel_id = channel_id
+        self.items = items
+        self.page_idx = page_idx
+
+        # Create select menu
+        options = []
+        for idx, item in enumerate(items):
+            title = item.get("title", "No title")
+            if len(title) > 50:
+                title = title[:47] + "..."
+            priority_emoji = PRIORITY_EMOJIS.get(item.get("priority", "low"), "🟢")
+
+            # Show current assignment status
+            assigned_to = item.get("assigned_to_name")
+            if assigned_to:
+                description = f"{priority_emoji} Currently: {assigned_to}"
+            else:
+                description = f"{priority_emoji} Unassigned"
+
+            options.append(
+                discord.SelectOption(
+                    label=f"{idx + 1}. {title}",
+                    value=str(idx),
+                    description=description[:100],
+                    emoji=priority_emoji,
+                )
+            )
+
+        select = discord.ui.Select(
+            placeholder="Choose a task to assign...", options=options, min_values=1, max_values=1
+        )
+        select.callback = self.select_callback
+        self.add_item(select)
+
+    async def select_callback(self, interaction: discord.Interaction) -> None:
+        """Handle task selection."""
+        item_idx = int(interaction.data["values"][0])
+        item = self.items[item_idx]
+
+        # Show user selector
+        view = UserSelectView(self.bot, self.channel_id, self.page_idx, item_idx, item, interaction.user)
+
+        embed = discord.Embed(
+            title="👥 Select User to Assign",
+            description=f"**Task:** {item.get('title', 'No title')}\n\nSelect the user to assign this task to:",
+            color=Config.PINK,
+        )
+
+        # Show current assignee if exists
+        if item.get("assigned_to_id"):
+            embed.add_field(
+                name="⚠️ Currently Assigned To", value=f"{item.get('assigned_to_name', 'Unknown')}", inline=False
+            )
+            embed.add_field(name="Note", value="This will reassign the task to the new user.", inline=False)
+
+        set_pink_footer(embed, bot=self.bot.user)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True, delete_after=60)
+
+
+class UserSelectView(discord.ui.View):
+    """View with user select for assignment."""
+
+    def __init__(
+        self,
+        bot: commands.Bot,
+        channel_id: int,
+        page_idx: int,
+        item_idx: int,
+        item: Dict,
+        assigner: discord.Member,
+    ) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.channel_id = channel_id
+        self.page_idx = page_idx
+        self.item_idx = item_idx
+        self.item = item
+        self.assigner = assigner
+
+        # Add user select menu
+        user_select = discord.ui.UserSelect(placeholder="Select a user to assign...", min_values=1, max_values=1)
+        user_select.callback = self.user_selected
+        self.add_item(user_select)
+
+    async def user_selected(self, interaction: discord.Interaction) -> None:
+        """Handle user selection and perform assignment."""
+        from datetime import datetime, timezone
+
+        selected_user = interaction.data["values"][0]
+
+        # Resolve user
+        user = interaction.guild.get_member(int(selected_user))
+        if not user:
+            await interaction.response.send_message("❌ Could not find that user!", ephemeral=True)
+            return
+
+        # Don't allow assigning to bots
+        if user.bot:
+            await interaction.response.send_message("❌ Cannot assign tasks to bots!", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Load data
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        item = channel_data["pages"][self.page_idx]["items"][self.item_idx]
+
+        # Check if already assigned to this user
+        if item.get("assigned_to_id") == user.id:
+            await interaction.followup.send(f"❌ Task is already assigned to {user.display_name}!", ephemeral=True)
+            return
+
+        # Store old assignee for logging
+        old_assignee = item.get("assigned_to_name")
+
+        # Assign task
+        item["assigned_to_id"] = user.id
+        item["assigned_to_name"] = user.display_name
+        item["assigned_by_id"] = self.assigner.id
+        item["assigned_by_name"] = self.assigner.display_name
+        item["assigned_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Save
+        save_todo_data(data)
+
+        # Update main todo display
+        modal = TodoModal(self.bot, channel_id=self.channel_id)
+        await modal.update_todo_message(interaction, data, self.channel_id)
+
+        # Log
+        if old_assignee:
+            logger.info(
+                f"{self.assigner} reassigned task {self.item_idx + 1} from {old_assignee} "
+                f"to {user} in channel {self.channel_id}"
+            )
+        else:
+            logger.info(f"{self.assigner} assigned task {self.item_idx + 1} to {user} in channel {self.channel_id}")
+
+        # Confirmation
+        embed = discord.Embed(
+            title="✅ Task Assigned Successfully",
+            description=(
+                f"**Task:** {item['title']}\n**Assigned to:** {user.mention}\n**Assigned by:** {self.assigner.mention}"
+            ),
+            color=discord.Color.green(),
+        )
+
+        if old_assignee:
+            embed.add_field(name="Previous Assignee", value=old_assignee, inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+class TodoClaimSelectView(discord.ui.View):
+    """View for selecting a task to claim for yourself."""
+
+    def __init__(
+        self, bot: commands.Bot, channel_id: int, items: List[Dict], page_idx: int, claimer: discord.Member
+    ) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.channel_id = channel_id
+        self.items = items
+        self.page_idx = page_idx
+        self.claimer = claimer
+
+        # Create select menu
+        options = []
+        for idx, item in enumerate(items):
+            title = item.get("title", "No title")
+            if len(title) > 50:
+                title = title[:47] + "..."
+            priority_emoji = PRIORITY_EMOJIS.get(item.get("priority", "low"), "🟢")
+
+            # Show current assignment status
+            assigned_to = item.get("assigned_to_name")
+            if assigned_to:
+                description = f"{priority_emoji} Currently: {assigned_to}"
+            else:
+                description = f"{priority_emoji} Unassigned"
+
+            options.append(
+                discord.SelectOption(
+                    label=f"{idx + 1}. {title}",
+                    value=str(idx),
+                    description=description[:100],
+                    emoji=priority_emoji,
+                )
+            )
+
+        select = discord.ui.Select(placeholder="Choose a task to claim...", options=options, min_values=1, max_values=1)
+        select.callback = self.select_callback
+        self.add_item(select)
+
+    async def select_callback(self, interaction: discord.Interaction) -> None:
+        """Handle task claim."""
+        from datetime import datetime, timezone
+
+        item_idx = int(interaction.data["values"][0])
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Load data
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        item = channel_data["pages"][self.page_idx]["items"][item_idx]
+
+        # Check if already assigned to this user
+        if item.get("assigned_to_id") == self.claimer.id:
+            await interaction.followup.send("❌ You already claimed this task!", ephemeral=True)
+            return
+
+        # Store old assignee for logging (if reassigning)
+        old_assignee = item.get("assigned_to_name")
+
+        # Claim task (self-assignment, no assigned_by)
+        item["assigned_to_id"] = self.claimer.id
+        item["assigned_to_name"] = self.claimer.display_name
+        item["assigned_by_id"] = None  # Self-claim
+        item["assigned_by_name"] = None
+        item["assigned_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Save
+        save_todo_data(data)
+
+        # Update display
+        modal = TodoModal(self.bot, channel_id=self.channel_id)
+        await modal.update_todo_message(interaction, data, self.channel_id)
+
+        # Log
+        if old_assignee:
+            logger.info(
+                f"{self.claimer} claimed task {item_idx + 1} (previously {old_assignee}) in channel {self.channel_id}"
+            )
+        else:
+            logger.info(f"{self.claimer} claimed task {item_idx + 1} in channel {self.channel_id}")
+
+        # Confirmation
+        embed = discord.Embed(
+            title="✅ Task Claimed Successfully",
+            description=f"**Task:** {item['title']}\n**Claimed by:** {self.claimer.mention}",
+            color=discord.Color.green(),
+        )
+
+        if old_assignee:
+            embed.add_field(name="⚠️ Note", value=f"This task was reassigned from **{old_assignee}**", inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+class TodoUnassignSelectView(discord.ui.View):
+    """View for selecting a task to unassign."""
+
+    def __init__(self, bot: commands.Bot, channel_id: int, assigned_items: List[tuple], page_idx: int) -> None:
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.channel_id = channel_id
+        self.assigned_items = assigned_items
+        self.page_idx = page_idx
+
+        # Create select menu
+        options = []
+        for idx, item in assigned_items:
+            title = item.get("title", "No title")
+            if len(title) > 50:
+                title = title[:47] + "..."
+            priority_emoji = PRIORITY_EMOJIS.get(item.get("priority", "low"), "🟢")
+            assigned_to = item.get("assigned_to_name", "Unknown")
+
+            options.append(
+                discord.SelectOption(
+                    label=f"{idx + 1}. {title}",
+                    value=str(idx),
+                    description=f"{priority_emoji} Assigned to: {assigned_to}"[:100],
+                    emoji="👤",
+                )
+            )
+
+        select = discord.ui.Select(
+            placeholder="Choose a task to unassign...", options=options, min_values=1, max_values=1
+        )
+        select.callback = self.select_callback
+        self.add_item(select)
+
+    async def select_callback(self, interaction: discord.Interaction) -> None:
+        """Handle unassignment."""
+        item_idx = int(interaction.data["values"][0])
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Load data
+        data = await load_todo_data()
+        channel_data = await get_channel_data(data, self.channel_id)
+        item = channel_data["pages"][self.page_idx]["items"][item_idx]
+
+        # Store info for logging
+        old_assignee = item.get("assigned_to_name", "Unknown")
+
+        # Remove assignment
+        item["assigned_to_id"] = None
+        item["assigned_to_name"] = None
+        item["assigned_by_id"] = None
+        item["assigned_by_name"] = None
+        item["assigned_at"] = None
+
+        # Save
+        save_todo_data(data)
+
+        # Update display
+        modal = TodoModal(self.bot, channel_id=self.channel_id)
+        await modal.update_todo_message(interaction, data, self.channel_id)
+
+        # Log
+        logger.info(
+            f"{interaction.user} unassigned {old_assignee} from task {item_idx + 1} in channel {self.channel_id}"
+        )
+
+        # Confirmation
+        embed = discord.Embed(
+            title="✅ Task Unassigned Successfully",
+            description=f"**Task:** {item['title']}\n**Removed:** {old_assignee}",
+            color=discord.Color.green(),
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
 
 # === Select view for editing specific items ===
 class TodoEditSelectView(discord.ui.View):
@@ -1302,7 +1780,7 @@ class TodoEditSelectView(discord.ui.View):
             embed = discord.Embed(
                 title="Edit Priority",
                 description=f"Editing: **{item['title']}**\n\nChoose new priority level:",
-                color=PINK,
+                color=Config.PINK,
             )
             set_pink_footer(embed, bot=self.bot.user)
             view = PrioritySelectView(
@@ -1549,7 +2027,7 @@ class TodoList(commands.Cog):
             description=f"Use the buttons below to manage the to-do list for <#{channel_id}>.\n\n"
             f"**Current Page:** {current_page_idx + 1}/{len(pages)}\n"
             f"**Items on Current Page:** {current_items}",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
 

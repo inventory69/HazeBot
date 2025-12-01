@@ -1,15 +1,17 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import aiohttp
-import logging
 import asyncio
-from typing import Optional, Dict, Any, List
+import logging
 from difflib import get_close_matches
+from typing import Any, Dict, List, Optional
 
-from Config import PINK, get_guild_id
-from Utils.EmbedUtils import set_pink_footer
+import aiohttp
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import Config
+from Config import get_guild_id
 from Utils.CacheUtils import file_cache
+from Utils.EmbedUtils import set_pink_footer
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ class WarframeHubView(discord.ui.View):
                 await interaction.followup.send("❌ No active invasions found.", ephemeral=True)
                 return
 
-            embed = discord.Embed(title="🌍 Active Invasions", color=PINK)
+            embed = discord.Embed(title="🌍 Active Invasions", color=Config.PINK)
 
             for invasion in invasions[:5]:  # Max 5 invasions
                 node = invasion.get("node", "Unknown")
@@ -87,7 +89,7 @@ class WarframeHubView(discord.ui.View):
                 await interaction.followup.send("❌ No active sortie found.", ephemeral=True)
                 return
 
-            embed = discord.Embed(title="⚔️ Current Sortie", color=PINK)
+            embed = discord.Embed(title="⚔️ Current Sortie", color=Config.PINK)
 
             boss = sortie.get("boss", "Unknown")
             faction = sortie.get("faction", "Unknown")
@@ -153,7 +155,9 @@ class WarframeMarketModal(discord.ui.Modal, title="🔍 Search Warframe Market")
                 await interaction.followup.send(embed=embed, view=view, ephemeral=True)
             else:
                 embed = discord.Embed(
-                    title=f"📦 {item_name_display}", description="Market data temporarily unavailable.", color=PINK
+                    title=f"📦 {item_name_display}",
+                    description="Market data temporarily unavailable.",
+                    color=Config.PINK,
                 )
                 set_pink_footer(embed, bot=self.cog.bot.user)
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -194,7 +198,7 @@ class WarframeStatusView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
 
         alerts = await self.cog.get_alerts()
-        embed = discord.Embed(title="🚨 Active Alerts", color=PINK)
+        embed = discord.Embed(title="🚨 Active Alerts", color=Config.PINK)
 
         if alerts:
             for alert in alerts[:5]:
@@ -219,7 +223,7 @@ class WarframeStatusView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
 
         fissures = await self.cog.get_fissures()
-        embed = discord.Embed(title="🌌 Void Fissures", color=PINK)
+        embed = discord.Embed(title="🌌 Void Fissures", color=Config.PINK)
 
         if fissures:
             for fissure in fissures[:5]:
@@ -246,7 +250,7 @@ class WarframeStatusView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
 
         sortie = await self.cog.get_sortie()
-        embed = discord.Embed(title="⚔️ Current Sortie", color=PINK)
+        embed = discord.Embed(title="⚔️ Current Sortie", color=Config.PINK)
 
         if sortie and not sortie.get("expired", True):
             boss = sortie.get("boss", "Unknown")
@@ -274,7 +278,7 @@ class WarframeStatusView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
 
         invasions = await self.cog.get_invasions()
-        embed = discord.Embed(title="🌍 Active Invasions", color=PINK)
+        embed = discord.Embed(title="🌍 Active Invasions", color=Config.PINK)
 
         if invasions:
             for invasion in invasions[:3]:
@@ -420,7 +424,7 @@ class WarframeOrderSelectView(discord.ui.View):
         embed = discord.Embed(
             title="📋 Trade Message Ready",
             description=f"Copy this message and paste it in Warframe's in-game chat to {action} **{username}**:",
-            color=PINK,
+            color=Config.PINK,
         )
 
         embed.add_field(
@@ -494,7 +498,7 @@ class WarframeOrdersView(discord.ui.View):
                 "🟢 = Online/Ingame • ⚫ = Offline\n\n"
                 "The message will be formatted exactly like warframe.market for easy copy-paste!"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         item_name = self.item_data.get("i18n", {}).get("en", {}).get("name", "Unknown")
@@ -575,7 +579,7 @@ class WarframeMarketView(discord.ui.View):
                 "🟢 = Online/Ingame • ⚫ = Offline\n\n"
                 "The message will be formatted exactly like warframe.market for easy copy-paste!"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         item_name = self.item_data.get("i18n", {}).get("en", {}).get("name", "Unknown")
@@ -1014,7 +1018,7 @@ class Warframe(commands.Cog):
     # Embed Creation Methods
     async def create_status_embed(self) -> discord.Embed:
         """Create embed with current Warframe status"""
-        embed = discord.Embed(title="🌌 Warframe Status", color=PINK)
+        embed = discord.Embed(title="🌌 Warframe Status", color=Config.PINK)
 
         # Get data with error handling
         alerts = await self.get_alerts()
@@ -1081,7 +1085,7 @@ class Warframe(commands.Cog):
         max_price = item_data.get("max_price", 0)
         volume = item_data.get("volume", 0)
 
-        embed = discord.Embed(title=f"💰 {item_name or 'Unknown Item'}", color=PINK)
+        embed = discord.Embed(title=f"💰 {item_name or 'Unknown Item'}", color=Config.PINK)
 
         # Add timestamp to show data freshness
         import datetime
@@ -1105,7 +1109,7 @@ class Warframe(commands.Cog):
     async def create_orders_embed(self, item_data: Dict[str, Any], orders: List[Dict[str, Any]]) -> discord.Embed:
         """Create embed showing buy/sell orders (improved with top orders)"""
         item_name = item_data.get("i18n", {}).get("en", {}).get("name", "Unknown")
-        embed = discord.Embed(title=f"📋 Orders: {item_name}", color=PINK)
+        embed = discord.Embed(title=f"📋 Orders: {item_name}", color=Config.PINK)
 
         # Try to get top orders for better performance
         top_data = await self.get_item_top_orders(item_data["slug"])
@@ -1175,7 +1179,7 @@ class Warframe(commands.Cog):
                 "**Quick Access:**\n"
                 "Use the buttons below to access all features instantly!"
             ),
-            color=PINK,
+            color=Config.PINK,
         )
 
         # Add status overview
@@ -1282,7 +1286,7 @@ class Warframe(commands.Cog):
                 await ctx.send(embed=embed, view=view)
             else:
                 embed = discord.Embed(
-                    title=f"📦 {item_name}", description="Market data temporarily unavailable.", color=PINK
+                    title=f"📦 {item_name}", description="Market data temporarily unavailable.", color=Config.PINK
                 )
                 set_pink_footer(embed, bot=self.bot.user)
                 await ctx.send(embed=embed)
@@ -1324,7 +1328,7 @@ class Warframe(commands.Cog):
                 await interaction.followup.send(embed=embed, view=view)
             else:
                 embed = discord.Embed(
-                    title=f"📦 {item_name}", description="Market data temporarily unavailable.", color=PINK
+                    title=f"📦 {item_name}", description="Market data temporarily unavailable.", color=Config.PINK
                 )
                 set_pink_footer(embed, bot=self.bot.user)
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -1373,7 +1377,7 @@ class Warframe(commands.Cog):
                 await ctx.send("❌ No active invasions found.")
                 return
 
-            embed = discord.Embed(title="🌍 Active Invasions", color=PINK)
+            embed = discord.Embed(title="🌍 Active Invasions", color=Config.PINK)
 
             for invasion in invasions[:5]:  # Max 5 invasions
                 node = invasion.get("node", "Unknown")
@@ -1406,7 +1410,7 @@ class Warframe(commands.Cog):
                 await ctx.send("❌ No active sortie found.")
                 return
 
-            embed = discord.Embed(title="⚔️ Current Sortie", color=PINK)
+            embed = discord.Embed(title="⚔️ Current Sortie", color=Config.PINK)
 
             boss = sortie.get("boss", "Unknown")
             faction = sortie.get("faction", "Unknown")

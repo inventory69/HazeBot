@@ -1,22 +1,17 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-import os
-import logging
 import json
+import logging
+import os
 from datetime import datetime
-from typing import Dict, List, Any
-from Config import (
-    PINK,
-    ADMIN_ROLE_ID,
-    MODERATOR_ROLE_ID,
-    MOD_DATA_FILE,
-    CHANGELOG_ROLE_ID,
-    MEME_ROLE_ID,
-    get_guild_id,
-)
-from Utils.EmbedUtils import set_pink_footer
+from typing import Any, Dict, List
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+import Config
+from Config import ADMIN_ROLE_ID, CHANGELOG_ROLE_ID, MEME_ROLE_ID, MOD_DATA_FILE, MODERATOR_ROLE_ID, get_guild_id
 from Utils.CacheUtils import cache_instance as cache
+from Utils.EmbedUtils import set_pink_footer
 
 # === File Logger for this cog only ===
 LOG_DIR = "Logs"
@@ -76,7 +71,7 @@ def create_modpanel_embed(bot_user: discord.User) -> discord.Embed:
     embed = discord.Embed(
         title="📦 Mod Panel",
         description="Quick moderation actions for Slot Keepers and Admins.",
-        color=PINK,
+        color=Config.PINK,
     )
     embed.add_field(
         name="Actions",
@@ -410,6 +405,8 @@ class ModPanel(commands.Cog):
     📦 Mod Panel Cog: Quick moderation actions for Slot Keepers and Admins.
     """
 
+    __cog_name__ = "ModPerks"
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
@@ -417,7 +414,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title="📦 Mod Panel Help",
             description="Quick moderation actions for Slot Keepers and Admins.\nUse `!modpanel` or `/modpanel`.",
-            color=PINK,
+            color=Config.PINK,
         )
         embed.add_field(
             name="Actions",
@@ -486,7 +483,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title="📋 Mod Tools",
             description="Quick access to moderation tools.\nSelect a user for details or use the buttons below.",
-            color=PINK,
+            color=Config.PINK,
         )
         set_pink_footer(embed, bot=self.bot.user)
         members = [
@@ -539,7 +536,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title="📊 Moderation Overview",
             description="Overview of moderation actions taken.",
-            color=PINK,
+            color=Config.PINK,
         )
         actions = ["warnings", "kicks", "bans", "mutes"]
         for action in actions:
@@ -628,7 +625,7 @@ class ModPanel(commands.Cog):
         embed = discord.Embed(
             title=f"📊 Moderation Details for {user.display_name}",
             description=f"Detailed moderation actions for {user.mention}.",
-            color=PINK,
+            color=Config.PINK,
         )
         actions = ["warnings", "kicks", "bans", "mutes"]
         for action in actions:
@@ -707,27 +704,29 @@ class ModPanel(commands.Cog):
             else:
                 await ctx_or_interaction.response.send_message(message, ephemeral=True)
             return
-        
+
         guild = ctx_or_interaction.guild if hasattr(ctx_or_interaction, "guild") else ctx_or_interaction.guild
-        
+
         # Get both roles
         changelog_role = guild.get_role(CHANGELOG_ROLE_ID)
         meme_role = guild.get_role(MEME_ROLE_ID)
-        
+
         # Build description with both opt-in types
         description_parts = []
-        
+
         # Changelog opt-ins
         if changelog_role:
             users_with_changelog = [member for member in guild.members if changelog_role in member.roles]
             if users_with_changelog:
                 user_list = "\n".join([f"<@{member.id}> ({member.display_name})" for member in users_with_changelog])
-                description_parts.append(f"**📢 Changelog Notifications ({len(users_with_changelog)} users):**\n{user_list}")
+                description_parts.append(
+                    f"**📢 Changelog Notifications ({len(users_with_changelog)} users):**\n{user_list}"
+                )
             else:
                 description_parts.append("**📢 Changelog Notifications:**\nNo users opted in.")
         else:
             description_parts.append("**📢 Changelog Notifications:**\n❌ Role not found.")
-        
+
         # Daily Meme opt-ins
         if meme_role:
             users_with_meme = [member for member in guild.members if meme_role in member.roles]
@@ -738,10 +737,10 @@ class ModPanel(commands.Cog):
                 description_parts.append("**🎭 Daily Memes:**\nNo users opted in.")
         else:
             description_parts.append("**🎭 Daily Memes:**\n❌ Role not found.")
-        
+
         description = "\n\n".join(description_parts)
-        
-        embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=PINK)
+
+        embed = discord.Embed(title="📊 Opt-Ins Overview", description=description, color=Config.PINK)
         set_pink_footer(embed, bot=self.bot.user)
         if hasattr(ctx_or_interaction, "send"):
             await ctx_or_interaction.send(embed=embed)
