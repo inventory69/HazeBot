@@ -123,9 +123,9 @@ class APIServer(commands.Cog):
 
                     logger.info(f"API server successfully bound to port {self.api_port}")
 
-                    # Run the server with SocketIO
+                    # Run the server with SocketIO (log_output=False to suppress HTTP request logs)
                     socketio.run(
-                        app, host="0.0.0.0", port=self.api_port, debug=False, use_reloader=False, log_output=True
+                        app, host="0.0.0.0", port=self.api_port, debug=False, use_reloader=False, log_output=False
                     )
 
                     # Only log if this was an intentional shutdown
