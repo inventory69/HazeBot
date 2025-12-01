@@ -21,6 +21,10 @@ root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
+# Suppress werkzeug HTTP request logs (Flask API)
+werkzeug_logger = logging.getLogger("werkzeug")
+werkzeug_logger.setLevel(logging.WARNING)  # Only show warnings and errors, not INFO (HTTP requests)
+
 # Now imports
 import asyncio
 import difflib
