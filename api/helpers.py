@@ -19,11 +19,9 @@ def init_helpers(config):
     Config = config
 
 
-# Suppress werkzeug HTTP request logs completely
-# Set level to WARNING to only show errors, not INFO (HTTP requests)
+# COMPLETELY disable werkzeug HTTP request logs
 werkzeug_logger = logging.getLogger("werkzeug")
-werkzeug_logger.setLevel(logging.WARNING)
-werkzeug_logger.propagate = True  # Still propagate warnings/errors to parent
+werkzeug_logger.disabled = True  # Nuclear option: disable logger completely
 
 
 # Upvotes storage helpers

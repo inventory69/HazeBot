@@ -21,9 +21,9 @@ root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
-# Suppress werkzeug HTTP request logs (Flask API)
+# Suppress werkzeug HTTP request logs (Flask API) - NUCLEAR OPTION
 werkzeug_logger = logging.getLogger("werkzeug")
-werkzeug_logger.setLevel(logging.WARNING)  # Only show warnings and errors, not INFO (HTTP requests)
+werkzeug_logger.disabled = True  # Completely disable werkzeug logging
 
 # Now imports
 import asyncio
