@@ -80,21 +80,10 @@ NEGATIVE_EMOJIS = {
 }
 
 
-# Configure logging - suppress 200 OK responses
-class NoSuccessRequestsFilter(logging.Filter):
-    def filter(self, record):
-        # Filter out successful requests (200 OK)
-        msg = record.getMessage()
-        if " 200 " in msg and any(
-            method in msg for method in ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-        ):
-            return False
-        return True
-
-
-# Apply filter to werkzeug logger (Flask's request logger)
+# Configure logging - suppress HTTP request logs completely
+# Set werkzeug logger to WARNING level to suppress INFO level HTTP request logs
 werkzeug_logger = logging.getLogger("werkzeug")
-werkzeug_logger.addFilter(NoSuccessRequestsFilter())
+werkzeug_logger.setLevel(logging.WARNING)
 
 # Secret key for JWT (should be in environment variable in production)
 app.config["SECRET_KEY"] = os.getenv("API_SECRET_KEY", "dev-secret-key-change-in-production")
