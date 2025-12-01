@@ -166,6 +166,52 @@ def get_user_profile():
             # Warnings are optional
             pass
 
+        # Get resolved tickets (for admins/mods)
+        resolved_tickets = 0
+        if any(role.id in [Config.ADMIN_ROLE_ID, Config.MODERATOR_ROLE_ID] for role in member.roles):
+            try:
+                from Cogs.TicketSystem import load_tickets
+
+                tickets_sync = load_tickets()
+                if hasattr(tickets_sync, "__await__"):
+                    tickets = asyncio.run(tickets_sync)
+                else:
+                    tickets = tickets_sync
+
+                for ticket in tickets:
+                    if ticket["status"] == "Closed" and (
+                        ticket.get("claimed_by") == int(discord_id) or ticket.get("assigned_to") == int(discord_id)
+                    ):
+                        resolved_tickets += 1
+            except Exception:
+                pass
+
+        # Get activity stats
+        activity = {"messages": 0, "images": 0, "memes_requested": 0, "memes_generated": 0}
+        try:
+            from Cogs.Leaderboard import get_user_activity
+
+            activity_sync = get_user_activity(int(discord_id))
+            if hasattr(activity_sync, "__await__"):
+                activity_data = asyncio.run(activity_sync)
+            else:
+                activity_data = activity_sync
+            activity["messages"] = activity_data.get("messages", 0)
+            activity["images"] = activity_data.get("images", 0)
+        except Exception:
+            pass
+
+        # Get meme stats
+        try:
+            from Cogs.Profile import load_meme_requests, load_memes_generated
+
+            meme_requests = load_meme_requests()
+            memes_generated = load_memes_generated()
+            activity["memes_requested"] = meme_requests.get(str(discord_id), 0)
+            activity["memes_generated"] = memes_generated.get(str(discord_id), 0)
+        except Exception:
+            pass
+
         # Build profile response
         return jsonify(
             {
@@ -184,7 +230,11 @@ def get_user_profile():
                         "changelog_opt_in": has_changelog,
                         "meme_opt_in": has_meme,
                     },
-                    "warnings_count": warnings_count,
+                    "custom_stats": {
+                        "warnings": warnings_count,
+                        "resolved_tickets": resolved_tickets,
+                    },
+                    "activity": activity,
                     "joined_at": member.joined_at.isoformat() if member.joined_at else None,
                     "created_at": member.created_at.isoformat() if member.created_at else None,
                 },
