@@ -36,11 +36,21 @@ active_sessions_dict = None
 recent_activity_list = None
 max_activity_log_value = None
 app_usage_file_path = None
+analytics_aggregator = None
 
 
-def init_auth(config, app=None, active_sessions=None, recent_activity=None, max_activity_log=None, app_usage_file=None):
+def init_auth(
+    config,
+    app=None,
+    active_sessions=None,
+    recent_activity=None,
+    max_activity_log=None,
+    app_usage_file=None,
+    analytics=None,
+):
     """Initialize auth module with Config and app dependencies"""
-    global Config, app_instance, active_sessions_dict, recent_activity_list, max_activity_log_value, app_usage_file_path
+    global Config, app_instance, active_sessions_dict, recent_activity_list, max_activity_log_value
+    global app_usage_file_path, analytics_aggregator
     Config = config
     if app is not None:
         app_instance = app
@@ -48,6 +58,7 @@ def init_auth(config, app=None, active_sessions=None, recent_activity=None, max_
         recent_activity_list = recent_activity
         max_activity_log_value = max_activity_log
         app_usage_file_path = app_usage_file
+        analytics_aggregator = analytics
 
 
 def create_token_required_decorator():
@@ -181,7 +192,34 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "platform": request.headers.get("X-Platform", "Unknown"),
                 "device_info": request.headers.get("X-Device-Info", "Unknown"),
             }
+
+            # Check if this is a new session (first time seeing this session_id)
+            is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
+
+            # Analytics: Start session tracking for new sessions
+            if is_new_session and analytics_aggregator is not None:
+                try:
+                    analytics_aggregator.start_session(
+                        session_id=request.session_id,
+                        discord_id=request.discord_id,
+                        username=request.username,
+                        device_info=session_info["device_info"],
+                        platform=session_info["platform"],
+                        app_version=session_info["app_version"],
+                        ip_address=real_ip,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to start analytics session: {e}")
+
+            # Analytics: Update session activity
+            if analytics_aggregator is not None:
+                try:
+                    analytics_aggregator.update_session(
+                        session_id=request.session_id, endpoint=request.endpoint or "unknown"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to update analytics session: {e}")
 
             # Update app usage tracking (persistent)
             update_app_usage(request.discord_id, app_usage_file, Config)

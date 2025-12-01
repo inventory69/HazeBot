@@ -290,24 +290,24 @@ def notify_ticket_update(ticket_id, event_type, data):
 def clean_admin_panel_prefix(content):
     """
     Remove admin panel formatting from message content for notifications
-    
+
     Transforms:
         Input:  "**[Admin Panel - wutangwilli]:** Die Nachricht hier"
         Output: "wutangwilli: Die Nachricht hier"
-    
+
     If no admin panel prefix is found, returns the original content.
     """
     import re
-    
+
     # Pattern matches: **[Admin Panel - username]:** (with optional whitespace after)
-    pattern = r'\*\*\[Admin Panel - ([^\]]+)\]:\*\*\s*'
+    pattern = r"\*\*\[Admin Panel - ([^\]]+)\]:\*\*\s*"
     match = re.match(pattern, content)
-    
+
     if match:
         username = match.group(1)
-        message = content[match.end():]
+        message = content[match.end() :]
         return f"{username}: {message}"
-    
+
     # No admin panel prefix found - return original
     return content
 
@@ -330,7 +330,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
 
         # Access bot instance from Config (set by set_bot_instance in api/app.py)
         # This works in async contexts without needing Flask app context
-        bot = getattr(Config, 'bot', None)
+        bot = getattr(Config, "bot", None)
         if not bot:
             return
 
@@ -375,7 +375,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                 raw_content = message_data.get("content", "")
                 cleaned_content = clean_admin_panel_prefix(raw_content)
                 content_preview = cleaned_content[:100]
-                
+
                 # If content already has username prefix (from cleaning), use it directly
                 # Otherwise, add author name
                 if cleaned_content.startswith(message_data.get("author_name", "") + ":"):

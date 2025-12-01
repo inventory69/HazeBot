@@ -19,12 +19,15 @@ require_permission = None
 get_cache_stats = None
 clear_cache = None
 invalidate_cache = None
+analytics_aggregator = None
 
 # Create Blueprint
 admin_bp = Blueprint("admin", __name__)
 
 
-def init_admin_routes(app, config, log, sessions_dict, activity_list, helpers_module, auth_module, cache_module):
+def init_admin_routes(
+    app, config, log, sessions_dict, activity_list, helpers_module, auth_module, cache_module, analytics=None
+):
     """
     Initialize admin routes Blueprint with dependencies
 
@@ -37,10 +40,11 @@ def init_admin_routes(app, config, log, sessions_dict, activity_list, helpers_mo
         helpers_module: Module containing log_action
         auth_module: Module containing decorators (token_required, require_permission)
         cache_module: Module containing cache functions (get_cache_stats, clear_cache, invalidate_cache)
+        analytics: Analytics aggregator instance (optional)
     """
     global Config, logger, active_sessions, recent_activity, log_action
     global token_required, require_permission
-    global get_cache_stats, clear_cache, invalidate_cache
+    global get_cache_stats, clear_cache, invalidate_cache, analytics_aggregator
 
     Config = config
     logger = log
@@ -48,6 +52,7 @@ def init_admin_routes(app, config, log, sessions_dict, activity_list, helpers_mo
     recent_activity = activity_list
     log_action = helpers_module.log_action
     token_required = auth_module.token_required
+    analytics_aggregator = analytics
     require_permission = auth_module.require_permission
     get_cache_stats = cache_module.get_cache_stats
     clear_cache = cache_module.clear_cache
@@ -406,4 +411,73 @@ def get_guild_roles():
 
         return jsonify(roles)
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# ANALYTICS ENDPOINTS (Admin Only)
+# ============================================================================
+
+
+@admin_bp.route("/api/admin/analytics/export", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_analytics_export():
+    """
+    Export full analytics data for external analysis
+    Query params:
+        - days: Number of days to include (optional, default: all)
+    """
+    try:
+        if analytics_aggregator is None:
+            return jsonify({"error": "Analytics not enabled"}), 503
+
+        # Get optional days parameter
+        days = request.args.get("days", type=int)
+
+        export_data = analytics_aggregator.get_export_data(days=days)
+
+        return jsonify({"success": True, "data": export_data})
+    except Exception as e:
+        logger.error(f"Failed to export analytics: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/api/admin/analytics/stats", methods=["GET"])
+@token_required
+@require_permission("all")
+def get_analytics_stats():
+    """Get summary analytics statistics"""
+    try:
+        if analytics_aggregator is None:
+            return jsonify({"error": "Analytics not enabled"}), 503
+
+        stats = analytics_aggregator.get_summary_stats()
+
+        return jsonify({"success": True, "stats": stats})
+    except Exception as e:
+        logger.error(f"Failed to get analytics stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/api/admin/analytics/cleanup", methods=["POST"])
+@token_required
+@require_permission("all")
+def cleanup_analytics():
+    """
+    Clean up old analytics sessions
+    Body: {"days_to_keep": 90}
+    """
+    try:
+        if analytics_aggregator is None:
+            return jsonify({"error": "Analytics not enabled"}), 503
+
+        data = request.get_json() or {}
+        days_to_keep = data.get("days_to_keep", 90)
+
+        removed = analytics_aggregator.cleanup_old_sessions(days_to_keep=days_to_keep)
+
+        return jsonify({"success": True, "removed_sessions": removed, "days_kept": days_to_keep})
+    except Exception as e:
+        logger.error(f"Failed to cleanup analytics: {e}")
         return jsonify({"error": str(e)}), 500

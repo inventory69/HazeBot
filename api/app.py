@@ -3,7 +3,6 @@ Flask API for HazeBot Configuration
 Modular REST API with Blueprint architecture
 """
 
-import logging
 import os
 import sys
 import threading
@@ -27,6 +26,7 @@ from Utils.Logger import Logger as logger
 
 # Import all Blueprint modules
 import api.admin_routes as admin_routes_module
+import api.analytics as analytics_module
 import api.auth as auth_module
 import api.auth_routes as auth_routes_module
 import api.cog_routes as cog_routes_module
@@ -43,6 +43,10 @@ import api.user_routes as user_routes_module
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
+
+# Initialize analytics
+analytics_file = Path(__file__).parent.parent / Config.DATA_DIR / "app_analytics.json"
+analytics = analytics_module.AnalyticsAggregator(analytics_file)
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()
@@ -93,7 +97,7 @@ helpers_module.init_helpers(Config)
 
 # Initialize auth module (standalone - no Blueprint)
 # This sets up decorators and JWT handling
-auth_module.init_auth(Config, app, active_sessions, recent_activity, MAX_ACTIVITY_LOG, app_usage_file)
+auth_module.init_auth(Config, app, active_sessions, recent_activity, MAX_ACTIVITY_LOG, app_usage_file, analytics)
 
 # Create decorator functions that can be used by Blueprint modules
 # These wrap the actual decorator implementations with initialized dependencies
@@ -117,7 +121,7 @@ config_routes_module.init_config_routes(app, Config, logger, helpers_module, dec
 
 # Initialize admin routes Blueprint
 admin_routes_module.init_admin_routes(
-    app, Config, logger, active_sessions, recent_activity, helpers_module, decorator_module, cache_module
+    app, Config, logger, active_sessions, recent_activity, helpers_module, decorator_module, cache_module, analytics
 )
 
 # Initialize user routes Blueprint
