@@ -50,30 +50,29 @@ class ChangelogCog(commands.Cog):
 
         prompt = f"""
 Format the following PR text as a compact Discord-Markdown changelog.
-- Do NOT repeat the title in the text.
-- Directly below the title, add these lines (with Discord markdown):
-  **Project:** `{project}`
-  **Author:** `{author}`
-- After a blank line, list the changes as bullet points. Each change must start with a small bullet point (•), then EXACTLY ONE emoji, then a short description.
-- IMPORTANT: Use ONLY ONE emoji per line, never multiple emojis.
+- Start with project and author info (with Discord markdown):
+  *Project: {project} | Author: {author}*
+- After a blank line, add section headers with emojis (e.g., **🚀 Major Features**)
+- Group related changes under section headers
+- Each change must start with a bullet point (•) followed by the description
 - Format file names, command names, variables, and settings in backticks (`).
 - Do not add a summary or extra text at the end.
-- Do not use paragraphs. Only use bullet points as shown below.
-- If the input already contains emojis in the bullet points, keep them as-is and do not add additional emojis.
+- Keep it compact and well-organized
 
 Example:
-**Project:** `HazeWorldBot`
-**Author:** `inventory69`
+*Project: HazeWorldBot | Author: inventory69*
 
-• 🎮 Added dynamic Presence cog with hourly inventory-themed status updates
-• 🌍 Introduced `Env.py` for environment variable loading and validation with logging
-• 🎨 Replaced legacy logging with Rich-based Logger (emojis, regex highlights, pastel themes, tracebacks)
-• 🛠️ Enhanced `Main.py` with fuzzy command matching, cooldowns, error handling, and edit/delete logging
-• 📁 Organized JSON files into `Data/` folder (`rl_accounts.json`, `tickets.json`, `persistent_views.json`)
-• ⚙️ Updated `Config.py` with new settings: `PresenceUpdateInterval`, `FuzzyMatchingThreshold`, `MessageCooldown`, `LogLevel`
-• 📦 Added `rich` to `requirements.txt`
-• 🔧 Improved JSON persistence with automatic directory creation
-• 📊 Better command syncing, cog loading logs, and user feedback
+**🚀 Major Features**
+• Dynamic Presence cog with hourly inventory-themed status updates
+• Enhanced `Main.py` with fuzzy command matching and cooldowns
+
+**📁 File Organization**
+• Organized JSON files into `Data/` folder
+• Improved JSON persistence with automatic directory creation
+
+**⚙️ Configuration**
+• Updated `Config.py` with new settings: `PresenceUpdateInterval`, `FuzzyMatchingThreshold`
+• Added `rich` to `requirements.txt`
 
 PR-Text:
 {text}
