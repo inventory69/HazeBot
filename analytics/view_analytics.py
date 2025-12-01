@@ -30,6 +30,18 @@ def main():
     class CustomHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(script_dir), **kwargs)
+        
+        def do_GET(self):
+            # Redirect root to analytics dashboard
+            if self.path == '/':
+                self.send_response(301)
+                self.send_header('Location', '/analytics/analytics_dashboard.html')
+                self.end_headers()
+                return
+            # Allow direct access to analytics_dashboard.html
+            elif self.path == '/analytics_dashboard.html':
+                self.path = '/analytics/analytics_dashboard.html'
+            super().do_GET()
 
         def end_headers(self):
             # Allow CORS for local file access
