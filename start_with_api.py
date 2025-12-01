@@ -5,6 +5,16 @@ Runs both the Discord bot and the Flask API in separate threads
 
 import logging
 
+# Custom filter to suppress successful HTTP requests
+class SuppressSuccessfulRequests(logging.Filter):
+    """Filter out log messages from successful HTTP requests (200, 201, 204)"""
+    def filter(self, record):
+        message = record.getMessage()
+        # Suppress successful HTTP requests (status 200-299)
+        if 'HTTP/1.1" 2' in message:
+            return False
+        return True
+
 # Setup logging first
 logging.basicConfig(
     level=logging.INFO,
@@ -12,12 +22,16 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
     style="{",
 )
+
+# Add filter to root logger
+root_logger = logging.getLogger()
+root_logger.addFilter(SuppressSuccessfulRequests())
+
 logging.getLogger("discord").handlers.clear()
 logging.getLogger("discord").propagate = False
 logging.getLogger("discord").setLevel(logging.ERROR)  # Suppress discord.py warnings
 
-# Set root logger
-root_logger = logging.getLogger()
+# Set root logger level
 root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
