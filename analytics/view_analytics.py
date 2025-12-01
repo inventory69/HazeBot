@@ -17,12 +17,14 @@ import socketserver
 import webbrowser
 from pathlib import Path
 
+
 # Load .env file to check PROD_MODE
 def load_prod_mode():
     """Load PROD_MODE from .env or Config.py"""
     # Try loading from .env with python-dotenv
     try:
         from dotenv import load_dotenv
+
         env_path = Path(__file__).parent.parent / ".env"
         if env_path.exists():
             load_dotenv(env_path)
@@ -31,35 +33,38 @@ def load_prod_mode():
             return prod_mode
     except ImportError:
         pass
-    
+
     # Fallback: Parse .env file manually
     try:
         env_path = Path(__file__).parent.parent / ".env"
         if env_path.exists():
-            with open(env_path, 'r') as f:
+            with open(env_path, "r") as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith('PROD_MODE='):
-                        value = line.split('=', 1)[1].strip().strip('"').strip("'")
+                    if line.startswith("PROD_MODE="):
+                        value = line.split("=", 1)[1].strip().strip('"').strip("'")
                         prod_mode = value.lower() == "true"
                         print(f"✅ Parsed PROD_MODE from .env: {prod_mode}")
                         return prod_mode
     except Exception as e:
         print(f"⚠️  Warning: Could not read .env: {e}")
-    
+
     # Last fallback: Try importing Config.py
     try:
         import sys
+
         sys.path.insert(0, str(Path(__file__).parent.parent))
         import Config
+
         prod_mode = Config.PROD_MODE
         print(f"✅ Loaded PROD_MODE from Config.py: {prod_mode}")
         return prod_mode
     except Exception as e:
         print(f"⚠️  Warning: Could not load Config.py: {e}")
-    
+
     print("⚠️  Warning: Defaulting to PROD_MODE=False")
     return False
+
 
 PROD_MODE = load_prod_mode()
 DATA_DIR = "Data" if PROD_MODE else "TestData"
@@ -68,7 +73,12 @@ DATA_DIR = "Data" if PROD_MODE else "TestData"
 def main():
     parser = argparse.ArgumentParser(description="Start HazeBot Analytics Dashboard")
     parser.add_argument("--port", type=int, default=8080, help="Port to serve on (default: 8080)")
-    parser.add_argument("--host", type=str, default="localhost", help="Host to bind to (default: localhost, use 0.0.0.0 for all interfaces)")
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="Host to bind to (default: localhost, use 0.0.0.0 for all interfaces)",
+    )
     parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
     args = parser.parse_args()
 
@@ -78,17 +88,17 @@ def main():
     class CustomHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(script_dir), **kwargs)
-        
+
         def do_GET(self):
             # Redirect root to analytics dashboard
-            if self.path == '/':
+            if self.path == "/":
                 self.send_response(301)
-                self.send_header('Location', '/analytics/analytics_dashboard.html')
+                self.send_header("Location", "/analytics/analytics_dashboard.html")
                 self.end_headers()
                 return
             # Allow direct access to analytics_dashboard.html
-            elif self.path == '/analytics_dashboard.html':
-                self.path = '/analytics/analytics_dashboard.html'
+            elif self.path == "/analytics_dashboard.html":
+                self.path = "/analytics/analytics_dashboard.html"
             super().do_GET()
 
         def end_headers(self):
@@ -100,11 +110,11 @@ def main():
 
     # Allow port reuse to prevent "Address already in use" errors
     socketserver.TCPServer.allow_reuse_address = True
-    
+
     httpd = None
     try:
         httpd = socketserver.TCPServer((args.host, args.port), CustomHandler)
-        
+
         if args.host == "0.0.0.0":
             url = f"http://<your-server-ip>:{args.port}/analytics/analytics_dashboard.html"
         else:
@@ -130,7 +140,7 @@ def main():
         if e.errno == 98:  # Address already in use
             print(f"\n❌ Error: Port {args.port} is already in use!")
             print(f"💡 Try killing the process using: lsof -ti:{args.port} | xargs kill -9")
-            print(f"   Or use a different port: --port <other-port>")
+            print("   Or use a different port: --port <other-port>")
         else:
             print(f"\n❌ Server error: {e}")
     except Exception as e:

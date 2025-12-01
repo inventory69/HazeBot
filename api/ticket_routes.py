@@ -996,7 +996,7 @@ def get_ticket_messages_endpoint(ticket_id):
             from Cogs.TicketSystem import ADMIN_ROLE_ID, MODERATOR_ROLE_ID
 
             messages = []
-            async for message in channel.history(limit=50, oldest_first=False):
+            async for message in channel.history(limit=100, oldest_first=True):
                 # Skip bot system messages (but keep Initial details, Admin Panel, important system messages)
                 if message.author.bot:
                     # Include important bot messages (initial, admin panel, close/claim/assign/reopen)
@@ -1090,8 +1090,12 @@ def get_ticket_messages_endpoint(ticket_id):
                         "role": user_role,  # 'admin', 'moderator', or None
                     }
                 )
+            
+            # Debug: Check if initial message is included
+            initial_messages = [m for m in messages if m['content'].startswith('**Initial details')]
+            logger.debug(f"✅ [GET MESSAGES] Found {len(initial_messages)} initial message(s)")
             logger.debug(f"✅ [GET MESSAGES] Returning {len(messages)} messages for ticket {ticket_id}")
-            return list(reversed(messages))  # Oldest first
+            return messages  # Already in correct order (oldest first)
 
         future = asyncio.run_coroutine_threadsafe(fetch_messages(), loop)
         messages = future.result(timeout=10)
