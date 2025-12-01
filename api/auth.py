@@ -179,6 +179,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "endpoint": request.endpoint or "unknown",
                 "app_version": request.headers.get("X-App-Version", "Unknown"),
                 "platform": request.headers.get("X-Platform", "Unknown"),
+                "device_info": request.headers.get("X-Device-Info", "Unknown"),
             }
             active_sessions[request.session_id] = session_info
 

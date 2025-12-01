@@ -117,6 +117,7 @@ def get_active_sessions_endpoint():
                     "last_endpoint": session_data.get("endpoint", "unknown"),
                     "app_version": session_data.get("app_version", "Unknown"),
                     "platform": session_data.get("platform", "Unknown"),
+                    "device_info": session_data.get("device_info", "Unknown"),
                 }
             )
         except Exception:
