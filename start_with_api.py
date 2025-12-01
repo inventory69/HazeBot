@@ -23,15 +23,16 @@ logging.basicConfig(
     style="{",
 )
 
-# Add filter to root logger
-root_logger = logging.getLogger()
-root_logger.addFilter(SuppressSuccessfulRequests())
+# Suppress Werkzeug/Flask HTTP logs for successful requests
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.addFilter(SuppressSuccessfulRequests())
 
 logging.getLogger("discord").handlers.clear()
 logging.getLogger("discord").propagate = False
 logging.getLogger("discord").setLevel(logging.ERROR)  # Suppress discord.py warnings
 
 # Set root logger level
+root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
