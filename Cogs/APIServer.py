@@ -123,6 +123,11 @@ class APIServer(commands.Cog):
 
                     logger.info(f"API server successfully bound to port {self.api_port}")
 
+                    # Disable gevent pywsgi access logs (HTTP requests)
+                    import logging as log
+                    log.getLogger("gevent.pywsgi").setLevel(log.ERROR)
+                    log.getLogger("geventwebsocket.handler").setLevel(log.ERROR)
+
                     # Run the server with SocketIO
                     socketio.run(
                         app, host="0.0.0.0", port=self.api_port, debug=False, use_reloader=False
