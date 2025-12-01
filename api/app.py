@@ -79,12 +79,6 @@ NEGATIVE_EMOJIS = {
     "😬",
 }
 
-
-# Configure logging - suppress HTTP request logs completely
-# Set werkzeug logger to WARNING level to suppress INFO level HTTP request logs
-werkzeug_logger = logging.getLogger("werkzeug")
-werkzeug_logger.setLevel(logging.WARNING)
-
 # Secret key for JWT (should be in environment variable in production)
 app.config["SECRET_KEY"] = os.getenv("API_SECRET_KEY", "dev-secret-key-change-in-production")
 

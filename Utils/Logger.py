@@ -164,6 +164,10 @@ def InitLogging() -> Tuple[RichConsole, logging.Logger, RichHandler]:
         cog_logger.setLevel(level)
         Logger.info(f"🎯 Set log level for {cog_name} to {logging.getLevelName(level)}")
 
+    # Suppress werkzeug HTTP request logs (Flask/API)
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.setLevel(logging.WARNING)
+
     return Console, Logger, ConsoleHandler
 
 
