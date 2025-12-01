@@ -23,8 +23,8 @@ def main():
     parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
     args = parser.parse_args()
 
-    # Change to script directory
-    script_dir = Path(__file__).parent
+    # Change to parent directory (HazeBot root) for data access
+    script_dir = Path(__file__).parent.parent
     
     class CustomHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -38,7 +38,7 @@ def main():
             super().end_headers()
 
     with socketserver.TCPServer(("", args.port), CustomHandler) as httpd:
-        url = f"http://localhost:{args.port}/analytics_dashboard.html"
+        url = f"http://localhost:{args.port}/analytics/analytics_dashboard.html"
         
         print("=" * 60)
         print("📊 HazeBot Analytics Dashboard Server")
