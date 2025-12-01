@@ -12,9 +12,24 @@ Then open: http://localhost:8080
 
 import argparse
 import http.server
+import os
 import socketserver
 import webbrowser
 from pathlib import Path
+
+# Load .env file to check PROD_MODE
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / ".env"
+    load_dotenv(env_path)
+except ImportError:
+    print("⚠️  Warning: python-dotenv not installed, assuming PROD_MODE=False")
+except Exception as e:
+    print(f"⚠️  Warning: Could not load .env: {e}")
+
+# Check PROD_MODE from environment
+PROD_MODE = os.getenv("PROD_MODE", "false").lower() == "true"
+DATA_DIR = "Data" if PROD_MODE else "TestData"
 
 
 def main():
@@ -59,7 +74,9 @@ def main():
         print("=" * 60)
         print("📊 HazeBot Analytics Dashboard Server")
         print("=" * 60)
-        print(f"\n✅ Server started on {args.host}:{args.port}")
+        print(f"\n🔧 Mode: {'PRODUCTION' if PROD_MODE else 'DEVELOPMENT'}")
+        print(f"📂 Data Directory: {DATA_DIR}/")
+        print(f"✅ Server started on {args.host}:{args.port}")
         print(f"🌐 Dashboard URL: {url}\n")
         print("Press Ctrl+C to stop the server\n")
 

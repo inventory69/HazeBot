@@ -332,19 +332,32 @@
             try {
                 const timeRange = parseInt(document.getElementById('timeRange').value);
                 
-                // Try to load from local file first (for local testing)
+                // Detect PROD_MODE by checking which folder has the analytics file
+                // Try Data/ first (production), then TestData/ (development)
                 let data;
+                let dataSource = '';
+                
                 try {
+                    const response = await fetch('../Data/app_analytics.json');
+                    if (response.ok) {
+                        data = await response.json();
+                        dataSource = 'Data';
+                        console.log('📊 Loaded analytics from Data/ (PRODUCTION mode)');
+                    } else {
+                        throw new Error('Data folder not found');
+                    }
+                } catch (e) {
+                    // Fallback to TestData folder
+                    console.log('⚠️ Data/ not found, trying TestData/ (DEVELOPMENT mode)');
                     const response = await fetch('../TestData/app_analytics.json');
                     data = await response.json();
-                } catch (e) {
-                    // Fallback to Data folder
-                    const response = await fetch('../Data/app_analytics.json');
-                    data = await response.json();
+                    dataSource = 'TestData';
+                    console.log('📊 Loaded analytics from TestData/ (DEVELOPMENT mode)');
                 }
 
                 processData(data, timeRange);
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+                document.getElementById('lastUpdate').textContent = 
+                    `${new Date().toLocaleString()} (Source: ${dataSource}/)`;
                 document.getElementById('error').style.display = 'none';
             } catch (error) {
                 console.error('Failed to load analytics data:', error);
