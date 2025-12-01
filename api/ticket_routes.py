@@ -997,13 +997,16 @@ def get_ticket_messages_endpoint(ticket_id):
 
             messages = []
             async for message in channel.history(limit=100, oldest_first=True):
-                logger.info(f"🔍 [GET_MESSAGES] ID: {message.id}, Author: {message.author.name}, Bot: {message.author.bot}, Content: {message.content[:80]}...")
-                
+                logger.info(
+                    f"🔍 [GET_MESSAGES] ID: {message.id}, Author: {message.author.name}, Bot: {message.author.bot}, Content: {message.content[:80]}..."
+                )
+
                 # Skip bot system messages (but keep Initial details, Admin Panel, important system messages)
                 if message.author.bot:
                     # Include important bot messages (initial, admin panel, close/claim/assign/reopen)
                     if not (
                         message.content.startswith("**Initial details")
+                        or message.content.startswith("**Subject:")  # API-created tickets
                         or message.content.startswith("**[Admin Panel")
                         or "Ticket successfully closed" in message.content
                         or "Ticket claimed by" in message.content
@@ -1095,9 +1098,9 @@ def get_ticket_messages_endpoint(ticket_id):
                         "role": user_role,  # 'admin', 'moderator', or None
                     }
                 )
-            
+
             # Debug: Check if initial message is included
-            initial_messages = [m for m in messages if m['content'].startswith('**Initial details')]
+            initial_messages = [m for m in messages if m["content"].startswith("**Initial details")]
             logger.info(f"✅ [GET_MESSAGES] Found {len(initial_messages)} initial message(s)")
             logger.info(f"✅ [GET_MESSAGES] Returning {len(messages)} messages for ticket {ticket_id}")
             return messages  # Already in correct order (oldest first)
