@@ -136,11 +136,20 @@
             padding: 15px;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            height: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-container canvas {
+            max-height: 280px;
         }
 
         .chart-container.full-width {
             grid-column: 1 / -1;
+        }
+
+        .chart-container.full-width canvas {
+            max-height: 200px;
         }
 
         .chart-title {
@@ -148,6 +157,13 @@
             color: #667eea;
             margin-bottom: 10px;
             font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .chart-wrapper {
+            flex: 1;
+            min-height: 0;
+            position: relative;
         }
 
         .table-container {
@@ -258,22 +274,30 @@
         <div class="charts-grid">
             <div class="chart-container full-width">
                 <h3 class="chart-title">📈 User Growth (Daily)</h3>
-                <canvas id="userGrowthChart"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="userGrowthChart"></canvas>
+                </div>
             </div>
 
             <div class="chart-container">
                 <h3 class="chart-title">📱 Device Distribution</h3>
-                <canvas id="deviceChart"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="deviceChart"></canvas>
+                </div>
             </div>
 
             <div class="chart-container">
                 <h3 class="chart-title">🔥 Top Features</h3>
-                <canvas id="endpointsChart"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="endpointsChart"></canvas>
+                </div>
             </div>
 
             <div class="chart-container full-width">
                 <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
-                <canvas id="hourlyChart"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
             </div>
         </div>
 
