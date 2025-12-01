@@ -74,6 +74,11 @@ def initialize_firebase() -> bool:
 
         # Check if Firebase credentials file exists
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "firebase-credentials.json")
+        
+        # Make path absolute relative to project root (parent of Utils/)
+        if not os.path.isabs(cred_path):
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            cred_path = os.path.join(project_root, cred_path)
 
         if not os.path.exists(cred_path):
             logger.warning(f"❌ Firebase credentials not found at {cred_path}. Push notifications disabled.")

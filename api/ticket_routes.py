@@ -997,10 +997,6 @@ def get_ticket_messages_endpoint(ticket_id):
 
             messages = []
             async for message in channel.history(limit=100, oldest_first=True):
-                logger.info(
-                    f"🔍 [GET_MESSAGES] ID: {message.id}, Author: {message.author.name}, Bot: {message.author.bot}, Content: {message.content[:80]}..."
-                )
-
                 # Skip bot system messages (but keep Initial details, Admin Panel, important system messages)
                 if message.author.bot:
                     # Include important bot messages (initial, admin panel, close/claim/assign/reopen)
@@ -1013,10 +1009,7 @@ def get_ticket_messages_endpoint(ticket_id):
                         or "Ticket assigned to" in message.content
                         or "Ticket has been reopened" in message.content
                     ):
-                        logger.info(f"⏭️ [GET_MESSAGES] Skipping bot message: {message.content[:50]}...")
                         continue
-                    else:
-                        logger.info(f"✅ [GET_MESSAGES] Keeping important bot message: {message.content[:80]}...")
 
                 # Get avatar URL with fallback
                 # For admin panel messages, extract the real admin's username and get their avatar
@@ -1099,10 +1092,7 @@ def get_ticket_messages_endpoint(ticket_id):
                     }
                 )
 
-            # Debug: Check if initial message is included
-            initial_messages = [m for m in messages if m["content"].startswith("**Initial details")]
-            logger.info(f"✅ [GET_MESSAGES] Found {len(initial_messages)} initial message(s)")
-            logger.info(f"✅ [GET_MESSAGES] Returning {len(messages)} messages for ticket {ticket_id}")
+            return messages  # Already in correct order (oldest first)
             return messages  # Already in correct order (oldest first)
 
         future = asyncio.run_coroutine_threadsafe(fetch_messages(), loop)

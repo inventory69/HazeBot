@@ -8,8 +8,9 @@ import sys
 import os
 import asyncio
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root to path (parent directory of scripts/)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 from Utils.notification_service import initialize_firebase, send_notification, is_fcm_enabled
 
