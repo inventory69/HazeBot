@@ -78,6 +78,12 @@ def init_admin_routes(
     vf["admin.get_guild_channels"] = token_required(vf["admin.get_guild_channels"])
     vf["admin.get_guild_roles"] = token_required(vf["admin.get_guild_roles"])
 
+    # Analytics endpoints (if analytics enabled)
+    if analytics is not None:
+        vf["admin.get_analytics_export"] = token_required(require_permission("all")(vf["admin.get_analytics_export"]))
+        vf["admin.get_analytics_stats"] = token_required(require_permission("all")(vf["admin.get_analytics_stats"]))
+        vf["admin.cleanup_analytics"] = token_required(require_permission("all")(vf["admin.cleanup_analytics"]))
+
 
 # ===== ACTIVE SESSIONS =====
 
@@ -417,11 +423,10 @@ def get_guild_roles():
 # ============================================================================
 # ANALYTICS ENDPOINTS (Admin Only)
 # ============================================================================
+# Note: Dekoratoren werden in init_admin_routes() angewendet
 
 
 @admin_bp.route("/api/admin/analytics/export", methods=["GET"])
-@token_required
-@require_permission("all")
 def get_analytics_export():
     """
     Export full analytics data for external analysis
@@ -444,8 +449,6 @@ def get_analytics_export():
 
 
 @admin_bp.route("/api/admin/analytics/stats", methods=["GET"])
-@token_required
-@require_permission("all")
 def get_analytics_stats():
     """Get summary analytics statistics"""
     try:
@@ -461,8 +464,6 @@ def get_analytics_stats():
 
 
 @admin_bp.route("/api/admin/analytics/cleanup", methods=["POST"])
-@token_required
-@require_permission("all")
 def cleanup_analytics():
     """
     Clean up old analytics sessions
