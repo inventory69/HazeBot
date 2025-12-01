@@ -25,32 +25,32 @@ def main():
 
     # Change to parent directory (HazeBot root) for data access
     script_dir = Path(__file__).parent.parent
-    
+
     class CustomHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(script_dir), **kwargs)
-        
+
         def end_headers(self):
             # Allow CORS for local file access
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', '*')
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "*")
             super().end_headers()
 
     with socketserver.TCPServer(("", args.port), CustomHandler) as httpd:
         url = f"http://localhost:{args.port}/analytics/analytics_dashboard.html"
-        
+
         print("=" * 60)
         print("📊 HazeBot Analytics Dashboard Server")
         print("=" * 60)
         print(f"\n✅ Server started on port {args.port}")
         print(f"🌐 Dashboard URL: {url}\n")
         print("Press Ctrl+C to stop the server\n")
-        
+
         if not args.no_browser:
             print("🚀 Opening dashboard in browser...")
             webbrowser.open(url)
-        
+
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

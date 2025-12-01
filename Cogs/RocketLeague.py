@@ -640,8 +640,10 @@ class RocketLeague(commands.Cog):
             if user_account:
                 platform = user_account["platform"]
             else:
-                raise ValueError("❌ Please specify a platform (steam, epic, psn, xbl, switch) or set your account with /setrlaccount")
-        
+                raise ValueError(
+                    "❌ Please specify a platform (steam, epic, psn, xbl, switch) or set your account with /setrlaccount"
+                )
+
         if platform.lower() not in ["steam", "epic", "psn", "xbl", "switch"]:
             raise ValueError("❌ Invalid platform.")
         return platform.lower(), username

@@ -354,7 +354,7 @@ async def send_notification(
                 # Add title/body to data payload for the app to display
                 notification_data["title"] = clean_title
                 notification_data["body"] = clean_body
-                
+
                 message = messaging.Message(
                     data=notification_data,  # Data-only message (no notification payload)
                     token=token,

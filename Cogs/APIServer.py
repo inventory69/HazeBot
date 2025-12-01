@@ -125,13 +125,12 @@ class APIServer(commands.Cog):
 
                     # Disable gevent pywsgi access logs (HTTP requests)
                     import logging as log
+
                     log.getLogger("gevent.pywsgi").setLevel(log.ERROR)
                     log.getLogger("geventwebsocket.handler").setLevel(log.ERROR)
 
                     # Run the server with SocketIO
-                    socketio.run(
-                        app, host="0.0.0.0", port=self.api_port, debug=False, use_reloader=False
-                    )
+                    socketio.run(app, host="0.0.0.0", port=self.api_port, debug=False, use_reloader=False)
 
                     # Only log if this was an intentional shutdown
                     if self._shutdown_event.is_set():
