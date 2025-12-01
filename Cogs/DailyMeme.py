@@ -104,6 +104,16 @@ class DailyMeme(commands.Cog):
                     # Migration: rename ping_role_id to role_id if it exists
                     if "ping_role_id" in config and "role_id" not in config:
                         config["role_id"] = config.pop("ping_role_id")
+                    
+                    # Migration: Convert empty lists to None (old logic: no selection = all)
+                    # This ensures production servers with empty selections get all sources
+                    if "use_subreddits" in config and config["use_subreddits"] == []:
+                        config["use_subreddits"] = None
+                        logger.info("Migrated empty use_subreddits to None (use all)")
+                    if "use_lemmy" in config and config["use_lemmy"] == []:
+                        config["use_lemmy"] = None
+                        logger.info("Migrated empty use_lemmy to None (use all)")
+                    
                     # Merge with defaults (in case new settings are added)
                     return {**default_config, **config}
         except Exception as e:

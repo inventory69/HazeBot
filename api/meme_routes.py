@@ -369,6 +369,12 @@ def update_daily_meme_config():
             daily_meme_cog.meme_lemmy = data.pop("lemmy_communities")
             daily_meme_cog.save_lemmy_communities()
 
+        # Migration: Convert empty lists to None (use all sources)
+        if "use_subreddits" in data and data["use_subreddits"] == []:
+            data["use_subreddits"] = None
+        if "use_lemmy" in data and data["use_lemmy"] == []:
+            data["use_lemmy"] = None
+
         # Update configuration
         daily_meme_cog.daily_config.update(data)
         daily_meme_cog.save_daily_config()
