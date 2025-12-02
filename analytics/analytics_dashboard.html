@@ -678,28 +678,25 @@
             try {
                 const timeRange = parseInt(document.getElementById('timeRange').value);
                 
-                // Detect PROD_MODE by checking which folder has the analytics file
-                // Try Data/ first (production), then TestData/ (development)
+                // Fetch analytics data from API endpoint (SQLite backend)
+                // API auto-detects PROD_MODE from Config
                 let data;
-                let dataSource = '';
+                let dataSource = 'SQLite API';
                 
-                try {
-                    const response = await fetch('../Data/app_analytics.json');
-                    if (response.ok) {
-                        data = await response.json();
-                        dataSource = 'Data';
-                        console.log('📊 Loaded analytics from Data/ (PRODUCTION mode)');
-                    } else {
-                        throw new Error('Data folder not found');
-                    }
-                } catch (e) {
-                    // Fallback to TestData folder
-                    console.log('⚠️ Data/ not found, trying TestData/ (DEVELOPMENT mode)');
-                    const response = await fetch('../TestData/app_analytics.json');
-                    data = await response.json();
-                    dataSource = 'TestData';
-                    console.log('📊 Loaded analytics from TestData/ (DEVELOPMENT mode)');
+                console.log('📊 Fetching analytics from SQLite API endpoint...');
+                const apiUrl = `http://localhost:5070/api/analytics/data?days=${timeRange === 'all' ? 365 : timeRange === '30d' ? 30 : 7}`;
+                
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}: ${response.statusText}`);
                 }
+                
+                data = await response.json();
+                console.log('✅ Analytics loaded from SQLite backend:', {
+                    sessions: data.sessions?.length || 0,
+                    users: Object.keys(data.user_stats || {}).length,
+                    days: Object.keys(data.daily_stats || {}).length
+                });
 
                 // Store data globally for export
                 currentAnalyticsData = data;
@@ -1375,25 +1372,19 @@
 
         async function loadErrorAnalytics(dataSource) {
             try {
-                let errorData;
+                // Fetch error analytics from API endpoint
+                console.log('📊 Fetching error analytics from API...');
+                const response = await fetch('http://localhost:5070/api/analytics/errors?days=7');
                 
-                // Try API endpoint first (when running from Flask)
-                if (dataSource === 'api') {
-                    const response = await fetch('/api/analytics/errors?days=7');
-                    if (response.ok) {
-                        errorData = await response.json();
-                    }
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}: ${response.statusText}`);
                 }
                 
-                // Fallback to JSON file
-                if (!errorData) {
-                    // Use absolute path from root (same logic as main analytics)
-                    const errorPath = dataSource === 'api' ? '/Data/error_analytics.json' : `/${dataSource}/error_analytics.json`;
-                    const response = await fetch(errorPath);
-                    if (response.ok) {
-                        errorData = await response.json();
-                    }
-                }
+                const errorData = await response.json();
+                console.log('✅ Error analytics loaded:', {
+                    totalErrors: errorData.errors?.length || 0,
+                    uniqueErrors: Object.keys(errorData.error_groups || {}).length
+                });
                 
                 if (errorData) {
                     updateErrorAnalytics(errorData);

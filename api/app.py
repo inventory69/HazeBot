@@ -281,6 +281,30 @@ def cleanup_stale_sessions():
 # ANALYTICS ENDPOINTS
 # ============================================================================
 
+@app.route("/api/analytics/data", methods=["GET"])
+def get_analytics_data():
+    """Get main analytics data (sessions, daily_stats, user_stats)
+    
+    This endpoint replaces the old app_analytics.json file access.
+    Now data comes directly from SQLite for better performance.
+    
+    Query params:
+        days (int): Number of days to include (default: 30, None = all)
+    """
+    try:
+        from flask import request
+        days_param = request.args.get("days")
+        days = int(days_param) if days_param else 30
+        
+        # Get data from SQLite
+        export_data = analytics.get_export_data(days=days)
+        
+        return jsonify(export_data), 200
+    except Exception as e:
+        logger.error(f"Failed to get analytics data: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/analytics/errors", methods=["GET"])
 def get_error_analytics():
     """Get error analytics summary"""
