@@ -38,8 +38,6 @@ class AnalyticsAggregator:
         # Initialize SQLite database
         db_path = analytics_file.parent / "analytics.db"
         self.db = AnalyticsDatabase(db_path)
-        
-        logger.info(f"📊 Analytics initialized with SQLite backend: {db_path}")
 
     # ===========================
     # Public API Methods
@@ -286,8 +284,6 @@ class AnalyticsAggregator:
             
             # Vacuum to reclaim space
             self.db.conn.execute("VACUUM")
-            
-            logger.info(f"Cleaned up {count} old sessions (older than {days_to_keep} days)")
 
         return count
 
@@ -337,9 +333,5 @@ class AnalyticsAggregator:
 
     def shutdown(self) -> None:
         """Gracefully shutdown the analytics system"""
-        logger.info("Shutting down analytics aggregator...")
-        
-        # Close database connection
+        # Close database connection (quiet)
         self.db.close()
-        
-        logger.info("Shutdown complete")

@@ -24,7 +24,6 @@ class APIServer(commands.Cog):
         self._server = None
         self._shutdown_event = threading.Event()
         self._suppress_errors = False  # Flag to suppress Waitress errors during shutdown
-        logger.info("Initializing API Server cog")
 
     async def cog_load(self):
         """Called when cog is loaded - starts the API server"""
@@ -33,14 +32,12 @@ class APIServer(commands.Cog):
         logger.info(f"Starting API server on port {self.api_port}...")
 
         # Wait to ensure port is released (in case of reload)
-        logger.info("Waiting for port to be released...")
         await asyncio.sleep(3)
 
         self.start_api_server()
 
         # Wait for server to start (retry logic will handle delays)
         await asyncio.sleep(2)
-        logger.info("API server startup sequence complete")
 
     async def cog_unload(self):
         """Called when cog is unloaded - stops the API server"""
@@ -94,9 +91,8 @@ class APIServer(commands.Cog):
                 analytics_inst = analytics_cog.get_analytics()
                 error_tracker_inst = analytics_cog.get_error_tracker()
                 set_analytics_instances(analytics_inst, error_tracker_inst)
-                logger.info("✅ [APIServer] Analytics instances connected")
             else:
-                logger.warning("⚠️  [APIServer] AnalyticsManager Cog not found - analytics disabled")
+                logger.warning("AnalyticsManager Cog not found - analytics disabled")
 
             # Retry logic for port binding
             max_retries = 8
@@ -120,9 +116,7 @@ class APIServer(commands.Cog):
                             if firebase_initialized:
                                 logger.info("✅ Firebase Cloud Messaging initialized")
                             else:
-                                logger.warning(
-                                    "⚠️  Firebase Cloud Messaging not available (push notifications disabled)"
-                                )
+                                logger.warning("Firebase Cloud Messaging not available (push notifications disabled)")
                         except Exception as e:
                             logger.warning(f"⚠️  Failed to initialize Firebase: {e}")
                             logger.warning("   Push notifications will be disabled")
@@ -174,7 +168,6 @@ class APIServer(commands.Cog):
         # Use daemon=True so thread doesn't block shutdown, but we'll stop it gracefully
         self.api_thread = threading.Thread(target=run_api, daemon=True, name="APIServerThread")
         self.api_thread.start()
-        logger.info(f"API server thread started on port {self.api_port}")
 
     def stop_api_server(self, wait_for_thread: bool = True):
         """Stop the API server

@@ -47,8 +47,6 @@ class AnalyticsManager(commands.Cog):
         
         # Initialize analytics
         self._initialize_analytics()
-        
-        logger.info("📊 [AnalyticsManager] Cog initialized")
 
     def _initialize_analytics(self) -> None:
         """Initialize analytics and error tracking systems"""
@@ -56,22 +54,20 @@ class AnalyticsManager(commands.Cog):
             import api.analytics as analytics_module
             import api.error_tracking as error_tracking_module
             
-            # Initialize analytics aggregator
+            # Initialize analytics aggregator (SQLite backend)
             analytics_file = Path(__file__).parent.parent / Config.DATA_DIR / "app_analytics.json"
             self.analytics = analytics_module.AnalyticsAggregator(
                 analytics_file,
                 batch_interval=300,  # Not used in SQLite mode, kept for compatibility
                 cache_ttl=300  # Not used in SQLite mode, kept for compatibility
             )
-            logger.info("✅ [AnalyticsManager] Analytics system initialized")
             
             # Initialize error tracker
             error_file = Path(__file__).parent.parent / Config.DATA_DIR / "error_analytics.json"
             self.error_tracker = error_tracking_module.ErrorTracker(error_file)
-            logger.info("✅ [AnalyticsManager] Error tracking initialized")
             
         except Exception as e:
-            logger.error(f"❌ [AnalyticsManager] Failed to initialize analytics: {e}", exc_info=True)
+            logger.error(f"Failed to initialize analytics: {e}", exc_info=True)
             raise
 
     def get_analytics(self):
@@ -94,35 +90,32 @@ class AnalyticsManager(commands.Cog):
 
     async def cog_load(self) -> None:
         """Called when the cog is loaded"""
-        logger.info("📊 [AnalyticsManager] Cog loaded successfully")
+        pass  # Quiet loading
 
     async def cog_unload(self) -> None:
         """
         Called when the cog is unloaded
         Ensures graceful shutdown of analytics system
         """
-        logger.info("📊 [AnalyticsManager] Shutting down analytics system...")
+        logger.info("Shutting down analytics system...")
         
         try:
             if self.analytics:
                 # Graceful shutdown (closes DB connections)
                 self.analytics.shutdown()
-                logger.info("✅ [AnalyticsManager] Analytics system shutdown complete")
             
             if self.error_tracker:
                 # Flush any pending errors
-                logger.info("✅ [AnalyticsManager] Error tracker shutdown complete")
+                pass
                 
         except Exception as e:
-            logger.error(f"❌ [AnalyticsManager] Error during shutdown: {e}", exc_info=True)
-        
-        logger.info("👋 [AnalyticsManager] Cog unloaded")
+            logger.error(f"Error during shutdown: {e}", exc_info=True)
 
     @commands.Cog.listener()
     async def on_ready(self):
         """Called when the bot is ready"""
         if self.analytics and self.error_tracker:
-            logger.info("📊 [AnalyticsManager] Ready - Analytics system online")
+            logger.info("Analytics system online")
 
 
 async def setup(bot: commands.Bot):

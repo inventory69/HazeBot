@@ -128,6 +128,7 @@ COG_LOG_LEVELS = {
 
 # Cog prefixes for logging (emoji + label)
 COG_PREFIXES = {
+    "AnalyticsManager": "📊 [AnalyticsManager]",
     "APIServer": "🌐 [APIServer]",
     "CogManager": "🔧 [CogManager]",
     "Changelog": "📝 [Changelog]",

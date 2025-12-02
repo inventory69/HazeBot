@@ -37,7 +37,6 @@ class AnalyticsDatabase:
         
         # Create tables if they don't exist
         self._initialize_database()
-        logger.info(f"📊 Analytics database initialized: {db_path}")
     
     @contextmanager
     def _get_connection(self):
@@ -169,11 +168,7 @@ class AnalyticsDatabase:
             
             conn.commit()
             
-            # Only log if we actually created tables (not if they already existed)
-            if not tables_exist:
-                logger.info("✅ Database schema created with optimized indexes")
-            else:
-                logger.debug("📊 Database schema verified (already exists)")
+            # Quiet - no logging needed for schema creation
     
     # ==================== Session Operations ====================
     
@@ -545,7 +540,6 @@ class AnalyticsDatabase:
             with self._get_connection() as conn:
                 conn.execute("VACUUM")
                 conn.execute("ANALYZE")
-            logger.info("✅ Database optimized (VACUUM + ANALYZE)")
         except Exception as e:
             logger.error(f"Failed to optimize database: {e}")
     
