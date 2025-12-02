@@ -104,24 +104,11 @@ def get_latest_memes():
                     embed = message.embeds[0]
 
                     message_id_str = str(message.id)
-                    
-                    # Get image URL and proxy it if needed for HTTPS/CORS
-                    image_url = embed.image.url if embed.image else None
-                    if image_url:
-                        # Check if image is from Reddit or other external sources
-                        from urllib.parse import urlparse, quote
-                        parsed = urlparse(image_url)
-                        
-                        # Proxy Reddit images to avoid mixed content and CORS issues
-                        if 'redd.it' in parsed.netloc:
-                            # Use our proxy endpoint with full HTTPS URL
-                            image_url = f"/api/meme/proxy-image?url={quote(image_url)}"
-                    
                     meme_data = {
                         "message_id": message_id_str,
                         "timestamp": message.created_at.isoformat(),
                         "title": embed.title or "Untitled Meme",
-                        "image_url": image_url,
+                        "image_url": embed.image.url if embed.image else None,
                         "url": embed.url or None,  # Permalink to reddit/lemmy
                         "color": embed.color.value if embed.color else None,
                     }
