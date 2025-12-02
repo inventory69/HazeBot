@@ -88,8 +88,21 @@ class AnalyticsAggregator:
                 session["endpoints_used"][endpoint] += 1
 
                 # Update last activity time (ended_at tracks last activity)
-                session["ended_at"] = datetime.utcnow().isoformat()
+                now = datetime.utcnow()
+                session["ended_at"] = now.isoformat()
+                
+                # Calculate current duration
+                try:
+                    started = datetime.fromisoformat(session["started_at"])
+                    duration = (now - started).total_seconds() / 60  # minutes
+                    session["duration_minutes"] = round(duration, 2)
+                except Exception as e:
+                    logger.error(f"Failed to calculate session duration: {e}")
 
+                # Update aggregations in real-time
+                self._update_user_stats(session)
+                self._update_daily_stats(session)
+                
                 self._save_data()
                 break
 
@@ -122,25 +135,47 @@ class AnalyticsAggregator:
             self.data["user_stats"][discord_id] = {
                 "username": session["username"],
                 "first_seen": session["started_at"],
-                "last_seen": session["ended_at"],
+                "last_seen": session["ended_at"] or session["started_at"],
                 "total_sessions": 0,
                 "total_time_minutes": 0,
                 "avg_session_duration": 0,
                 "device_history": [],
+                "session_ids_processed": set(),  # Track which sessions we've counted
             }
 
         user = self.data["user_stats"][discord_id]
+        
+        # Convert session_ids_processed to set if it's a list (for JSON compatibility)
+        if isinstance(user.get("session_ids_processed", []), list):
+            user["session_ids_processed"] = set(user["session_ids_processed"])
+        
+        # Only increment session count once per session
+        session_id = session["session_id"]
+        if session_id not in user.get("session_ids_processed", set()):
+            user["total_sessions"] += 1
+            if "session_ids_processed" not in user:
+                user["session_ids_processed"] = set()
+            user["session_ids_processed"].add(session_id)
+        
         user["username"] = session["username"]  # Update in case of name change
-        user["last_seen"] = session["ended_at"]
-        user["total_sessions"] += 1
-        user["total_time_minutes"] += session["duration_minutes"]
-        user["avg_session_duration"] = round(user["total_time_minutes"] / user["total_sessions"], 2)
+        user["last_seen"] = session["ended_at"] or session["started_at"]
+        
+        # Recalculate total time from all processed sessions
+        user["total_time_minutes"] = sum(
+            s["duration_minutes"] 
+            for s in self.data["sessions"] 
+            if s["discord_id"] == discord_id and s["session_id"] in user["session_ids_processed"]
+        )
+        
+        if user["total_sessions"] > 0:
+            user["avg_session_duration"] = round(user["total_time_minutes"] / user["total_sessions"], 2)
 
         # Track device history (unique devices)
         if session["device_info"] not in user["device_history"]:
             user["device_history"].append(session["device_info"])
-
-        self._save_data()
+        
+        # Convert set back to list for JSON serialization
+        user["session_ids_processed"] = list(user["session_ids_processed"])
 
     def _update_daily_stats(self, session: Dict[str, Any]) -> None:
         """Update daily statistics"""
@@ -151,30 +186,43 @@ class AnalyticsAggregator:
 
         if date not in self.data["daily_stats"]:
             self.data["daily_stats"][date] = {
-                "unique_users": set(),
+                "unique_users": [],
                 "total_sessions": 0,
                 "total_actions": 0,
                 "total_duration_minutes": 0,
                 "avg_session_duration": 0,
+                "session_ids_processed": [],  # Track which sessions we've counted
             }
 
         stats = self.data["daily_stats"][date]
 
-        # Handle set for unique users (convert to list for JSON)
-        if isinstance(stats["unique_users"], list):
-            unique_users = set(stats["unique_users"])
-        else:
-            unique_users = stats["unique_users"]
-
+        # Handle unique users (always as list for JSON)
+        unique_users = set(stats["unique_users"])
         unique_users.add(session["discord_id"])
-        stats["unique_users"] = list(unique_users)  # Convert back to list for JSON
+        stats["unique_users"] = list(unique_users)
 
-        stats["total_sessions"] += 1
-        stats["total_actions"] += session["actions_count"]
-        stats["total_duration_minutes"] += session["duration_minutes"]
-        stats["avg_session_duration"] = round(stats["total_duration_minutes"] / stats["total_sessions"], 2)
-
-        self._save_data()
+        # Track processed sessions to avoid double-counting
+        session_ids_processed = set(stats.get("session_ids_processed", []))
+        session_id = session["session_id"]
+        
+        # Only increment counts once per session
+        if session_id not in session_ids_processed:
+            stats["total_sessions"] += 1
+            session_ids_processed.add(session_id)
+            stats["session_ids_processed"] = list(session_ids_processed)
+        
+        # Recalculate totals from all sessions on this date
+        sessions_for_date = [
+            s for s in self.data["sessions"]
+            if datetime.fromisoformat(s["started_at"]).date().isoformat() == date
+            and s["session_id"] in session_ids_processed
+        ]
+        
+        stats["total_actions"] = sum(s["actions_count"] for s in sessions_for_date)
+        stats["total_duration_minutes"] = sum(s["duration_minutes"] for s in sessions_for_date)
+        
+        if stats["total_sessions"] > 0:
+            stats["avg_session_duration"] = round(stats["total_duration_minutes"] / stats["total_sessions"], 2)
 
     def add_screen_visit(self, session_id: str, screen_name: str) -> None:
         """Track screen visit in session"""
@@ -251,3 +299,47 @@ class AnalyticsAggregator:
             logger.info(f"Cleaned up {removed} old sessions (older than {days_to_keep} days)")
 
         return removed
+
+    def reprocess_all_sessions(self) -> Dict[str, int]:
+        """Reprocess all sessions to rebuild user_stats and daily_stats from scratch"""
+        logger.info("Reprocessing all sessions to rebuild aggregations...")
+        
+        # Clear existing aggregations
+        self.data["user_stats"] = {}
+        self.data["daily_stats"] = {}
+        
+        # Process each session
+        processed = 0
+        for session in self.data["sessions"]:
+            # Ensure session has ended_at (use started_at as fallback)
+            if not session.get("ended_at"):
+                session["ended_at"] = session["started_at"]
+            
+            # Ensure duration is calculated
+            if session.get("duration_minutes", 0) == 0:
+                try:
+                    started = datetime.fromisoformat(session["started_at"])
+                    ended = datetime.fromisoformat(session["ended_at"])
+                    duration = (ended - started).total_seconds() / 60
+                    session["duration_minutes"] = round(duration, 2)
+                except Exception:
+                    session["duration_minutes"] = 0
+            
+            # Update aggregations
+            try:
+                self._update_user_stats(session)
+                self._update_daily_stats(session)
+                processed += 1
+            except Exception as e:
+                logger.error(f"Failed to process session {session.get('session_id')}: {e}")
+        
+        self._save_data()
+        
+        result = {
+            "sessions_processed": processed,
+            "total_users": len(self.data["user_stats"]),
+            "total_days": len(self.data["daily_stats"]),
+        }
+        
+        logger.info(f"Reprocessing complete: {result}")
+        return result
