@@ -63,7 +63,7 @@ def set_analytics_instances(analytics_inst, error_tracker_inst):
     global analytics, error_tracker
     analytics = analytics_inst
     error_tracker = error_tracker_inst
-    logger.info("✅ Analytics instances connected to API")
+    logger.debug("✅ Analytics instances connected to API")
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()

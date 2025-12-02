@@ -29,8 +29,6 @@ class APIServer(commands.Cog):
         """Called when cog is loaded - starts the API server"""
         import asyncio
 
-        logger.info(f"Starting API server on port {self.api_port}...")
-
         # Wait to ensure port is released (in case of reload)
         await asyncio.sleep(3)
 
@@ -85,7 +83,7 @@ class APIServer(commands.Cog):
             # Set bot instance for API to use
             set_bot_instance(self.bot)
             
-            # Get analytics instances from AnalyticsManager Cog
+            # Get analytics instances from AnalyticsManager Cog (quiet)
             analytics_cog = self.bot.get_cog("AnalyticsManager")
             if analytics_cog:
                 analytics_inst = analytics_cog.get_analytics()
@@ -105,7 +103,7 @@ class APIServer(commands.Cog):
                     return
 
                 try:
-                    logger.info(f"API server starting on port {self.api_port} (attempt {attempt}/{max_retries})...")
+                    logger.debug(f"API server starting on port {self.api_port} (attempt {attempt}/{max_retries})...")
 
                     # Initialize Firebase Cloud Messaging (only on first attempt)
                     if attempt == 1:
@@ -114,18 +112,18 @@ class APIServer(commands.Cog):
 
                             firebase_initialized = initialize_firebase()
                             if firebase_initialized:
-                                logger.info("✅ Firebase Cloud Messaging initialized")
+                                logger.debug("✅ Firebase Cloud Messaging initialized")
                             else:
-                                logger.warning("Firebase Cloud Messaging not available (push notifications disabled)")
+                                logger.debug("Firebase Cloud Messaging not available (push notifications disabled)")
                         except Exception as e:
-                            logger.warning(f"⚠️  Failed to initialize Firebase: {e}")
-                            logger.warning("   Push notifications will be disabled")
+                            logger.warning(f"Failed to initialize Firebase: {e}")
+                            logger.debug("Push notifications will be disabled")
 
                     # Start the SocketIO server with gevent (this blocks until server stops)
                     # Store reference for shutdown
                     self._server = socketio
 
-                    logger.info(f"API server successfully bound to port {self.api_port}")
+                    logger.debug(f"API server successfully bound to port {self.api_port}")
 
                     # Disable gevent pywsgi access logs (HTTP requests)
                     import logging as log

@@ -89,7 +89,7 @@ def initialize_firebase() -> bool:
         _firebase_app = firebase_admin.initialize_app(cred)
         _fcm_enabled = True
 
-        logger.info("✅ Firebase Cloud Messaging initialized successfully")
+        logger.debug("✅ Firebase Cloud Messaging initialized successfully")
         return True
 
     except ImportError:
