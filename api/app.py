@@ -44,9 +44,13 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
 
-# Initialize analytics
+# Initialize analytics (performance-optimized with batch updates + cache)
 analytics_file = Path(__file__).parent.parent / Config.DATA_DIR / "app_analytics.json"
-analytics = analytics_module.AnalyticsAggregator(analytics_file)
+analytics = analytics_module.AnalyticsAggregator(
+    analytics_file,
+    batch_interval=300,  # Process batch every 5 minutes
+    cache_ttl=300  # Cache TTL: 5 minutes
+)
 
 # Initialize error tracking
 import api.error_tracking as error_tracking_module
@@ -352,5 +356,19 @@ if __name__ == "__main__":
     # Start first cleanup after 5 minutes
     Timer(300.0, periodic_cleanup).start()
 
+    # Register shutdown handler to flush analytics queue
+    import atexit
+    def shutdown_handler():
+        print("\n🛑 Shutting down...")
+        flushed = analytics.force_flush()
+        print(f"✅ Flushed {flushed} pending analytics updates")
+        analytics.shutdown()
+    
+    atexit.register(shutdown_handler)
+
     # Use socketio.run instead of app.run for WebSocket support
-    socketio.run(app, host="0.0.0.0", port=port, debug=debug_mode)
+    try:
+        socketio.run(app, host="0.0.0.0", port=port, debug=debug_mode)
+    except KeyboardInterrupt:
+        print("\n⚠️  Keyboard interrupt received")
+        shutdown_handler()
