@@ -69,6 +69,10 @@ class AnalyticsDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             
+            # Check if tables already exist
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+            tables_exist = cursor.fetchone() is not None
+            
             # Sessions table - Core analytics data
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
@@ -164,7 +168,12 @@ class AnalyticsDatabase:
                 cursor.execute(index_sql)
             
             conn.commit()
-            logger.info("✅ Database schema created with optimized indexes")
+            
+            # Only log if we actually created tables (not if they already existed)
+            if not tables_exist:
+                logger.info("✅ Database schema created with optimized indexes")
+            else:
+                logger.debug("📊 Database schema verified (already exists)")
     
     # ==================== Session Operations ====================
     
