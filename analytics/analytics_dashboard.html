@@ -260,52 +260,52 @@
         }
 
         /* Ultrawide Support (3440x1440 and above) */
+        /* Goal: Show MORE information side-by-side, not just bigger charts */
         @media (min-width: 2560px) {
             .container {
-                max-width: 3200px;
-                padding: 30px 60px;
+                max-width: 3400px;
+                padding: 25px 50px;
             }
 
+            /* Stats: 8 columns instead of 4 */
+            .stats-grid {
+                grid-template-columns: repeat(8, 1fr);
+                gap: 15px;
+            }
+
+            /* Charts: 3 columns for better space utilization */
             .charts-grid {
                 grid-template-columns: repeat(3, 1fr);
-                gap: 25px;
+                gap: 20px;
             }
 
+            /* Full-width sections span all 3 columns */
             .chart-container.full-width {
                 grid-column: span 3;
             }
 
-            .stats-grid {
-                grid-template-columns: repeat(6, 1fr);
-                gap: 20px;
-            }
-
-            .stat-card {
-                padding: 25px 20px;
-            }
-
-            h1 {
-                font-size: 2.8em;
-            }
-
-            .chart-title {
-                font-size: 1.4em;
-            }
-
+            /* Compact chart height to show more vertically */
             .chart-wrapper {
-                height: 420px;
+                height: 320px;
             }
 
+            /* Feature Analytics: Horizontal layout with 3 stat cards */
+            #featureAnalyticsSection .chart-wrapper {
+                height: 350px;
+            }
+
+            /* Tables: More compact to show more rows */
             table {
-                font-size: 0.95em;
+                font-size: 0.9em;
             }
 
             th, td {
-                padding: 12px 16px;
+                padding: 10px 14px;
             }
 
-            #featureAnalyticsSection .chart-wrapper {
-                height: 500px;
+            /* Sessions table: Show more columns/data */
+            #sessionsTable {
+                font-size: 0.85em;
             }
         }
 
@@ -357,15 +357,26 @@
                 <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
                 Auto-refresh every 30s
             </label>
-            <label>
-                Time Range:
-                <select id="timeRange" onchange="loadData()">
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="rangeMode" value="preset" checked onchange="toggleRangeMode()">
+                Preset:
+                <select id="timeRange" onchange="loadData()" style="min-width: 120px;">
                     <option value="7">Last 7 days</option>
                     <option value="30" selected>Last 30 days</option>
                     <option value="90">Last 90 days</option>
                     <option value="0">All time</option>
                 </select>
             </label>
+            <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="rangeMode" value="custom" onchange="toggleRangeMode()">
+                Custom Range:
+            </label>
+            <div id="customRangeInputs" style="display: none; gap: 8px; align-items: center;">
+                <input type="date" id="startDate" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 5px;">
+                <span style="color: var(--text-secondary);">to</span>
+                <input type="date" id="endDate" style="background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 5px;">
+                <button onclick="applyCustomRange()" style="padding: 6px 16px;">Apply</button>
+            </div>
             <div style="margin-left: auto; display: flex; gap: 8px;">
                 <button onclick="exportToCSV('sessions')">📥 Export Sessions</button>
                 <button onclick="exportToCSV('daily')">📥 Export Daily Stats</button>
@@ -395,6 +406,26 @@
                 <div class="stat-label">Total Actions</div>
                 <div class="stat-value" id="totalActions">-</div>
                 <div class="stat-sublabel" id="actionsToday">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Actions/Session</div>
+                <div class="stat-value" id="avgActionsPerSession">-</div>
+                <div class="stat-sublabel">average</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Longest Session</div>
+                <div class="stat-value" id="maxSessionDuration">-</div>
+                <div class="stat-sublabel">minutes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">New Users (7d)</div>
+                <div class="stat-value" id="newUsers7d">-</div>
+                <div class="stat-sublabel">this week</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Return Rate</div>
+                <div class="stat-value" id="returnRate">-</div>
+                <div class="stat-sublabel">% returning</div>
             </div>
         </div>
 
@@ -511,6 +542,53 @@
     <script>
         let autoRefreshInterval = null;
         let charts = {};
+        let customDateRange = null;
+
+        // Date Range Management
+        function toggleRangeMode() {
+            const mode = document.querySelector('input[name="rangeMode"]:checked').value;
+            const customInputs = document.getElementById('customRangeInputs');
+            const presetSelect = document.getElementById('timeRange');
+
+            if (mode === 'custom') {
+                customInputs.style.display = 'flex';
+                presetSelect.disabled = true;
+                
+                // Set default dates (last 30 days)
+                const end = new Date();
+                const start = new Date();
+                start.setDate(start.getDate() - 30);
+                
+                document.getElementById('startDate').valueAsDate = start;
+                document.getElementById('endDate').valueAsDate = end;
+            } else {
+                customInputs.style.display = 'none';
+                presetSelect.disabled = false;
+                customDateRange = null;
+                loadData();
+            }
+        }
+
+        function applyCustomRange() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!startDate || !endDate) {
+                alert('⚠️ Please select both start and end dates');
+                return;
+            }
+
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+
+            if (start > end) {
+                alert('⚠️ Start date must be before end date');
+                return;
+            }
+
+            customDateRange = { start: startDate, end: endDate };
+            loadData();
+        }
 
         // Theme Management
         function initializeTheme() {
@@ -622,11 +700,23 @@
 
         function processData(data, daysFilter) {
             const now = new Date();
-            const cutoffDate = daysFilter > 0 ? new Date(now - daysFilter * 24 * 60 * 60 * 1000) : null;
-
-            // Filter sessions by date
+            
+            // Filter sessions by date (custom range takes priority)
             let sessions = data.sessions || [];
-            if (cutoffDate) {
+            
+            if (customDateRange) {
+                // Use custom date range
+                const startDate = new Date(customDateRange.start);
+                const endDate = new Date(customDateRange.end);
+                endDate.setHours(23, 59, 59, 999); // Include entire end date
+                
+                sessions = sessions.filter(s => {
+                    const sessionDate = new Date(s.started_at);
+                    return sessionDate >= startDate && sessionDate <= endDate;
+                });
+            } else if (daysFilter > 0) {
+                // Use preset filter
+                const cutoffDate = new Date(now - daysFilter * 24 * 60 * 60 * 1000);
                 sessions = sessions.filter(s => new Date(s.started_at) >= cutoffDate);
             }
 
@@ -649,6 +739,33 @@
             const sessionsToday = todaySessions.length;
             const actionsToday = todaySessions.reduce((sum, s) => sum + (s.actions_count || 0), 0);
 
+            // Additional stats for ultrawide display
+            const avgActionsPerSession = totalSessions > 0 ? (totalActions / totalSessions).toFixed(1) : 0;
+            const maxSessionDuration = sessions.length > 0 
+                ? Math.max(...sessions.map(s => s.duration_minutes || 0)).toFixed(1) 
+                : 0;
+            
+            // New users in last 7 days
+            const userFirstSessions = {};
+            sessions.forEach(s => {
+                const userId = s.discord_id;
+                const sessionDate = new Date(s.started_at);
+                if (!userFirstSessions[userId] || sessionDate < userFirstSessions[userId]) {
+                    userFirstSessions[userId] = sessionDate;
+                }
+            });
+            const newUsers7d = Object.values(userFirstSessions).filter(
+                date => date >= sevenDaysAgo
+            ).length;
+            
+            // Return rate: users with more than 1 session
+            const userSessionCounts = {};
+            sessions.forEach(s => {
+                userSessionCounts[s.discord_id] = (userSessionCounts[s.discord_id] || 0) + 1;
+            });
+            const returningUsers = Object.values(userSessionCounts).filter(count => count > 1).length;
+            const returnRate = uniqueUsers > 0 ? ((returningUsers / uniqueUsers) * 100).toFixed(0) : 0;
+
             // Update stat cards
             document.getElementById('totalUsers').textContent = uniqueUsers;
             document.getElementById('activeUsers7d').textContent = `${activeUsers7d} active (7d)`;
@@ -657,6 +774,10 @@
             document.getElementById('avgDuration').textContent = avgDuration;
             document.getElementById('totalActions').textContent = totalActions;
             document.getElementById('actionsToday').textContent = `${actionsToday} today`;
+            document.getElementById('avgActionsPerSession').textContent = avgActionsPerSession;
+            document.getElementById('maxSessionDuration').textContent = maxSessionDuration;
+            document.getElementById('newUsers7d').textContent = newUsers7d;
+            document.getElementById('returnRate').textContent = `${returnRate}%`;
 
             // Generate charts
             updateUserGrowthChart(sessions);
@@ -927,6 +1048,9 @@
                     if (response.ok) {
                         featureData = await response.json();
                     }
+                } else {
+                    // Calculate feature analytics from local data
+                    featureData = calculateFeatureAnalytics(currentAnalyticsData, 30);
                 }
                 
                 if (featureData && featureData.features && Object.keys(featureData.features).length > 0) {
@@ -939,6 +1063,122 @@
                 console.error('Failed to load feature analytics:', error);
                 document.getElementById('featureAnalyticsSection').style.display = 'none';
             }
+        }
+
+        function calculateFeatureAnalytics(data, days) {
+            // Calculate feature analytics from sessions data (client-side implementation)
+            const sessions = data.sessions || [];
+            const now = new Date();
+            const cutoff = new Date(now - days * 24 * 60 * 60 * 1000);
+            
+            // Filter sessions by date
+            const recentSessions = sessions.filter(s => new Date(s.started_at) >= cutoff);
+            
+            if (recentSessions.length === 0) {
+                return null;
+            }
+            
+            // Feature categories (simplified version - matches Python categorization)
+            const categories = {
+                'Gaming Members': ['user.get_gaming_members', 'user.get_top_users'],
+                'Rocket League': ['rocket_league.get_user_rl_account', 'rocket_league.get_rocket_league_stats'],
+                'Memes': ['meme.get_meme_templates', 'meme.get_meme_sources', 'hazehub_cogs.get_latest_memes'],
+                'Config': ['config.get_config', 'config.update_config', 'config.config_general'],
+                'Tickets': ['tickets.get_my_tickets', 'tickets.get_ticket_messages_endpoint', 'tickets.create_ticket'],
+                'User Profile': ['user.get_user_profile', 'user.update_user_profile'],
+                'Auth': ['auth_routes.get_current_user', 'auth_routes.ping', 'auth_routes.login'],
+                'Admin': ['admin.get_active_sessions_endpoint', 'admin.force_sync'],
+                'Rankups': ['hazehub_cogs.get_latest_rankups'],
+                'Other': []
+            };
+            
+            // Count endpoint usage per user
+            const endpointUsage = {};
+            const userActions = {};
+            
+            recentSessions.forEach(session => {
+                const userId = session.discord_id;
+                const actions = session.actions || [];
+                
+                actions.forEach(action => {
+                    const endpoint = action.endpoint || 'unknown';
+                    
+                    // Initialize counters
+                    if (!endpointUsage[endpoint]) {
+                        endpointUsage[endpoint] = { count: 0, users: new Set() };
+                    }
+                    if (!userActions[userId]) {
+                        userActions[userId] = { total: 0, endpoints: new Set() };
+                    }
+                    
+                    // Track usage
+                    endpointUsage[endpoint].count++;
+                    endpointUsage[endpoint].users.add(userId);
+                    userActions[userId].total++;
+                    userActions[userId].endpoints.add(endpoint);
+                });
+            });
+            
+            // Categorize endpoints
+            function categorizeEndpoint(endpoint) {
+                for (const [category, endpoints] of Object.entries(categories)) {
+                    if (category === 'Other') continue;
+                    if (endpoints.some(e => endpoint.includes(e) || e.includes(endpoint))) {
+                        return category;
+                    }
+                }
+                return 'Other';
+            }
+            
+            // Aggregate by category
+            const features = {};
+            const totalUsers = Object.keys(userActions).length;
+            
+            Object.entries(endpointUsage).forEach(([endpoint, data]) => {
+                const category = categorizeEndpoint(endpoint);
+                
+                if (!features[category]) {
+                    features[category] = {
+                        total_uses: 0,
+                        unique_users: new Set(),
+                        endpoints: {},
+                        top_users: {}
+                    };
+                }
+                
+                features[category].total_uses += data.count;
+                data.users.forEach(u => features[category].unique_users.add(u));
+                features[category].endpoints[endpoint] = data.count;
+            });
+            
+            // Calculate stats and convert Sets to arrays
+            const featureRanking = [];
+            Object.keys(features).forEach(category => {
+                const feature = features[category];
+                const uniqueUsers = feature.unique_users.size;
+                feature.unique_users = uniqueUsers;
+                feature.adoption_rate = totalUsers > 0 ? uniqueUsers / totalUsers : 0;
+                feature.avg_uses_per_user = uniqueUsers > 0 ? feature.total_uses / uniqueUsers : 0;
+                
+                // Top users for this category (simplified)
+                feature.top_users = Object.entries(userActions)
+                    .map(([userId, data]) => [userId, data.total])
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3);
+                
+                featureRanking.push([category, feature.total_uses]);
+            });
+            
+            featureRanking.sort((a, b) => b[1] - a[1]);
+            
+            return {
+                features,
+                feature_ranking: featureRanking,
+                total_users: totalUsers,
+                total_actions: Object.values(endpointUsage).reduce((sum, data) => sum + data.count, 0),
+                days_analyzed: days,
+                analysis_date: new Date().toISOString()
+            };
         }
 
         function updateFeatureAnalytics(data) {
