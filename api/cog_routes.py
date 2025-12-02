@@ -62,6 +62,22 @@ COG_METADATA = {
             "/apirestart Command",
         ],
     },
+    "AnalyticsManager": {
+        "description": "Manages analytics tracking with SQLite backend",
+        "icon": "analytics",
+        "category": "monitoring",
+        "features": [
+            "SQLite Backend (WAL mode)",
+            "Real-time Session Tracking",
+            "User Statistics",
+            "Daily Analytics Aggregation",
+            "Error Tracking",
+            "Hot Reload via CogManager",
+            "Graceful Shutdown with DB Flush",
+            "64MB Query Cache",
+            "15+ Optimized Indexes",
+        ],
+    },
     "CogManager": {
         "description": "Dynamic cog loading, unloading, and reloading system",
         "icon": "settings",
