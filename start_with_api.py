@@ -77,7 +77,15 @@ class HazeWorldBot(commands.Bot):
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
 
-        # Load APIServer first (so API is available for other cogs)
+        # Load AnalyticsManager first (APIServer needs it)
+        try:
+            await self.load_extension("Cogs.AnalyticsManager")
+            loaded_cogs.append("AnalyticsManager")
+            Logger.info("   └─ ✅ Loaded: AnalyticsManager")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load AnalyticsManager: {e}")
+
+        # Load APIServer second (uses AnalyticsManager)
         try:
             await self.load_extension("Cogs.APIServer")
             loaded_cogs.append("APIServer")
@@ -85,7 +93,7 @@ class HazeWorldBot(commands.Bot):
         except Exception as e:
             Logger.error(f"   └─ ❌ Failed to load APIServer: {e}")
 
-        # Load CogManager second
+        # Load CogManager third
         try:
             await self.load_extension("Cogs.CogManager")
             loaded_cogs.append("CogManager")
@@ -94,7 +102,7 @@ class HazeWorldBot(commands.Bot):
             Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
             return
 
-        # Load DiscordLogging third
+        # Load DiscordLogging fourth
         try:
             await self.load_extension("Cogs.DiscordLogging")
             loaded_cogs.append("DiscordLogging")
@@ -108,7 +116,7 @@ class HazeWorldBot(commands.Bot):
 
         # Load other cogs
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_") or cog.stem in ["APIServer", "CogManager", "DiscordLogging"]:
+            if cog.name.startswith("_") or cog.stem in ["AnalyticsManager", "APIServer", "CogManager", "DiscordLogging"]:
                 continue
             if cog.stem in disabled_cogs:
                 Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")

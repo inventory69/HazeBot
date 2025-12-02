@@ -44,22 +44,26 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
 
-# Initialize analytics (singleton pattern - only once even if module imported multiple times)
-if not hasattr(analytics_module, '_analytics_instance'):
-    analytics_file = Path(__file__).parent.parent / Config.DATA_DIR / "app_analytics.json"
-    analytics_module._analytics_instance = analytics_module.AnalyticsAggregator(
-        analytics_file,
-        batch_interval=300,  # Process batch every 5 minutes
-        cache_ttl=300  # Cache TTL: 5 minutes
-    )
-analytics = analytics_module._analytics_instance
-
-# Initialize error tracking (singleton pattern)
+# Import error tracking module for error handling
 import api.error_tracking as error_tracking_module
-if not hasattr(error_tracking_module, '_error_tracker_instance'):
-    error_file = Path(__file__).parent.parent / Config.DATA_DIR / "error_analytics.json"
-    error_tracking_module._error_tracker_instance = error_tracking_module.ErrorTracker(error_file)
-error_tracker = error_tracking_module._error_tracker_instance
+
+# Analytics and Error Tracking instances (set by set_analytics_instances)
+# These will be injected by the AnalyticsManager Cog
+analytics = None
+error_tracker = None
+
+def set_analytics_instances(analytics_inst, error_tracker_inst):
+    """
+    Set analytics and error tracker instances from AnalyticsManager Cog
+    
+    Args:
+        analytics_inst: AnalyticsAggregator instance
+        error_tracker_inst: ErrorTracker instance
+    """
+    global analytics, error_tracker
+    analytics = analytics_inst
+    error_tracker = error_tracker_inst
+    logger.info("✅ Analytics instances connected to API")
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()

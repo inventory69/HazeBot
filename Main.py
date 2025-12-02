@@ -85,13 +85,21 @@ class HazeWorldBot(commands.Bot):
         except Exception as e:
             Logger.error(f"   └─ ❌ Failed to load DiscordLogging: {e}")
 
+        # Load AnalyticsManager third (before APIServer needs it)
+        try:
+            await self.load_extension("Cogs.AnalyticsManager")
+            loaded_cogs.append("AnalyticsManager")
+            Logger.info("   └─ ✅ Loaded: AnalyticsManager")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load AnalyticsManager: {e}")
+
         # Get disabled cogs from CogManager
         cog_manager = self.get_cog("CogManager")
         disabled_cogs = cog_manager.get_disabled_cogs() if cog_manager else []
 
         # Load other cogs, skipping disabled ones and already loaded ones
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_") or cog.stem in ["CogManager", "DiscordLogging"]:
+            if cog.name.startswith("_") or cog.stem in ["CogManager", "DiscordLogging", "AnalyticsManager"]:
                 continue
             if cog.stem in disabled_cogs:
                 Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")

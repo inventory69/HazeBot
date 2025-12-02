@@ -83,10 +83,20 @@ class APIServer(commands.Cog):
 
             # Import API app
             sys.path.insert(0, str(Path(__file__).parent.parent / "api"))
-            from api.app import app, socketio, set_bot_instance
+            from api.app import app, socketio, set_bot_instance, set_analytics_instances
 
             # Set bot instance for API to use
             set_bot_instance(self.bot)
+            
+            # Get analytics instances from AnalyticsManager Cog
+            analytics_cog = self.bot.get_cog("AnalyticsManager")
+            if analytics_cog:
+                analytics_inst = analytics_cog.get_analytics()
+                error_tracker_inst = analytics_cog.get_error_tracker()
+                set_analytics_instances(analytics_inst, error_tracker_inst)
+                logger.info("✅ [APIServer] Analytics instances connected")
+            else:
+                logger.warning("⚠️  [APIServer] AnalyticsManager Cog not found - analytics disabled")
 
             # Retry logic for port binding
             max_retries = 8
