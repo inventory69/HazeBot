@@ -378,6 +378,41 @@
             </div>
         </div>
 
+        <!-- Error Analytics Section -->
+        <div id="errorAnalyticsSection" class="table-container" style="margin-bottom: 15px; display: none;">
+            <h3 class="chart-title">🐛 Error Analytics</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">Total Errors</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="uniqueErrors">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">Unique Errors</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="errorRate">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">Avg/Day</div>
+                </div>
+            </div>
+            <h4 style="font-size: 1em; color: var(--text-primary); margin: 15px 0 10px 0;">Top Errors (Last 7 Days)</h4>
+            <table id="errorsTable">
+                <thead>
+                    <tr>
+                        <th>Error Type</th>
+                        <th>Message</th>
+                        <th>Endpoint</th>
+                        <th>Count</th>
+                        <th>Affected Users</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody id="errorsTableBody">
+                    <tr><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <div class="table-container">
             <h3 class="chart-title">🕐 Recent Sessions</h3>
             <table id="sessionsTable">
@@ -492,6 +527,10 @@
                 currentAnalyticsData = data;
 
                 processData(data, timeRange);
+                
+                // Load error analytics
+                await loadErrorAnalytics(dataSource);
+                
                 document.getElementById('lastUpdate').textContent = 
                     `${new Date().toLocaleString()} (Source: ${dataSource}/)`;
                 document.getElementById('error').style.display = 'none';
@@ -798,6 +837,97 @@
                     : '-';
                 row.insertCell().textContent = topFeature;
             });
+        }
+
+        async function loadErrorAnalytics(dataSource) {
+            try {
+                let errorData;
+                
+                // Try API endpoint first (when running from Flask)
+                if (dataSource === 'api') {
+                    const response = await fetch('/api/analytics/errors?days=7');
+                    if (response.ok) {
+                        errorData = await response.json();
+                    }
+                }
+                
+                // Fallback to JSON file
+                if (!errorData) {
+                    const response = await fetch(`${dataSource}/error_analytics.json`);
+                    errorData = await response.json();
+                }
+                
+                updateErrorAnalytics(errorData);
+            } catch (error) {
+                console.error('Failed to load error analytics:', error);
+                // Hide error section if data unavailable
+                document.getElementById('errorAnalyticsSection').style.display = 'none';
+            }
+        }
+
+        function updateErrorAnalytics(data) {
+            // Update error stats
+            const totalErrors = data.errors?.length || 0;
+            const uniqueErrors = Object.keys(data.error_groups || {}).length;
+            
+            // Calculate error rate (errors per day)
+            const dailyCounts = Object.values(data.daily_error_counts || {});
+            const avgErrorsPerDay = dailyCounts.length > 0 
+                ? (dailyCounts.reduce((a, b) => a + b, 0) / dailyCounts.length).toFixed(1)
+                : 0;
+            
+            document.getElementById('totalErrors').textContent = totalErrors;
+            document.getElementById('uniqueErrors').textContent = uniqueErrors;
+            document.getElementById('errorRate').textContent = `${avgErrorsPerDay}/day`;
+
+            // Update errors table
+            updateErrorsTable(data.error_groups || {});
+        }
+
+        function updateErrorsTable(errorGroups) {
+            const tbody = document.getElementById('errorsTableBody');
+            tbody.innerHTML = '';
+
+            // Sort by count descending and take top 10
+            const sortedErrors = Object.entries(errorGroups)
+                .sort((a, b) => b[1].count - a[1].count)
+                .slice(0, 10);
+
+            sortedErrors.forEach(([signature, errorGroup]) => {
+                const row = tbody.insertRow();
+                
+                // Error Type
+                row.insertCell().textContent = errorGroup.error_type || 'Unknown';
+
+                // Message (truncate if too long)
+                const message = errorGroup.message || '-';
+                const truncated = message.length > 60 
+                    ? message.substring(0, 60) + '...' 
+                    : message;
+                row.insertCell().textContent = truncated;
+
+                // Endpoint
+                const endpoint = errorGroup.endpoint || '-';
+                row.insertCell().textContent = endpoint.split('.').pop() || endpoint;
+
+                // Count
+                row.insertCell().textContent = errorGroup.count;
+
+                // Affected Users
+                const affectedUsers = errorGroup.affected_users?.length || 0;
+                row.insertCell().textContent = affectedUsers;
+
+                // Last Seen
+                const lastSeen = errorGroup.last_seen 
+                    ? new Date(errorGroup.last_seen).toLocaleString()
+                    : '-';
+                row.insertCell().textContent = lastSeen;
+            });
+
+            // Show section if we have errors
+            if (sortedErrors.length > 0) {
+                document.getElementById('errorAnalyticsSection').style.display = 'block';
+            }
         }
 
         function toggleAutoRefresh() {

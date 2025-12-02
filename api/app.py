@@ -48,6 +48,11 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=F
 analytics_file = Path(__file__).parent.parent / Config.DATA_DIR / "app_analytics.json"
 analytics = analytics_module.AnalyticsAggregator(analytics_file)
 
+# Initialize error tracking
+import api.error_tracking as error_tracking_module
+error_file = Path(__file__).parent.parent / Config.DATA_DIR / "error_analytics.json"
+error_tracker = error_tracking_module.ErrorTracker(error_file)
+
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()
 
@@ -176,7 +181,52 @@ def method_not_allowed(e):
 def internal_error(e):
     """Handle 500 errors"""
     logger.error(f"Internal server error: {e}")
+    # Track error
+    try:
+        error_tracking_module.track_api_error(
+            error_tracker=error_tracker,
+            exception=e,
+            endpoint="unknown",
+            request_data={"error_type": "500_internal_error"}
+        )
+    except Exception as track_error:
+        logger.error(f"Failed to track error: {track_error}")
     return jsonify({"error": "Internal server error"}), 500
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Global exception handler - catches all unhandled exceptions"""
+    logger.error(f"Unhandled exception: {e}", exc_info=True)
+    
+    # Track error
+    try:
+        from flask import request
+        endpoint = request.endpoint or "unknown"
+        user_id = getattr(request, 'discord_id', None)
+        username = getattr(request, 'username', None)
+        
+        error_tracking_module.track_api_error(
+            error_tracker=error_tracker,
+            exception=e,
+            endpoint=endpoint,
+            user_id=user_id,
+            username=username,
+            request_data={
+                "method": request.method,
+                "url": request.url,
+                "remote_addr": request.remote_addr
+            }
+        )
+    except Exception as track_error:
+        logger.error(f"Failed to track error: {track_error}")
+    
+    # Return user-friendly error message
+    return jsonify({
+        "error": "An unexpected error occurred",
+        "message": str(e),
+        "type": type(e).__name__
+    }), 500
 
 
 # ============================================================================
@@ -221,6 +271,23 @@ def cleanup_stale_sessions():
 
     if stale_session_ids:
         logger.debug(f"🧹 Cleaned up {len(stale_session_ids)} stale sessions")
+
+
+# ============================================================================
+# ERROR ANALYTICS ENDPOINT
+# ============================================================================
+
+@app.route("/api/analytics/errors", methods=["GET"])
+def get_error_analytics():
+    """Get error analytics summary"""
+    try:
+        from flask import request
+        days = int(request.args.get("days", 7))
+        summary = error_tracker.get_error_summary(days=days)
+        return jsonify(summary), 200
+    except Exception as e:
+        logger.error(f"Failed to get error analytics: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # ============================================================================
