@@ -103,6 +103,7 @@ class AnalyticsAggregator:
 
     def __init__(self, analytics_file: Path, batch_interval: int = 300, cache_ttl: int = 300):
         self.analytics_file = analytics_file
+        self.archive_dir = analytics_file.parent / "analytics_archive"
         self.data = self._load_data()
         self.data_lock = threading.Lock()
         self.running = True  # Must be set before thread starts
@@ -116,8 +117,13 @@ class AnalyticsAggregator:
         # Caching system
         self.cache = AnalyticsCache(ttl_seconds=cache_ttl)
 
+        # Monthly partitioning
+        self.current_month = datetime.utcnow().strftime("%Y-%m")
+        self._check_and_archive_old_month()
+
         logger.info(
-            f"Analytics aggregator initialized (batch_interval={batch_interval}s, cache_ttl={cache_ttl}s)"
+            f"Analytics aggregator initialized (batch_interval={batch_interval}s, cache_ttl={cache_ttl}s, "
+            f"current_month={self.current_month})"
         )
 
     def _load_data(self) -> Dict[str, Any]:
@@ -151,6 +157,191 @@ class AnalyticsAggregator:
         except Exception as e:
             logger.error(f"Failed to save analytics data: {e}")
 
+    def _check_and_archive_old_month(self) -> None:
+        """Check if we need to archive sessions from previous months"""
+        now = datetime.utcnow()
+        current_month = now.strftime("%Y-%m")
+
+        # Check if month changed since last check
+        if hasattr(self, 'current_month') and self.current_month != current_month:
+            logger.info(f"Month changed from {self.current_month} to {current_month}, archiving old sessions...")
+            self._archive_sessions_by_month()
+            self.current_month = current_month
+
+    def _archive_sessions_by_month(self) -> Dict[str, int]:
+        """Move sessions to monthly archive files"""
+        with self.data_lock:
+            if not self.data.get("sessions"):
+                return {}
+
+            # Group sessions by month
+            sessions_by_month = {}
+            current_sessions = []
+            current_month = datetime.utcnow().strftime("%Y-%m")
+
+            for session in self.data["sessions"]:
+                try:
+                    session_date = datetime.fromisoformat(session["started_at"])
+                    month_key = session_date.strftime("%Y-%m")
+
+                    if month_key == current_month:
+                        current_sessions.append(session)
+                    else:
+                        if month_key not in sessions_by_month:
+                            sessions_by_month[month_key] = []
+                        sessions_by_month[month_key].append(session)
+                except Exception as e:
+                    logger.error(f"Failed to parse session date: {e}")
+                    current_sessions.append(session)  # Keep in current if parsing fails
+
+            # Create archive directory
+            self.archive_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save archived months
+            archived_counts = {}
+            for month_key, sessions in sessions_by_month.items():
+                archive_file = self.archive_dir / f"{month_key}.json"
+                
+                # Load existing archive if it exists
+                existing_data = {"sessions": [], "daily_stats": {}, "user_stats": {}}
+                if archive_file.exists():
+                    try:
+                        with open(archive_file, "r", encoding="utf-8") as f:
+                            existing_data = json.load(f)
+                    except Exception as e:
+                        logger.error(f"Failed to load existing archive {month_key}: {e}")
+
+                # Merge sessions (avoid duplicates by session_id)
+                existing_session_ids = {s["session_id"] for s in existing_data["sessions"]}
+                new_sessions = [s for s in sessions if s["session_id"] not in existing_session_ids]
+                existing_data["sessions"].extend(new_sessions)
+
+                # Recalculate stats for archived month
+                archived_data = self._recalculate_stats_for_sessions(existing_data["sessions"])
+
+                # Save archive
+                try:
+                    with open(archive_file, "w", encoding="utf-8") as f:
+                        json.dump(archived_data, f, indent=2)
+                    archived_counts[month_key] = len(new_sessions)
+                    logger.info(f"Archived {len(new_sessions)} sessions to {month_key}.json")
+                except Exception as e:
+                    logger.error(f"Failed to save archive {month_key}: {e}")
+
+            # Update current data with only current month sessions
+            self.data["sessions"] = current_sessions
+            
+            # Recalculate current stats
+            self.data["user_stats"] = {}
+            self.data["daily_stats"] = {}
+            for session in current_sessions:
+                self._update_user_stats(session)
+                self._update_daily_stats(session)
+
+            return archived_counts
+
+    def _recalculate_stats_for_sessions(self, sessions: list) -> Dict[str, Any]:
+        """Recalculate user_stats and daily_stats for a list of sessions"""
+        data = {"sessions": sessions, "user_stats": {}, "daily_stats": {}}
+
+        # Calculate user stats
+        users_sessions = {}
+        for session in sessions:
+            discord_id = session["discord_id"]
+            if discord_id not in users_sessions:
+                users_sessions[discord_id] = []
+            users_sessions[discord_id].append(session)
+
+        for discord_id, user_sessions in users_sessions.items():
+            unique_session_ids = set(s["session_id"] for s in user_sessions)
+            total_time = sum(s.get("duration_minutes", 0) for s in user_sessions)
+            total_sessions = len(unique_session_ids)
+            device_history = list(set(s["device_info"] for s in user_sessions if s.get("device_info")))
+            
+            sorted_sessions = sorted(user_sessions, key=lambda s: s["started_at"])
+            first_seen = sorted_sessions[0]["started_at"]
+            last_seen = sorted_sessions[-1].get("ended_at") or sorted_sessions[-1]["started_at"]
+
+            data["user_stats"][discord_id] = {
+                "username": user_sessions[0]["username"],
+                "first_seen": first_seen,
+                "last_seen": last_seen,
+                "total_sessions": total_sessions,
+                "total_time_minutes": round(total_time, 2),
+                "avg_session_duration": round(total_time / total_sessions, 2) if total_sessions > 0 else 0,
+                "device_history": device_history,
+            }
+
+        # Calculate daily stats
+        daily_sessions = {}
+        for session in sessions:
+            try:
+                date = datetime.fromisoformat(session["started_at"]).date().isoformat()
+                if date not in daily_sessions:
+                    daily_sessions[date] = []
+                daily_sessions[date].append(session)
+            except Exception:
+                pass
+
+        for date, date_sessions in daily_sessions.items():
+            unique_users = list(set(s["discord_id"] for s in date_sessions))
+            unique_session_ids = set(s["session_id"] for s in date_sessions)
+            total_sessions = len(unique_session_ids)
+            total_actions = sum(s.get("actions_count", 0) for s in date_sessions)
+            total_duration = sum(s.get("duration_minutes", 0) for s in date_sessions)
+
+            data["daily_stats"][date] = {
+                "unique_users": unique_users,
+                "total_sessions": total_sessions,
+                "total_actions": total_actions,
+                "total_duration_minutes": round(total_duration, 2),
+                "avg_session_duration": round(total_duration / total_sessions, 2) if total_sessions > 0 else 0,
+            }
+
+        return data
+
+    def _load_archived_months(self, start_date: datetime, end_date: datetime) -> list:
+        """Load sessions from archived months within date range"""
+        archived_sessions = []
+        
+        if not self.archive_dir.exists():
+            return archived_sessions
+
+        # Generate list of months to check
+        current = start_date.replace(day=1)
+        end = end_date.replace(day=1)
+        months_to_check = []
+        
+        while current <= end:
+            months_to_check.append(current.strftime("%Y-%m"))
+            # Move to next month
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+
+        # Load each archived month
+        for month_key in months_to_check:
+            archive_file = self.archive_dir / f"{month_key}.json"
+            if archive_file.exists():
+                try:
+                    with open(archive_file, "r", encoding="utf-8") as f:
+                        archive_data = json.load(f)
+                        sessions = archive_data.get("sessions", [])
+                        
+                        # Filter by date range
+                        filtered_sessions = [
+                            s for s in sessions
+                            if start_date <= datetime.fromisoformat(s["started_at"]) <= end_date
+                        ]
+                        
+                        archived_sessions.extend(filtered_sessions)
+                        logger.debug(f"Loaded {len(filtered_sessions)} sessions from archive {month_key}")
+                except Exception as e:
+                    logger.error(f"Failed to load archive {month_key}: {e}")
+
+        return archived_sessions
+
     def _batch_processor(self) -> None:
         """Background thread that processes batched updates periodically"""
         logger.info(f"Batch processor started (interval: {self.batch_interval}s)")
@@ -170,6 +361,9 @@ class AnalyticsAggregator:
                 updates = self.update_queue.dequeue_all()
                 self._process_batch_updates(updates)
                 self._save_data()
+
+                # Check if we need to archive old months
+                self._check_and_archive_old_month()
 
                 # Invalidate cache after updates
                 self.cache.invalidate()
@@ -395,7 +589,7 @@ class AnalyticsAggregator:
                     break
 
     def get_export_data(self, days: int = None) -> Dict[str, Any]:
-        """Export analytics data for external analysis (with caching)"""
+        """Export analytics data for external analysis (with caching and archive support)"""
         cache_key = f"export_{days or 'all'}"
 
         # Try cache first
@@ -405,13 +599,21 @@ class AnalyticsAggregator:
 
         with self.data_lock:
             if days is None:
+                # Return all current month data (no archives)
                 result = self.data.copy()
             else:
-                # Filter sessions by date
-                cutoff = datetime.utcnow() - timedelta(days=days)
-                filtered_sessions = [
+                # Calculate date range
+                now = datetime.utcnow()
+                cutoff = now - timedelta(days=days)
+
+                # Get sessions from current month
+                current_sessions = [
                     s for s in self.data["sessions"] if datetime.fromisoformat(s["started_at"]) > cutoff
                 ]
+
+                # Load archived sessions if date range spans multiple months
+                archived_sessions = self._load_archived_months(cutoff, now)
+                all_sessions = current_sessions + archived_sessions
 
                 # Filter daily stats by date
                 cutoff_date = cutoff.date().isoformat()
@@ -420,11 +622,12 @@ class AnalyticsAggregator:
                 }
 
                 result = {
-                    "sessions": filtered_sessions,
+                    "sessions": all_sessions,
                     "daily_stats": filtered_daily,
                     "user_stats": self.data["user_stats"],
-                    "export_date": datetime.utcnow().isoformat(),
+                    "export_date": now.isoformat(),
                     "days_included": days,
+                    "archived_months_loaded": len(archived_sessions) > 0,
                 }
 
         # Cache result
@@ -562,6 +765,56 @@ class AnalyticsAggregator:
         
         logger.info(f"Reprocessing complete: {result}")
         return result
+
+    def force_archive(self) -> Dict[str, int]:
+        """Manually trigger archiving of old months (useful for maintenance)"""
+        logger.info("Forcing archive of old sessions...")
+        archived_counts = self._archive_sessions_by_month()
+        self._save_data()
+        self.cache.invalidate()
+        
+        total_archived = sum(archived_counts.values())
+        logger.info(f"Archived {total_archived} sessions across {len(archived_counts)} months")
+        return archived_counts
+
+    def get_archive_stats(self) -> Dict[str, Any]:
+        """Get statistics about archived months"""
+        if not self.archive_dir.exists():
+            return {
+                "archive_enabled": True,
+                "archived_months": 0,
+                "total_archived_sessions": 0,
+                "months": []
+            }
+
+        archived_months = []
+        total_sessions = 0
+
+        for archive_file in sorted(self.archive_dir.glob("*.json")):
+            month_key = archive_file.stem
+            try:
+                with open(archive_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    session_count = len(data.get("sessions", []))
+                    user_count = len(data.get("user_stats", {}))
+                    total_sessions += session_count
+                    
+                    archived_months.append({
+                        "month": month_key,
+                        "sessions": session_count,
+                        "users": user_count,
+                        "file_size_kb": archive_file.stat().st_size // 1024
+                    })
+            except Exception as e:
+                logger.error(f"Failed to read archive stats for {month_key}: {e}")
+
+        return {
+            "archive_enabled": True,
+            "archived_months": len(archived_months),
+            "total_archived_sessions": total_sessions,
+            "archive_dir": str(self.archive_dir),
+            "months": archived_months
+        }
 
     def shutdown(self) -> None:
         """Gracefully shutdown the batch processor"""
