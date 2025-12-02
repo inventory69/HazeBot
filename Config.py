@@ -36,6 +36,12 @@ GUILD_NAME = os.getenv("DISCORD_GUILD_NAME" if PROD_MODE else "DISCORD_TEST_GUIL
 # Data directory selection based on PROD_MODE
 DATA_DIR = "Data" if PROD_MODE else "TestData"
 
+# Analytics storage backend: "sqlite" or "json" (legacy)
+# SQLite provides better performance, indexing, and query capabilities
+# JSON is kept for backward compatibility
+ANALYTICS_BACKEND = os.getenv("ANALYTICS_BACKEND", "sqlite").lower()
+USE_SQLITE_ANALYTICS = ANALYTICS_BACKEND == "sqlite"
+
 # Timezone configuration for consistent datetime display
 TIMEZONE = os.getenv("TIMEZONE", "Europe/Berlin")
 
