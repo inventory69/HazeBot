@@ -1157,18 +1157,46 @@
                 });
             });
             
+            const endpointList = Object.keys(endpointUsage);
             console.log('📊 Feature Analytics Debug:', { 
                 recentSessions: recentSessions.length,
-                endpointCount: Object.keys(endpointUsage).length,
+                endpointCount: endpointList.length,
+                endpoints: endpointList,
                 sampleSession: recentSessions[0]
             });
             
-            // Categorize endpoints
+            if (endpointList.length === 0) {
+                console.warn('⚠️ No endpoints found in sessions!');
+                return null;
+            }
+            
+            // Categorize endpoints (flexible matching)
             function categorizeEndpoint(endpoint) {
-                for (const [category, endpoints] of Object.entries(categories)) {
+                const endpointLower = endpoint.toLowerCase();
+                
+                // Try exact and partial matching
+                for (const [category, patterns] of Object.entries(categories)) {
                     if (category === 'Other') continue;
-                    if (endpoints.some(e => endpoint.includes(e) || e.includes(endpoint))) {
-                        return category;
+                    
+                    for (const pattern of patterns) {
+                        const patternLower = pattern.toLowerCase();
+                        // Check both directions: pattern in endpoint OR endpoint in pattern
+                        if (endpointLower.includes(patternLower) || patternLower.includes(endpointLower)) {
+                            return category;
+                        }
+                        
+                        // Also check by extracting key parts (e.g., "gaming_members" from "user.get_gaming_members")
+                        const endpointParts = endpointLower.split(/[._]/);
+                        const patternParts = patternLower.split(/[._]/);
+                        
+                        for (const ePart of endpointParts) {
+                            for (const pPart of patternParts) {
+                                if (ePart.length > 3 && pPart.length > 3 && 
+                                    (ePart.includes(pPart) || pPart.includes(ePart))) {
+                                    return category;
+                                }
+                            }
+                        }
                     }
                 }
                 return 'Other';
@@ -1177,9 +1205,11 @@
             // Aggregate by category
             const features = {};
             const totalUsers = Object.keys(userActions).length;
+            const categorization = {};  // Debug: track endpoint -> category mapping
             
             Object.entries(endpointUsage).forEach(([endpoint, data]) => {
                 const category = categorizeEndpoint(endpoint);
+                categorization[endpoint] = category;  // Debug tracking
                 
                 if (!features[category]) {
                     features[category] = {
@@ -1194,6 +1224,8 @@
                 data.users.forEach(u => features[category].unique_users.add(u));
                 features[category].endpoints[endpoint] = data.count;
             });
+            
+            console.log('🏷️ Endpoint Categorization:', categorization);
             
             // Calculate stats and convert Sets to arrays
             const featureRanking = [];
