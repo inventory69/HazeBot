@@ -278,7 +278,7 @@ def cleanup_stale_sessions():
 
 
 # ============================================================================
-# ERROR ANALYTICS ENDPOINT
+# ANALYTICS ENDPOINTS
 # ============================================================================
 
 @app.route("/api/analytics/errors", methods=["GET"])
@@ -291,6 +291,53 @@ def get_error_analytics():
         return jsonify(summary), 200
     except Exception as e:
         logger.error(f"Failed to get error analytics: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/analytics/features", methods=["GET"])
+def get_feature_analytics():
+    """Get feature usage analytics"""
+    try:
+        from flask import request
+        import api.feature_analytics as feature_analytics_module
+        
+        days = int(request.args.get("days", 30))
+        
+        # Get sessions from analytics
+        export_data = analytics.get_export_data(days=days)
+        sessions = export_data.get("sessions", [])
+        
+        # Analyze feature usage
+        analyzer = feature_analytics_module.FeatureUsageAnalyzer()
+        analysis = analyzer.analyze_feature_usage(sessions, days=days)
+        
+        return jsonify(analysis), 200
+    except Exception as e:
+        logger.error(f"Failed to get feature analytics: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/analytics/features/comparison", methods=["GET"])
+def get_feature_comparison():
+    """Get feature usage comparison between two periods"""
+    try:
+        from flask import request
+        import api.feature_analytics as feature_analytics_module
+        
+        days1 = int(request.args.get("days1", 7))
+        days2 = int(request.args.get("days2", 30))
+        
+        # Get sessions
+        export_data = analytics.get_export_data(days=days2)
+        sessions = export_data.get("sessions", [])
+        
+        # Compare feature usage
+        analyzer = feature_analytics_module.FeatureUsageAnalyzer()
+        comparison = analyzer.get_feature_comparison(sessions, days1=days1, days2=days2)
+        
+        return jsonify(comparison), 200
+    except Exception as e:
+        logger.error(f"Failed to get feature comparison: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

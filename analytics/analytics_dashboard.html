@@ -378,6 +378,31 @@
             </div>
         </div>
 
+        <!-- Feature Usage Analytics Section -->
+        <div id="featureAnalyticsSection" class="chart-container full-width" style="margin-bottom: 15px; display: none;">
+            <h3 class="chart-title">🎯 Feature Usage (Last 30 Days)</h3>
+            <div class="chart-wrapper">
+                <canvas id="featureUsageChart"></canvas>
+            </div>
+            <div style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="background: var(--card-hover); padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Most Used</div>
+                    <div style="font-size: 1.2em; color: var(--accent-primary); font-weight: bold;" id="topFeature">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);" id="topFeatureUses">-</div>
+                </div>
+                <div style="background: var(--card-hover); padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Highest Adoption</div>
+                    <div style="font-size: 1.2em; color: var(--accent-primary); font-weight: bold;" id="topAdoptionFeature">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);" id="topAdoptionRate">-</div>
+                </div>
+                <div style="background: var(--card-hover); padding: 12px; border-radius: 8px;">
+                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Top Power User</div>
+                    <div style="font-size: 1.2em; color: var(--accent-primary); font-weight: bold;" id="topPowerUser">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);" id="topPowerUserActions">-</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Error Analytics Section -->
         <div id="errorAnalyticsSection" class="table-container" style="margin-bottom: 15px; display: none;">
             <h3 class="chart-title">🐛 Error Analytics</h3>
@@ -527,6 +552,9 @@
                 currentAnalyticsData = data;
 
                 processData(data, timeRange);
+                
+                // Load feature analytics
+                await loadFeatureAnalytics(dataSource);
                 
                 // Load error analytics
                 await loadErrorAnalytics(dataSource);
@@ -836,6 +864,134 @@
                     ? topEndpoint[0].split('.').pop().replace(/_/g, ' ')
                     : '-';
                 row.insertCell().textContent = topFeature;
+            });
+        }
+
+        async function loadFeatureAnalytics(dataSource) {
+            try {
+                let featureData;
+                
+                // Try API endpoint first (when running from Flask)
+                if (dataSource === 'api') {
+                    const response = await fetch('/api/analytics/features?days=30');
+                    if (response.ok) {
+                        featureData = await response.json();
+                    }
+                }
+                
+                if (featureData && featureData.features && Object.keys(featureData.features).length > 0) {
+                    updateFeatureAnalytics(featureData);
+                    document.getElementById('featureAnalyticsSection').style.display = 'block';
+                } else {
+                    document.getElementById('featureAnalyticsSection').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load feature analytics:', error);
+                document.getElementById('featureAnalyticsSection').style.display = 'none';
+            }
+        }
+
+        function updateFeatureAnalytics(data) {
+            const features = data.features || {};
+            const ranking = data.feature_ranking || [];
+            const powerUsers = data.power_users || {};
+
+            // Update stats cards
+            if (ranking.length > 0) {
+                const [topFeatureName, topFeatureUses] = ranking[0];
+                const topFeatureStats = features[topFeatureName];
+                
+                document.getElementById('topFeature').textContent = topFeatureName;
+                document.getElementById('topFeatureUses').textContent = 
+                    `${topFeatureUses} uses by ${topFeatureStats.unique_users} users`;
+            }
+
+            // Find highest adoption
+            let highestAdoption = { name: '-', rate: 0 };
+            for (const [name, stats] of Object.entries(features)) {
+                if (stats.adoption_rate > highestAdoption.rate) {
+                    highestAdoption = { name, rate: stats.adoption_rate, users: stats.unique_users };
+                }
+            }
+            if (highestAdoption.name !== '-') {
+                document.getElementById('topAdoptionFeature').textContent = highestAdoption.name;
+                document.getElementById('topAdoptionRate').textContent = 
+                    `${(highestAdoption.rate * 100).toFixed(0)}% (${highestAdoption.users} users)`;
+            }
+
+            // Top power user
+            const powerUsersList = Object.entries(powerUsers);
+            if (powerUsersList.length > 0) {
+                const [username, userData] = powerUsersList[0];
+                document.getElementById('topPowerUser').textContent = username;
+                document.getElementById('topPowerUserActions').textContent = 
+                    `${userData.total_actions} actions, ${userData.feature_count} features`;
+            }
+
+            // Update feature usage chart
+            updateFeatureChart(ranking, features);
+        }
+
+        function updateFeatureChart(ranking, features) {
+            const labels = ranking.slice(0, 10).map(([name, uses]) => name);
+            const uses = ranking.slice(0, 10).map(([name, count]) => count);
+            const adoptionRates = ranking.slice(0, 10).map(([name, uses]) => 
+                (features[name].adoption_rate * 100).toFixed(1)
+            );
+
+            const colors = [
+                '#667eea', '#764ba2', '#f093fb', '#4facfe',
+                '#43e97b', '#fa709a', '#fee140', '#30cfd0',
+                '#a8edea', '#fed6e3'
+            ];
+
+            if (charts.featureUsage) charts.featureUsage.destroy();
+            
+            const ctx = document.getElementById('featureUsageChart').getContext('2d');
+            charts.featureUsage = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Uses',
+                        data: uses,
+                        backgroundColor: colors,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const featureName = context.label;
+                                    const stats = features[featureName];
+                                    return [
+                                        `Users: ${stats.unique_users}`,
+                                        `Adoption: ${(stats.adoption_rate * 100).toFixed(0)}%`,
+                                        `Avg: ${stats.avg_uses_per_user.toFixed(1)} uses/user`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { color: '#e2e8f0' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#e2e8f0' },
+                            grid: { display: false }
+                        }
+                    }
+                }
             });
         }
 
