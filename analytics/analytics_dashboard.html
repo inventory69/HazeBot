@@ -1104,17 +1104,19 @@
                 return null;
             }
             
-            // Feature categories (simplified version - matches Python categorization)
+            // Feature categories (matches actual endpoint names from backend)
             const categories = {
-                'Gaming Members': ['user.get_gaming_members', 'user.get_top_users'],
-                'Rocket League': ['rocket_league.get_user_rl_account', 'rocket_league.get_rocket_league_stats'],
-                'Memes': ['meme.get_meme_templates', 'meme.get_meme_sources', 'hazehub_cogs.get_latest_memes'],
-                'Config': ['config.get_config', 'config.update_config', 'config.config_general'],
-                'Tickets': ['tickets.get_my_tickets', 'tickets.get_ticket_messages_endpoint', 'tickets.create_ticket'],
-                'User Profile': ['user.get_user_profile', 'user.update_user_profile'],
-                'Auth': ['auth_routes.get_current_user', 'auth_routes.ping', 'auth_routes.login'],
-                'Admin': ['admin.get_active_sessions_endpoint', 'admin.force_sync'],
-                'Rankups': ['hazehub_cogs.get_latest_rankups'],
+                'Auth': ['auth_routes', 'auth.', 'login', 'logout', 'ping', 'current_user'],
+                'Gaming Members': ['gaming_members', 'get_top_users', 'user.get_gaming'],
+                'Rocket League': ['rocket_league', 'rl_account', 'rl_stats'],
+                'Memes': ['meme', 'meme_templates', 'meme_sources', 'latest_memes'],
+                'Config': ['config.', 'get_config', 'update_config', 'config_general'],
+                'Tickets': ['tickets', 'ticket_messages', 'create_ticket', 'get_my_tickets'],
+                'User Profile': ['user_profile', 'get_user_profile', 'update_user_profile'],
+                'Admin': ['admin.', 'active_sessions', 'force_sync'],
+                'Rankups': ['rankups', 'latest_rankups'],
+                'HazeHub Cogs': ['hazehub_cogs', 'hazehub'],
+                'Notifications': ['notification', 'push_token'],
                 'Other': []
             };
             
@@ -1124,15 +1126,22 @@
             
             recentSessions.forEach(session => {
                 const userId = session.discord_id;
+                
+                // Sessions have endpoints_used as an object: { "endpoint_name": count }
+                const endpointsUsed = session.endpoints_used || {};
+                const endpointNames = Object.keys(endpointsUsed);
+                
+                // Also support legacy formats
                 const actions = session.actions || [];
-                
-                // Also track session endpoints (for sessions without detailed actions)
                 const sessionEndpoints = session.endpoints_accessed || [];
-                const allEndpoints = [...actions.map(a => a.endpoint || a), ...sessionEndpoints];
+                const actionEndpoints = actions.map(a => a.endpoint || a).filter(e => e);
                 
-                if (allEndpoints.length === 0 && session.actions_count > 0) {
-                    // Fallback: If no endpoints but has actions, use a generic endpoint
-                    allEndpoints.push('general.session_activity');
+                // Combine all endpoint sources
+                const allEndpoints = [...endpointNames, ...actionEndpoints, ...sessionEndpoints];
+                
+                if (allEndpoints.length === 0) {
+                    // No endpoints tracked, skip this session
+                    return;
                 }
                 
                 allEndpoints.forEach(endpoint => {
@@ -1140,6 +1149,9 @@
                     
                     // Handle both string endpoints and action objects
                     const endpointName = typeof endpoint === 'string' ? endpoint : (endpoint.endpoint || 'unknown');
+                    
+                    // Get the count (from endpoints_used object or default to 1)
+                    const count = endpointsUsed[endpointName] || 1;
                     
                     // Initialize counters
                     if (!endpointUsage[endpointName]) {
@@ -1149,10 +1161,10 @@
                         userActions[userId] = { total: 0, endpoints: new Set() };
                     }
                     
-                    // Track usage
-                    endpointUsage[endpointName].count++;
+                    // Track usage (use actual count from session)
+                    endpointUsage[endpointName].count += count;
                     endpointUsage[endpointName].users.add(userId);
-                    userActions[userId].total++;
+                    userActions[userId].total += count;
                     userActions[userId].endpoints.add(endpointName);
                 });
             });
