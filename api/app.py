@@ -68,7 +68,7 @@ def set_analytics_instances(analytics_inst, error_tracker_inst):
     # This fixes the race condition where init_auth() is called before analytics is set
     auth_module.analytics_aggregator = analytics_inst
     
-    logger.debug("✅ Analytics instances connected to API")
+    logger.info(f"✅ Analytics instances connected to API - Aggregator: {analytics_inst is not None}, Auth Module: {auth_module.analytics_aggregator is not None}")
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()
