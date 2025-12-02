@@ -853,11 +853,17 @@
                 
                 // Fallback to JSON file
                 if (!errorData) {
-                    const response = await fetch(`${dataSource}/error_analytics.json`);
-                    errorData = await response.json();
+                    // Use absolute path from root (same logic as main analytics)
+                    const errorPath = dataSource === 'api' ? '/Data/error_analytics.json' : `/${dataSource}/error_analytics.json`;
+                    const response = await fetch(errorPath);
+                    if (response.ok) {
+                        errorData = await response.json();
+                    }
                 }
                 
-                updateErrorAnalytics(errorData);
+                if (errorData) {
+                    updateErrorAnalytics(errorData);
+                }
             } catch (error) {
                 console.error('Failed to load error analytics:', error);
                 // Hide error section if data unavailable
