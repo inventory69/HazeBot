@@ -63,6 +63,11 @@ def set_analytics_instances(analytics_inst, error_tracker_inst):
     global analytics, error_tracker
     analytics = analytics_inst
     error_tracker = error_tracker_inst
+    
+    # CRITICAL: Update auth_module's analytics_aggregator
+    # This fixes the race condition where init_auth() is called before analytics is set
+    auth_module.analytics_aggregator = analytics_inst
+    
     logger.debug("✅ Analytics instances connected to API")
 
 # Thread lock for JWT decode (prevents race conditions)
