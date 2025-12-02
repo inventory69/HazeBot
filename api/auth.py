@@ -160,15 +160,23 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             request.user_permissions = data.get("permissions", ["all"])
             request.discord_id = data.get("discord_id", "unknown")
 
-            # Generate a unique session ID if not present in token
-            # Use user-specific data to ensure uniqueness across different users
-            if "session_id" in data:
+            # Generate a unique session ID
+            # Priority: 1. X-Session-ID header (from Flutter app)
+            #           2. session_id from JWT token
+            #           3. Fallback: Hash of discord_id + token
+            session_id_header = request.headers.get("X-Session-ID")
+            
+            if session_id_header and session_id_header != "Unknown":
+                # Use session ID from Flutter app (preferred method)
+                request.session_id = session_id_header
+            elif "session_id" in data:
+                # Use session ID from JWT token
                 request.session_id = data["session_id"]
             else:
-                # Fallback: Create session ID from user ID + discord ID + token hash
+                # Fallback: Create session ID from user data
                 import hashlib
-
-                session_data = f"{data.get('user', 'unknown')}_{data.get('discord_id', 'unknown')}_{token}"
+                
+                session_data = f"{data.get('discord_id', 'unknown')}_{token[:20]}"
                 request.session_id = hashlib.sha256(session_data.encode()).hexdigest()[:32]
 
             # Update active session tracking
