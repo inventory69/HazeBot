@@ -263,49 +263,74 @@
         /* Goal: Show MORE information side-by-side, not just bigger charts */
         @media (min-width: 2560px) {
             .container {
-                max-width: 3400px;
-                padding: 25px 50px;
+                max-width: 3600px;
+                padding: 20px 40px;
             }
 
             /* Stats: 8 columns instead of 4 */
             .stats-grid {
                 grid-template-columns: repeat(8, 1fr);
+                gap: 12px;
+            }
+
+            .stat-card {
+                padding: 12px 15px;
+            }
+
+            .stat-value {
+                font-size: 1.6em;
+            }
+
+            /* Charts: 4 columns for maximum density */
+            .charts-grid {
+                grid-template-columns: repeat(4, 1fr);
                 gap: 15px;
             }
 
-            /* Charts: 3 columns for better space utilization */
-            .charts-grid {
-                grid-template-columns: repeat(3, 1fr);
-                gap: 20px;
+            /* Regular charts take 1 column each */
+            .chart-container {
+                grid-column: span 1;
             }
 
-            /* Full-width sections span all 3 columns */
+            /* Full-width sections: Only 2 columns instead of full width */
             .chart-container.full-width {
-                grid-column: span 3;
+                grid-column: span 2;
             }
 
-            /* Compact chart height to show more vertically */
+            /* Very compact chart height to fit more */
             .chart-wrapper {
-                height: 320px;
+                height: 280px;
             }
 
-            /* Feature Analytics: Horizontal layout with 3 stat cards */
+            /* Feature Analytics and Error Analytics: 2 columns each */
+            #featureAnalyticsSection {
+                grid-column: span 2;
+            }
+
             #featureAnalyticsSection .chart-wrapper {
-                height: 350px;
+                height: 300px;
+            }
+
+            #errorAnalyticsSection {
+                grid-column: span 4;
             }
 
             /* Tables: More compact to show more rows */
             table {
-                font-size: 0.9em;
+                font-size: 0.85em;
             }
 
             th, td {
-                padding: 10px 14px;
+                padding: 8px 12px;
             }
 
-            /* Sessions table: Show more columns/data */
+            /* Sessions table: Very compact */
             #sessionsTable {
-                font-size: 0.85em;
+                font-size: 0.8em;
+            }
+
+            .table-container {
+                grid-column: span 4;
             }
         }
 
@@ -1068,6 +1093,7 @@
         function calculateFeatureAnalytics(data, days) {
             // Calculate feature analytics from sessions data (client-side implementation)
             const sessions = data.sessions || [];
+            console.log('📊 Calculating feature analytics...', { totalSessions: sessions.length });
             const now = new Date();
             const cutoff = new Date(now - days * 24 * 60 * 60 * 1000);
             
@@ -1100,23 +1126,41 @@
                 const userId = session.discord_id;
                 const actions = session.actions || [];
                 
-                actions.forEach(action => {
-                    const endpoint = action.endpoint || 'unknown';
+                // Also track session endpoints (for sessions without detailed actions)
+                const sessionEndpoints = session.endpoints_accessed || [];
+                const allEndpoints = [...actions.map(a => a.endpoint || a), ...sessionEndpoints];
+                
+                if (allEndpoints.length === 0 && session.actions_count > 0) {
+                    // Fallback: If no endpoints but has actions, use a generic endpoint
+                    allEndpoints.push('general.session_activity');
+                }
+                
+                allEndpoints.forEach(endpoint => {
+                    if (!endpoint || endpoint === 'unknown') return;
+                    
+                    // Handle both string endpoints and action objects
+                    const endpointName = typeof endpoint === 'string' ? endpoint : (endpoint.endpoint || 'unknown');
                     
                     // Initialize counters
-                    if (!endpointUsage[endpoint]) {
-                        endpointUsage[endpoint] = { count: 0, users: new Set() };
+                    if (!endpointUsage[endpointName]) {
+                        endpointUsage[endpointName] = { count: 0, users: new Set() };
                     }
                     if (!userActions[userId]) {
                         userActions[userId] = { total: 0, endpoints: new Set() };
                     }
                     
                     // Track usage
-                    endpointUsage[endpoint].count++;
-                    endpointUsage[endpoint].users.add(userId);
+                    endpointUsage[endpointName].count++;
+                    endpointUsage[endpointName].users.add(userId);
                     userActions[userId].total++;
-                    userActions[userId].endpoints.add(endpoint);
+                    userActions[userId].endpoints.add(endpointName);
                 });
+            });
+            
+            console.log('📊 Feature Analytics Debug:', { 
+                recentSessions: recentSessions.length,
+                endpointCount: Object.keys(endpointUsage).length,
+                sampleSession: recentSessions[0]
             });
             
             // Categorize endpoints
