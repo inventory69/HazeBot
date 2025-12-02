@@ -128,101 +128,72 @@ class AnalyticsAggregator:
                 break
 
     def _update_user_stats(self, session: Dict[str, Any]) -> None:
-        """Update aggregated user statistics"""
+        """Update aggregated user statistics - recalculates from all sessions"""
         discord_id = session["discord_id"]
 
-        if discord_id not in self.data["user_stats"]:
-            self.data["user_stats"][discord_id] = {
-                "username": session["username"],
-                "first_seen": session["started_at"],
-                "last_seen": session["ended_at"] or session["started_at"],
-                "total_sessions": 0,
-                "total_time_minutes": 0,
-                "avg_session_duration": 0,
-                "device_history": [],
-                "session_ids_processed": set(),  # Track which sessions we've counted
-            }
+        # Get all sessions for this user
+        user_sessions = [s for s in self.data["sessions"] if s["discord_id"] == discord_id]
+        
+        if not user_sessions:
+            return
+        
+        # Get unique session IDs (to count unique sessions, not updates)
+        unique_session_ids = set(s["session_id"] for s in user_sessions)
+        
+        # Calculate stats from ALL user sessions
+        total_time = sum(s.get("duration_minutes", 0) for s in user_sessions)
+        total_sessions = len(unique_session_ids)
+        
+        # Get all unique devices
+        device_history = list(set(s["device_info"] for s in user_sessions if s.get("device_info")))
+        
+        # Get first and last seen
+        sorted_sessions = sorted(user_sessions, key=lambda s: s["started_at"])
+        first_seen = sorted_sessions[0]["started_at"]
+        last_seen = sorted_sessions[-1].get("ended_at") or sorted_sessions[-1]["started_at"]
 
-        user = self.data["user_stats"][discord_id]
-        
-        # Convert session_ids_processed to set if it's a list (for JSON compatibility)
-        if isinstance(user.get("session_ids_processed", []), list):
-            user["session_ids_processed"] = set(user["session_ids_processed"])
-        
-        # Only increment session count once per session
-        session_id = session["session_id"]
-        if session_id not in user.get("session_ids_processed", set()):
-            user["total_sessions"] += 1
-            if "session_ids_processed" not in user:
-                user["session_ids_processed"] = set()
-            user["session_ids_processed"].add(session_id)
-        
-        user["username"] = session["username"]  # Update in case of name change
-        user["last_seen"] = session["ended_at"] or session["started_at"]
-        
-        # Recalculate total time from all processed sessions
-        user["total_time_minutes"] = sum(
-            s["duration_minutes"] 
-            for s in self.data["sessions"] 
-            if s["discord_id"] == discord_id and s["session_id"] in user["session_ids_processed"]
-        )
-        
-        if user["total_sessions"] > 0:
-            user["avg_session_duration"] = round(user["total_time_minutes"] / user["total_sessions"], 2)
-
-        # Track device history (unique devices)
-        if session["device_info"] not in user["device_history"]:
-            user["device_history"].append(session["device_info"])
-        
-        # Convert set back to list for JSON serialization
-        user["session_ids_processed"] = list(user["session_ids_processed"])
+        # Update or create user stats
+        self.data["user_stats"][discord_id] = {
+            "username": session["username"],
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "total_sessions": total_sessions,
+            "total_time_minutes": round(total_time, 2),
+            "avg_session_duration": round(total_time / total_sessions, 2) if total_sessions > 0 else 0,
+            "device_history": device_history,
+        }
 
     def _update_daily_stats(self, session: Dict[str, Any]) -> None:
-        """Update daily statistics"""
+        """Update daily statistics - recalculates from all sessions for the day"""
         try:
             date = datetime.fromisoformat(session["started_at"]).date().isoformat()
         except Exception:
             date = datetime.utcnow().date().isoformat()
 
-        if date not in self.data["daily_stats"]:
-            self.data["daily_stats"][date] = {
-                "unique_users": [],
-                "total_sessions": 0,
-                "total_actions": 0,
-                "total_duration_minutes": 0,
-                "avg_session_duration": 0,
-                "session_ids_processed": [],  # Track which sessions we've counted
-            }
-
-        stats = self.data["daily_stats"][date]
-
-        # Handle unique users (always as list for JSON)
-        unique_users = set(stats["unique_users"])
-        unique_users.add(session["discord_id"])
-        stats["unique_users"] = list(unique_users)
-
-        # Track processed sessions to avoid double-counting
-        session_ids_processed = set(stats.get("session_ids_processed", []))
-        session_id = session["session_id"]
-        
-        # Only increment counts once per session
-        if session_id not in session_ids_processed:
-            stats["total_sessions"] += 1
-            session_ids_processed.add(session_id)
-            stats["session_ids_processed"] = list(session_ids_processed)
-        
-        # Recalculate totals from all sessions on this date
+        # Get all sessions for this date
         sessions_for_date = [
             s for s in self.data["sessions"]
             if datetime.fromisoformat(s["started_at"]).date().isoformat() == date
-            and s["session_id"] in session_ids_processed
         ]
         
-        stats["total_actions"] = sum(s["actions_count"] for s in sessions_for_date)
-        stats["total_duration_minutes"] = sum(s["duration_minutes"] for s in sessions_for_date)
+        if not sessions_for_date:
+            return
         
-        if stats["total_sessions"] > 0:
-            stats["avg_session_duration"] = round(stats["total_duration_minutes"] / stats["total_sessions"], 2)
+        # Calculate stats from ALL sessions on this date
+        unique_users = list(set(s["discord_id"] for s in sessions_for_date))
+        unique_session_ids = set(s["session_id"] for s in sessions_for_date)
+        total_sessions = len(unique_session_ids)
+        total_actions = sum(s.get("actions_count", 0) for s in sessions_for_date)
+        total_duration = sum(s.get("duration_minutes", 0) for s in sessions_for_date)
+        
+        # Update daily stats
+        self.data["daily_stats"][date] = {
+            "unique_users": unique_users,
+            "total_sessions": total_sessions,
+            "total_actions": total_actions,
+            "total_duration_minutes": round(total_duration, 2),
+            "avg_session_duration": round(total_duration / total_sessions, 2) if total_sessions > 0 else 0,
+        }
 
     def add_screen_visit(self, session_id: str, screen_name: str) -> None:
         """Track screen visit in session"""

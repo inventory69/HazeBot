@@ -482,8 +482,9 @@
             const devices = {};
             
             sessions.forEach(session => {
-                const platform = session.platform || 'Unknown';
-                devices[platform] = (devices[platform] || 0) + 1;
+                // Use device_info (actual device name) instead of platform
+                const device = session.device_info || session.platform || 'Unknown';
+                devices[device] = (devices[device] || 0) + 1;
             });
 
             const labels = Object.keys(devices);
