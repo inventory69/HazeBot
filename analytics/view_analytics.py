@@ -90,8 +90,12 @@ def main():
             super().__init__(*args, directory=str(script_dir), **kwargs)
 
         def do_GET(self):
+            # Proxy API requests to the bot's API server
+            if self.path.startswith("/api/"):
+                self.proxy_to_api()
+                return
             # Redirect root to analytics dashboard
-            if self.path == "/":
+            elif self.path == "/":
                 self.send_response(301)
                 self.send_header("Location", "/analytics/analytics_dashboard.html")
                 self.end_headers()
@@ -100,6 +104,50 @@ def main():
             elif self.path == "/analytics_dashboard.html":
                 self.path = "/analytics/analytics_dashboard.html"
             super().do_GET()
+
+        def proxy_to_api(self):
+            """Proxy API requests to the bot's Flask API server"""
+            import urllib.request
+            import json
+            
+            api_host = "localhost"
+            api_port = 5070
+            api_url = f"http://{api_host}:{api_port}{self.path}"
+            
+            try:
+                print(f"🔄 Proxying API request: {self.path} → {api_url}")
+                
+                # Forward request to API server
+                with urllib.request.urlopen(api_url, timeout=10) as response:
+                    data = response.read()
+                    
+                    # Send successful response
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", len(data))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    
+                    print(f"✅ API request successful: {self.path}")
+                    
+            except urllib.error.URLError as e:
+                print(f"❌ API connection failed: {e}")
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                error_msg = {
+                    "error": "API server not reachable",
+                    "details": str(e),
+                    "hint": "Make sure the bot is running (API server on port 5070)"
+                }
+                self.wfile.write(json.dumps(error_msg).encode())
+            except Exception as e:
+                print(f"❌ API proxy error: {e}")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                error_msg = {"error": "API proxy error", "details": str(e)}
+                self.wfile.write(json.dumps(error_msg).encode())
 
         def end_headers(self):
             # Allow CORS for local file access

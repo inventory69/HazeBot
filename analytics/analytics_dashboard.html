@@ -679,16 +679,41 @@
                 const timeRange = parseInt(document.getElementById('timeRange').value);
                 
                 // Fetch analytics data from API endpoint (SQLite backend)
-                // API auto-detects PROD_MODE from Config
+                // Try multiple API locations in order:
+                // 1. Proxy through current server (for remote access)
+                // 2. Direct API on localhost:5070 (for local development)
                 let data;
                 let dataSource = 'SQLite API';
                 
                 console.log('📊 Fetching analytics from SQLite API endpoint...');
-                const apiUrl = `http://localhost:5070/api/analytics/data?days=${timeRange === 'all' ? 365 : timeRange === '30d' ? 30 : 7}`;
                 
-                const response = await fetch(apiUrl);
-                if (!response.ok) {
-                    throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                const timeRangeDays = timeRange === 'all' ? 365 : timeRange === '30d' ? 30 : 7;
+                const apiEndpoints = [
+                    `/api/analytics/data?days=${timeRangeDays}`,  // Relative URL (proxied through view_analytics.py)
+                    `http://localhost:5070/api/analytics/data?days=${timeRangeDays}`,  // Direct API (local dev)
+                ];
+                
+                let response;
+                let lastError;
+                
+                for (const url of apiEndpoints) {
+                    try {
+                        console.log(`Trying: ${url}`);
+                        response = await fetch(url);
+                        if (response.ok) {
+                            console.log(`✅ Connected to API: ${url}`);
+                            break;
+                        } else {
+                            lastError = `HTTP ${response.status}: ${response.statusText}`;
+                        }
+                    } catch (e) {
+                        lastError = e.message;
+                        console.log(`❌ Failed: ${url} - ${e.message}`);
+                    }
+                }
+                
+                if (!response || !response.ok) {
+                    throw new Error(`Could not connect to API. Last error: ${lastError}`);
                 }
                 
                 data = await response.json();
@@ -1374,10 +1399,33 @@
             try {
                 // Fetch error analytics from API endpoint
                 console.log('📊 Fetching error analytics from API...');
-                const response = await fetch('http://localhost:5070/api/analytics/errors?days=7');
                 
-                if (!response.ok) {
-                    throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                const apiEndpoints = [
+                    '/api/analytics/errors?days=7',  // Relative URL (proxied)
+                    'http://localhost:5070/api/analytics/errors?days=7',  // Direct API
+                ];
+                
+                let response;
+                let lastError;
+                
+                for (const url of apiEndpoints) {
+                    try {
+                        console.log(`Trying: ${url}`);
+                        response = await fetch(url);
+                        if (response.ok) {
+                            console.log(`✅ Connected to error API: ${url}`);
+                            break;
+                        } else {
+                            lastError = `HTTP ${response.status}: ${response.statusText}`;
+                        }
+                    } catch (e) {
+                        lastError = e.message;
+                        console.log(`❌ Failed: ${url} - ${e.message}`);
+                    }
+                }
+                
+                if (!response || !response.ok) {
+                    throw new Error(`Could not connect to error API. Last error: ${lastError}`);
                 }
                 
                 const errorData = await response.json();
