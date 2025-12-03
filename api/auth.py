@@ -245,7 +245,9 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 # Path checks
                 "/analytics/" in request.path.lower() or
                 # Referer checks (any request originating from analytics dashboard)
-                "/analytics/" in referer.lower()
+                "/analytics/" in referer.lower() or
+                # Discord OAuth callback (referer from discord.com)
+                "discord.com" in referer.lower()
             )
             
             session_info = {
