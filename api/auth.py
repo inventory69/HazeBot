@@ -240,14 +240,21 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             # Determine endpoint and check if it's analytics-related (before session tracking)
             endpoint_name = request.endpoint or "unknown"
             referer = request.headers.get("Referer", "")
-            is_oauth_login = request.path == "/login" and "token" in request.args
+            
+            # Check if this is a fresh OAuth login by checking token age
+            # JWT tokens from OAuth have 'exp' and we can calculate how old the token is
+            import time
+            token_exp = data.get("exp", 0)
+            token_age_seconds = token_exp - time.time() if token_exp else 999999
+            # OAuth tokens are valid for 7 days (604800s), fresh ones will be ~604800s away from expiry
+            is_fresh_token = token_age_seconds > 604790  # Less than 10 seconds old
             
             logger.info(f"🔍 [Analytics Check] endpoint={endpoint_name}, path={request.path}, referer={referer[:80] if referer else 'None'}")
-            logger.info(f"🔍 [Analytics Check] is_oauth_login={is_oauth_login}")
+            logger.info(f"🔍 [Analytics Check] token_age_from_expiry={604800 - token_age_seconds:.1f}s, is_fresh_token={is_fresh_token}")
             
-            # Check if this is a Discord OAuth login (happens BEFORE first API call with the token)
-            # We need to mark these sessions to exclude them later
-            is_discord_oauth = request.discord_id and is_oauth_login
+            # Check if this is a Discord OAuth login
+            # OAuth login creates a fresh token, so first few API calls will have a very fresh token
+            is_discord_oauth = is_fresh_token and request.discord_id
             
             is_analytics_request = (
                 # Endpoint name checks
