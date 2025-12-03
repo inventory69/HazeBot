@@ -513,9 +513,10 @@
             </div>
         </div>
 
-        <!-- Error Analytics Section -->
-        <div id="errorAnalyticsSection" class="table-container" style="margin-bottom: 15px; display: none;">
-            <h3 class="chart-title">🐛 Error Analytics</h3>
+        <!-- Error Analytics & Recent Sessions Side-by-Side -->
+        <div class="charts-grid" style="margin-bottom: 15px;">
+            <div id="errorAnalyticsSection" class="table-container" style="display: none;">
+                <h3 class="chart-title">🐛 Error Analytics</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
                 <div style="text-align: center;">
                     <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
@@ -546,10 +547,10 @@
                     <tr><td colspan="6">Loading...</td></tr>
                 </tbody>
             </table>
-        </div>
+            </div>
 
-        <div class="table-container">
-            <h3 class="chart-title">🕐 Recent Sessions</h3>
+            <div class="table-container">
+                <h3 class="chart-title">🕐 Recent Sessions</h3>
             <table id="sessionsTable">
                 <thead>
                     <tr>
@@ -565,6 +566,7 @@
                     <tr><td colspan="6">Loading...</td></tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
 

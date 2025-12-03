@@ -235,6 +235,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             # Determine endpoint and check if it's analytics-related (before session tracking)
             endpoint_name = request.endpoint or "unknown"
             referer = request.headers.get("Referer", "")
+            is_oauth_login = request.path == "/login" and "token" in request.args
             
             is_analytics_request = (
                 # Endpoint name checks
@@ -246,8 +247,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "/analytics/" in request.path.lower() or
                 # Referer checks (any request originating from analytics dashboard)
                 "/analytics/" in referer.lower() or
-                # Discord OAuth callback (referer from discord.com)
-                "discord.com" in referer.lower()
+                # OAuth login redirect (from Discord OAuth callback to /login?token=...)
+                (is_oauth_login and "/analytics/" in referer.lower())
             )
             
             session_info = {
