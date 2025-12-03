@@ -277,9 +277,14 @@ def register_socketio_handlers(socketio_instance):
                         return []
                     
                     messages = []
-                    async for message in channel.history(limit=50, oldest_first=False):
+                    total_fetched = 0
+                    total_filtered = 0
+                    async for message in channel.history(limit=100, oldest_first=False):
+                        total_fetched += 1
+                        
                         # Skip bot system messages except important ones
                         if message.author.bot:
+                            # Keep important bot messages
                             if not (
                                 message.content.startswith("**Initial details")
                                 or message.content.startswith("**Subject:")  # API-created tickets
@@ -289,6 +294,8 @@ def register_socketio_handlers(socketio_instance):
                                 or "Ticket assigned to" in message.content
                                 or "Ticket has been reopened" in message.content
                             ):
+                                total_filtered += 1
+                                logger.debug(f"🔇 Filtered bot message: {message.content[:50]}...")
                                 continue
                         
                         # Get avatar URL
@@ -333,6 +340,7 @@ def register_socketio_handlers(socketio_instance):
                     
                     # Reverse to get oldest first
                     messages.reverse()
+                    logger.debug(f"📊 Message history: fetched={total_fetched}, filtered={total_filtered}, sent={len(messages)}")
                     return messages
                 
                 loop = bot.loop
