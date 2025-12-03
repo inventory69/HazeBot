@@ -997,13 +997,21 @@ def get_ticket_messages_endpoint(ticket_id):
 
             messages = []
             async for message in channel.history(limit=100, oldest_first=True):
-                # Skip bot system messages (but keep Initial details, Admin Panel, important system messages)
+                # Skip bot system messages (but keep Initial details, Admin Panel, user messages, important system messages)
                 if message.author.bot:
-                    # Include important bot messages (initial, admin panel, close/claim/assign/reopen)
+                    # Check if it's a user message from app (has [username]: prefix)
+                    is_user_message_from_app = (
+                        message.content.startswith("**[")
+                        and not message.content.startswith("**[Admin Panel")
+                        and "**:" in message.content
+                    )
+                    
+                    # Include important bot messages (initial, admin panel, user messages, close/claim/assign/reopen)
                     if not (
                         message.content.startswith("**Initial details")
                         or message.content.startswith("**Subject:")  # API-created tickets
                         or message.content.startswith("**[Admin Panel")
+                        or is_user_message_from_app  # User messages from app
                         or "Ticket successfully closed" in message.content
                         or "Ticket claimed by" in message.content
                         or "Ticket assigned to" in message.content
@@ -1158,11 +1166,12 @@ def send_ticket_message_endpoint(ticket_id):
 
         # Send message to channel
         async def send_message():
-            # Format message differently for admins vs regular users
+            # Format message with prefix for both admins and users (for Discord visibility)
             if is_admin_or_mod:
                 formatted_content = f"**[Admin Panel - {request.username}]:** {message_content}"
             else:
-                formatted_content = message_content
+                # Add user prefix so it's clear in Discord that message is from app
+                formatted_content = f"**[{request.username}]:** {message_content}"
 
             msg = await channel.send(formatted_content)
 

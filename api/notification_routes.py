@@ -284,11 +284,19 @@ def register_socketio_handlers(socketio_instance):
                         
                         # Skip bot system messages except important ones
                         if message.author.bot:
+                            # Check if it's a user message from app (has [username]: prefix)
+                            is_user_message_from_app = (
+                                message.content.startswith("**[")
+                                and not message.content.startswith("**[Admin Panel")
+                                and "**:" in message.content
+                            )
+                            
                             # Keep important bot messages
                             if not (
                                 message.content.startswith("**Initial details")
                                 or message.content.startswith("**Subject:")  # API-created tickets
                                 or message.content.startswith("**[Admin Panel")
+                                or is_user_message_from_app  # User messages from app
                                 or "Ticket successfully closed" in message.content
                                 or "Ticket claimed by" in message.content
                                 or "Ticket assigned to" in message.content
