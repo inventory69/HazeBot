@@ -193,8 +193,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             platform_header = request.headers.get("X-Platform", "Unknown")
             app_version = request.headers.get("X-App-Version", "Unknown")
             
-            logger.debug(f"🔍 [Device Detection] X-Platform={platform_header}, X-Device-Info={device_info}, X-App-Version={app_version}")
-            logger.debug(f"🔍 [Device Detection] User-Agent={user_agent[:80]}...")
+            logger.info(f"🔍 [Device Detection] X-Platform={platform_header}, X-Device-Info={device_info}, X-App-Version={app_version}")
+            logger.info(f"🔍 [Device Detection] User-Agent={user_agent[:80]}...")
             
             if not device_info or device_info == "Unknown":
                 # Priority 1: Use X-Platform header if present (sent by Flutter app)
@@ -235,15 +235,19 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     # Extract first part of User-Agent (e.g., "Dart/3.5" → "Dart")
                     device_info = user_agent.split("/")[0] if "/" in user_agent else "Unknown"
             
-            logger.debug(f"🔍 [Device Detection] Final device_info={device_info}")
+            logger.info(f"🔍 [Device Detection] Final device_info={device_info}")
             
             # Determine endpoint and check if it's analytics-related (before session tracking)
             endpoint_name = request.endpoint or "unknown"
             referer = request.headers.get("Referer", "")
             is_oauth_login = request.path == "/login" and "token" in request.args
             
-            logger.debug(f"🔍 [Analytics Check] endpoint={endpoint_name}, path={request.path}, referer={referer[:80] if referer else 'None'}")
-            logger.debug(f"🔍 [Analytics Check] is_oauth_login={is_oauth_login}")
+            logger.info(f"🔍 [Analytics Check] endpoint={endpoint_name}, path={request.path}, referer={referer[:80] if referer else 'None'}")
+            logger.info(f"🔍 [Analytics Check] is_oauth_login={is_oauth_login}")
+            
+            # Check if this is a Discord OAuth login (happens BEFORE first API call with the token)
+            # We need to mark these sessions to exclude them later
+            is_discord_oauth = request.discord_id and is_oauth_login
             
             is_analytics_request = (
                 # Endpoint name checks
@@ -255,11 +259,11 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "/analytics/" in request.path.lower() or
                 # Referer checks (any request originating from analytics dashboard)
                 "/analytics/" in referer.lower() or
-                # OAuth login redirect (from Discord OAuth callback to /login?token=...)
-                (is_oauth_login and "/analytics/" in referer.lower())
+                # Discord OAuth login (regardless of referer)
+                is_discord_oauth
             )
             
-            logger.debug(f"🔍 [Analytics Check] is_analytics_request={is_analytics_request}")
+            logger.info(f"🔍 [Analytics Check] is_analytics_request={is_analytics_request} (is_discord_oauth={is_discord_oauth})")
             
             session_info = {
                 "username": request.username,
@@ -279,7 +283,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
 
-            logger.debug(f"🔍 [Session Tracking] is_new_session={is_new_session}, will_track={is_new_session and not is_analytics_request}")
+            logger.info(f"🔍 [Session Tracking] is_new_session={is_new_session}, will_track={is_new_session and not is_analytics_request}")
 
             # Analytics: Start session tracking for new sessions (skip analytics dashboard)
             if is_new_session and analytics_aggregator is not None and not is_analytics_request:
