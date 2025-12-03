@@ -671,8 +671,68 @@
         // Initialize theme on load
         initializeTheme();
 
-        // Initialize
-        loadData();
+        // Check JWT authentication before loading dashboard
+        async function checkAuth() {
+            const token = localStorage.getItem('jwt_token');
+            
+            if (!token) {
+                // No token found, redirect to login
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+
+            try {
+                // Verify token with API
+                const response = await fetch('/api/ping', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    // Token invalid or expired
+                    localStorage.removeItem('jwt_token');
+                    localStorage.removeItem('user');
+                    localStorage.removeItem('role');
+                    window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                    return false;
+                }
+
+                // Token valid
+                const userData = await response.json();
+                console.log('✅ Authenticated as:', userData.your_username, '| Role:', userData.your_role);
+                return true;
+
+            } catch (error) {
+                console.error('❌ Auth check failed:', error);
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+        }
+
+        // Intercept all fetch requests to add JWT token
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            let [resource, config] = args;
+            if (!config) config = {};
+            if (!config.headers) config.headers = {};
+            
+            const token = localStorage.getItem('jwt_token');
+            
+            // Add token to all API requests
+            if (token && typeof resource === 'string' && resource.includes('/api/')) {
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            return originalFetch(resource, config);
+        };
+
+        // Initialize after auth check
+        checkAuth().then(isAuthenticated => {
+            if (isAuthenticated) {
+                loadData();
+            }
+        });
 
         async function loadData() {
             try {

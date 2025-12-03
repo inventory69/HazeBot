@@ -289,9 +289,14 @@
         const API_BASE = window.location.origin;
         const ANALYTICS_URL = '/analytics/analytics_dashboard.html';
 
-        // Get redirect parameter from URL
+        // Get redirect parameter from URL (sanitize to prevent open redirect)
         const urlParams = new URLSearchParams(window.location.search);
-        const redirectUrl = urlParams.get('redirect') || ANALYTICS_URL;
+        let redirectUrl = urlParams.get('redirect') || ANALYTICS_URL;
+        
+        // Ensure redirect is to a safe internal path
+        if (!redirectUrl.startsWith('/')) {
+            redirectUrl = ANALYTICS_URL;
+        }
 
         // Handle login form submission
         document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -366,6 +371,12 @@
 
         // Check if user is already logged in
         window.addEventListener('load', () => {
+            // Clean URL by removing redirect parameter
+            if (window.location.search) {
+                const cleanUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
+            }
+
             const token = localStorage.getItem('jwt_token');
             if (token) {
                 // Verify token is still valid
