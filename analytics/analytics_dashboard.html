@@ -378,6 +378,7 @@
                 <span id="themeIcon">🌙</span>
                 <span id="themeText">Dark</span>
             </div>
+            <button onclick="logout()" style="background: #ef4444; margin-left: auto;">🚪 Logout</button>
             <label>
                 <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
                 Auto-refresh every 30s
@@ -670,6 +671,19 @@
 
         // Initialize theme on load
         initializeTheme();
+
+        // Logout function
+        function logout() {
+            // Clear stored authentication data
+            localStorage.removeItem('jwt_token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('role');
+            
+            console.log('🚪 Logged out - redirecting to login page');
+            
+            // Redirect to login page
+            window.location.href = '/login';
+        }
 
         // Check JWT authentication before loading dashboard
         async function checkAuth() {
