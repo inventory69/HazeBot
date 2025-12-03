@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import smtplib
+import traceback
 import uuid
 from datetime import datetime, timedelta
 from email.message import EmailMessage
@@ -691,6 +692,165 @@ async def close_ticket_with_message(
         close_ticket_async(interaction.client, interaction.channel, ticket, followup, msg, close_message)
     )
     logger.info(f"Ticket closing started for {interaction.channel}.")
+
+
+# ============================================================================
+# API-COMPATIBLE FUNCTIONS (for use without Discord Interaction objects)
+# ============================================================================
+
+
+async def claim_ticket_from_api(
+    bot: commands.Bot, channel_id: int, user_id: int, ticket: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Claim a ticket via API (without Discord Interaction).
+    Uses same logic as Discord button to ensure consistency.
+    
+    Returns: Dict with success status and message
+    """
+    try:
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return {"success": False, "error": "Channel not found"}
+        
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return {"success": False, "error": "Guild not found"}
+        
+        claimer = guild.get_member(user_id)
+        if not claimer:
+            return {"success": False, "error": "User not found in guild"}
+        
+        # Check if already claimed
+        if ticket.get("claimed_by"):
+            return {"success": False, "error": "Ticket already claimed"}
+        
+        # Check permissions (simulate is_allowed_for_ticket_actions check)
+        has_permission = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in claimer.roles)
+        if not has_permission:
+            return {"success": False, "error": "Not authorized"}
+        
+        # Update ticket in database
+        await update_ticket(channel_id, {"claimed_by": user_id, "status": "Claimed"})
+        
+        # Send message to channel (visible for all users)
+        await channel.send(f"🎫 **Ticket claimed by {claimer.display_name}**\nStatus changed to: **Claimed**")
+        
+        # Update embed and disable Claim button
+        tickets = await load_tickets()
+        updated_ticket = next((t for t in tickets if t["channel_id"] == channel_id), None)
+        if updated_ticket and updated_ticket.get("embed_message_id"):
+            embed = create_ticket_embed(updated_ticket, bot.user)
+            view = TicketControlView()
+            # Disable Claim button (already claimed)
+            for item in view.children:
+                if isinstance(item, discord.ui.Button):
+                    if item.label == "Claim":
+                        item.disabled = True
+            try:
+                msg = await channel.fetch_message(updated_ticket["embed_message_id"])
+                await msg.edit(embed=embed, view=view)
+            except Exception as e:
+                logger.error(f"Error updating embed after claim: {e}")
+        
+        logger.info(f"🎫 [TicketSystem] Ticket in {channel.name} claimed by {claimer.name}.")
+        return {"success": True, "message": "Ticket claimed successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error in claim_ticket_from_api: {e}\n{traceback.format_exc()}")
+        return {"success": False, "error": str(e)}
+
+
+async def assign_ticket_from_api(
+    bot: commands.Bot, channel_id: int, assigned_to_id: int, ticket: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Assign a ticket via API (without Discord Interaction).
+    Uses same logic as Discord button to ensure consistency.
+    
+    Returns: Dict with success status and message
+    """
+    try:
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return {"success": False, "error": "Channel not found"}
+        
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return {"success": False, "error": "Guild not found"}
+        
+        assignee = guild.get_member(assigned_to_id)
+        if not assignee:
+            return {"success": False, "error": "Assigned user not found in guild"}
+        
+        # Update ticket in database
+        await update_ticket(channel_id, {"assigned_to": assigned_to_id})
+        
+        # Send assignment message to channel (with mention for notification)
+        await channel.send(
+            f"👤 **Ticket assigned to {assignee.display_name}** ({assignee.mention})"
+        )
+        
+        # Update embed and disable Assign button
+        tickets = await load_tickets()
+        updated_ticket = next((t for t in tickets if t["channel_id"] == channel_id), None)
+        if updated_ticket and updated_ticket.get("embed_message_id"):
+            embed = create_ticket_embed(updated_ticket, bot.user)
+            view = TicketControlView()
+            # Disable Assign button (already assigned)
+            for item in view.children:
+                if isinstance(item, discord.ui.Button):
+                    if item.label == "Assign":
+                        item.disabled = True
+            try:
+                msg = await channel.fetch_message(updated_ticket["embed_message_id"])
+                await msg.edit(embed=embed, view=view)
+            except Exception as e:
+                logger.error(f"Error updating embed after assign: {e}")
+        
+        logger.info(f"🎫 [TicketSystem] Ticket in {channel.name} assigned to {assignee.name}.")
+        return {"success": True, "message": "Ticket assigned successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error in assign_ticket_from_api: {e}\n{traceback.format_exc()}")
+        return {"success": False, "error": str(e)}
+
+
+async def close_ticket_from_api(
+    bot: commands.Bot, channel_id: int, ticket: Dict[str, Any], close_message: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Close a ticket via API (without Discord Interaction).
+    Uses same close_ticket_async logic to ensure consistency (transcript, email, etc.).
+    
+    Returns: Dict with success status and message
+    """
+    try:
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return {"success": False, "error": "Channel not found"}
+        
+        if ticket.get("status") == "Closed":
+            return {"success": False, "error": "Ticket already closed"}
+        
+        # Send closing message placeholder
+        closing_msg = await channel.send("🔒 Closing ticket...")
+        
+        # Update ticket status immediately
+        await update_ticket(channel_id, {"status": "Closed"})
+        
+        # Use existing close_ticket_async function (handles transcript, email, archive, etc.)
+        # Pass None for followup since we don't have an interaction
+        asyncio.create_task(
+            close_ticket_async(bot, channel, ticket, None, closing_msg, close_message)
+        )
+        
+        logger.info(f"🎫 [TicketSystem] Ticket #{ticket.get('ticket_num')} closed via API.")
+        return {"success": True, "message": "Ticket closed successfully"}
+        
+    except Exception as e:
+        logger.error(f"Error in close_ticket_from_api: {e}\n{traceback.format_exc()}")
+        return {"success": False, "error": str(e)}
 
 
 # === View with ticket buttons ===

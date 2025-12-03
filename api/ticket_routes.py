@@ -653,12 +653,11 @@ def delete_ticket_endpoint(ticket_id):
 
 @ticket_bp.route("/api/tickets/<ticket_id>/claim", methods=["POST"])
 def claim_ticket_endpoint(ticket_id):
-    """Claim a ticket"""
+    """Claim a ticket using Discord bot functions for consistency"""
     try:
         from flask import current_app
 
-        from Cogs.TicketSystem import load_tickets
-        from Cogs.TicketSystem import update_ticket
+        from Cogs.TicketSystem import claim_ticket_from_api, load_tickets
 
         bot = current_app.config.get("bot_instance")
         if not bot:
@@ -671,6 +670,8 @@ def claim_ticket_endpoint(ticket_id):
             return jsonify({"error": "user_id required"}), 400
 
         loop = bot.loop
+        
+        # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
 
@@ -683,39 +684,27 @@ def claim_ticket_endpoint(ticket_id):
 
         channel_id = ticket.get("channel_id")
 
-        # Get the channel and user
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            return jsonify({"error": "Ticket channel not found"}), 404
-
-        # Get the guild to fetch member info
-        guild = bot.get_guild(Config.GUILD_ID)
-        if guild:
-            claimer = guild.get_member(int(user_id))
-            claimer_name = claimer.display_name if claimer else f"User {user_id}"
-        else:
-            claimer_name = f"User {user_id}"
-
-        # Send claim message to channel
-        async def send_claim_message():
-            await channel.send(f"🎫 **Ticket claimed by {claimer_name}**\nStatus changed to: **Claimed**")
-
-        future = asyncio.run_coroutine_threadsafe(send_claim_message(), loop)
-        future.result(timeout=10)
-
-        # Update ticket
+        # Use Discord bot function to claim (ensures button updates, logging, etc.)
         future = asyncio.run_coroutine_threadsafe(
-            update_ticket(channel_id, {"claimed_by": int(user_id), "status": "Claimed"}), loop
+            claim_ticket_from_api(bot, channel_id, int(user_id), ticket), loop
         )
-        future.result(timeout=10)
+        result = future.result(timeout=10)
 
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Unknown error")}), 400
+
+        # WebSocket notification for real-time updates
+        if notify_ticket_update:
+            notify_ticket_update(ticket_id, "ticket_claimed", {"claimed_by": int(user_id)})
+
+        # Log action
         log_action(
             request.username,
             "claim_ticket",
             {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "claimed_by": user_id},
         )
 
-        return jsonify({"success": True, "message": "Ticket claimed successfully"})
+        return jsonify({"success": True, "message": result.get("message", "Ticket claimed successfully")})
 
     except Exception as e:
         logger.error(f"Error claiming ticket {ticket_id}: {e}\n{traceback.format_exc()}")
@@ -724,12 +713,11 @@ def claim_ticket_endpoint(ticket_id):
 
 @ticket_bp.route("/api/tickets/<ticket_id>/assign", methods=["POST"])
 def assign_ticket_endpoint(ticket_id):
-    """Assign a ticket to a moderator"""
+    """Assign a ticket to a moderator using Discord bot functions for consistency"""
     try:
         from flask import current_app
 
-        from Cogs.TicketSystem import load_tickets
-        from Cogs.TicketSystem import update_ticket
+        from Cogs.TicketSystem import assign_ticket_from_api, load_tickets
 
         bot = current_app.config.get("bot_instance")
         if not bot:
@@ -742,6 +730,8 @@ def assign_ticket_endpoint(ticket_id):
             return jsonify({"error": "assigned_to user_id required"}), 400
 
         loop = bot.loop
+        
+        # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
 
@@ -754,35 +744,14 @@ def assign_ticket_endpoint(ticket_id):
 
         channel_id = ticket.get("channel_id")
 
-        # Get the channel and user
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            return jsonify({"error": "Ticket channel not found"}), 404
+        # Use Discord bot function to assign (ensures button updates, logging, etc.)
+        future = asyncio.run_coroutine_threadsafe(
+            assign_ticket_from_api(bot, channel_id, int(assigned_to), ticket), loop
+        )
+        result = future.result(timeout=10)
 
-        # Get the guild to fetch member info
-        guild = bot.get_guild(Config.GUILD_ID)
-        if guild:
-            assignee = guild.get_member(int(assigned_to))
-            if assignee:
-                assignee_display = assignee.display_name
-                assignee_mention = assignee.mention
-            else:
-                assignee_display = f"User {assigned_to}"
-                assignee_mention = f"<@{assigned_to}>"
-        else:
-            assignee_display = f"User {assigned_to}"
-            assignee_mention = f"<@{assigned_to}>"
-
-        # Send assignment message to channel (with mention for notification + display name for readability)
-        async def send_assign_message():
-            await channel.send(f"👤 **Ticket assigned to {assignee_display}** ({assignee_mention})")
-
-        future = asyncio.run_coroutine_threadsafe(send_assign_message(), loop)
-        future.result(timeout=10)
-
-        # Update ticket
-        future = asyncio.run_coroutine_threadsafe(update_ticket(channel_id, {"assigned_to": int(assigned_to)}), loop)
-        future.result(timeout=10)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Unknown error")}), 400
 
         # Send push notification to assigned user
         if send_push_notification_for_ticket_event:
@@ -793,13 +762,18 @@ def assign_ticket_endpoint(ticket_id):
 
             asyncio.run_coroutine_threadsafe(notify_push(), loop)
 
+        # WebSocket notification for real-time updates
+        if notify_ticket_update:
+            notify_ticket_update(ticket_id, "ticket_assigned", {"assigned_to": int(assigned_to)})
+
+        # Log action
         log_action(
             request.username,
             "assign_ticket",
             {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num"), "assigned_to": assigned_to},
         )
 
-        return jsonify({"success": True, "message": "Ticket assigned successfully"})
+        return jsonify({"success": True, "message": result.get("message", "Ticket assigned successfully")})
 
     except Exception as e:
         logger.error(f"Error assigning ticket {ticket_id}: {e}\n{traceback.format_exc()}")
@@ -808,12 +782,11 @@ def assign_ticket_endpoint(ticket_id):
 
 @ticket_bp.route("/api/tickets/<ticket_id>/close", methods=["POST"])
 def close_ticket_endpoint(ticket_id):
-    """Close a ticket with optional message"""
+    """Close a ticket with optional message using Discord bot functions for consistency"""
     try:
         from flask import current_app
 
-        from Cogs.TicketSystem import load_tickets
-        from Cogs.TicketSystem import update_ticket
+        from Cogs.TicketSystem import close_ticket_from_api, load_tickets
 
         bot = current_app.config.get("bot_instance")
         if not bot:
@@ -823,6 +796,8 @@ def close_ticket_endpoint(ticket_id):
         close_message = data.get("close_message", "")
 
         loop = bot.loop
+        
+        # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
 
@@ -835,36 +810,21 @@ def close_ticket_endpoint(ticket_id):
 
         channel_id = ticket.get("channel_id")
 
-        # Get the channel
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            return jsonify({"error": "Ticket channel not found"}), 404
-
-        # Send close message to channel
-        async def send_close_message():
-            success_msg = "Ticket successfully closed and archived. It will be deleted after 7 days."
-            if close_message.strip():
-                success_msg += f"\n\n**Closing Message:** {close_message}"
-            await channel.send(success_msg)
-
-        future = asyncio.run_coroutine_threadsafe(send_close_message(), loop)
-        future.result(timeout=10)
-
-        # Update ticket status and clear claimed_by/assigned_to
+        # Use Discord bot function to close (ensures transcript, email, button updates, etc.)
         future = asyncio.run_coroutine_threadsafe(
-            update_ticket(
-                channel_id,
-                {
-                    "status": "Closed",
-                    "closed_at": datetime.now().isoformat(),
-                    "claimed_by": None,
-                    "assigned_to": None,
-                },
-            ),
-            loop,
+            close_ticket_from_api(bot, channel_id, ticket, close_message if close_message.strip() else None),
+            loop
         )
-        future.result(timeout=10)
+        result = future.result(timeout=10)
 
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Unknown error")}), 400
+
+        # WebSocket notification for real-time updates
+        if notify_ticket_update:
+            notify_ticket_update(ticket_id, "ticket_closed", {"close_message": close_message})
+
+        # Log action
         log_action(
             request.username,
             "close_ticket",
@@ -875,7 +835,7 @@ def close_ticket_endpoint(ticket_id):
             },
         )
 
-        return jsonify({"success": True, "message": "Ticket closed successfully"})
+        return jsonify({"success": True, "message": result.get("message", "Ticket closed successfully")})
 
     except Exception as e:
         logger.error(f"Error closing ticket {ticket_id}: {e}\n{traceback.format_exc()}")
