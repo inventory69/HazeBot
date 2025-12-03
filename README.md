@@ -58,10 +58,19 @@ python start_with_api.py       # Bot + API (Port 5070)
 - Interactive creation with GUI configuration
 
 ### 🎫 Support & Moderation
-- Interactive ticket system with categories
+- Interactive ticket system with real-time chat
+- Admin panel integration with WebSocket updates
 - Email transcripts and auto-archiving
+- Smart push notifications (suppressed when viewing)
 - Mod panel with mute/kick/ban/warn actions
-- User activity tracking and leaderboards
+- Message cache for instant loading
+
+### 📊 Analytics System
+- SQLite-based session tracking
+- Real-time user monitoring
+- Export to JSON with date filtering
+- Performance metrics and caching
+- 30-day data retention
 
 ### 🛠️ Bot Management
 - 22 modular cogs with hot-reload
@@ -75,7 +84,6 @@ python start_with_api.py       # Bot + API (Port 5070)
 
 - 📖 **[Features](docs/FEATURES.md)** - Complete feature list & commands
 - 🔧 **[Bot Setup Guide](docs/BOT_SETUP.md)** - Discord bot installation & configuration
-- 📱 **[Admin Panel Setup](docs/ADMIN_PANEL_SETUP.md)** - Web/mobile interface setup
 - 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture & structure
 - 📋 **[Requirements](docs/REQUIREMENTS.md)** - Dependencies & system requirements
 - 🌐 **[REST API](api/README.md)** - REST API endpoints & Blueprint details
