@@ -1193,6 +1193,7 @@ def send_ticket_message_endpoint(ticket_id):
                 "author_name": member.name,
                 "author_avatar": avatar_url,
                 "content": formatted_content,
+                "display_content": message_content,  # Original content for app display (without prefix)
                 "timestamp": msg.created_at.isoformat(),
                 "is_bot": False,
                 "is_admin": is_admin_or_mod,
