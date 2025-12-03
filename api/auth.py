@@ -244,9 +244,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 endpoint_name.startswith("get_feature") or
                 # Path checks
                 "/analytics/" in request.path.lower() or
-                # Referer checks (login from analytics page)
-                "/analytics/" in referer.lower() or
-                "/login" in referer.lower() and "/analytics/" in referer.lower()
+                # Referer checks (any request originating from analytics dashboard)
+                "/analytics/" in referer.lower()
             )
             
             session_info = {

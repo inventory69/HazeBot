@@ -477,36 +477,38 @@
                     <canvas id="endpointsChart"></canvas>
                 </div>
             </div>
+        </div>
 
-            <div class="chart-container full-width">
+        <!-- Peak Usage Times & Feature Usage Side-by-Side -->
+        <div class="charts-grid" style="margin-bottom: 15px;">
+            <div class="chart-container">
                 <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
                 <div class="chart-wrapper">
                     <canvas id="hourlyChart"></canvas>
                 </div>
             </div>
-        </div>
 
-        <!-- Feature Usage Analytics Section -->
-        <div id="featureAnalyticsSection" class="chart-container full-width" style="margin-bottom: 15px; display: none;">
-            <h3 class="chart-title">🎯 Feature Usage (Last 30 Days)</h3>
-            <div class="chart-wrapper">
-                <canvas id="featureUsageChart"></canvas>
-            </div>
-            <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
-                <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Most Used</div>
-                    <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topFeature">-</div>
-                    <div style="font-size: 0.7em; color: var(--text-secondary);" id="topFeatureUses">-</div>
+            <div id="featureAnalyticsSection" class="chart-container" style="display: none;">
+                <h3 class="chart-title">🎯 Feature Usage (Last 30 Days)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="featureUsageChart"></canvas>
                 </div>
-                <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Highest Adoption</div>
-                    <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topAdoptionFeature">-</div>
-                    <div style="font-size: 0.7em; color: var(--text-secondary);" id="topAdoptionRate">-</div>
-                </div>
-                <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Top Power User</div>
-                    <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topPowerUser">-</div>
-                    <div style="font-size: 0.7em; color: var(--text-secondary);" id="topPowerUserActions">-</div>
+                <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                    <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                        <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Most Used</div>
+                        <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topFeature">-</div>
+                        <div style="font-size: 0.7em; color: var(--text-secondary);" id="topFeatureUses">-</div>
+                    </div>
+                    <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                        <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Highest Adoption</div>
+                        <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topAdoptionFeature">-</div>
+                        <div style="font-size: 0.7em; color: var(--text-secondary);" id="topAdoptionRate">-</div>
+                    </div>
+                    <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                        <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Top Power User</div>
+                        <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topPowerUser">-</div>
+                        <div style="font-size: 0.7em; color: var(--text-secondary);" id="topPowerUserActions">-</div>
+                    </div>
                 </div>
             </div>
         </div>
