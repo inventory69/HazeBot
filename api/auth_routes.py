@@ -225,8 +225,8 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             # Redirect to deep link for mobile app
             return redirect(f"hazebot://oauth?token={token}")
         else:
-            # Redirect to frontend web URL with token
-            frontend_url = "https://test-hazebot-admin.hzwd.xyz"
+            # Get frontend URL from environment variable
+            frontend_url = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://api.haze.pro/login")
             return redirect(f"{frontend_url}?token={token}")
 
     @auth_routes.route("/api/auth/me", methods=["GET"])
@@ -364,7 +364,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         token = request.headers.get("Authorization")
 
         if not token:
-            logger.debug(f"❌ Analytics auth: No Authorization header")
+            logger.debug("❌ Analytics auth: No Authorization header")
             return "", 401
 
         try:
@@ -374,13 +374,13 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
 
             # Validate token is not empty
             if not token or token.strip() == "":
-                logger.debug(f"❌ Analytics auth: Empty token")
+                logger.debug("❌ Analytics auth: Empty token")
                 return "", 401
 
             # Validate JWT structure
             parts = token.split(".")
             if len(parts) != 3 or not all(parts):
-                logger.debug(f"❌ Analytics auth: Malformed token structure")
+                logger.debug("❌ Analytics auth: Malformed token structure")
                 return "", 401
 
             # Decode and verify JWT
@@ -414,7 +414,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             return "", 200
 
         except jwt.ExpiredSignatureError:
-            logger.debug(f"❌ Analytics auth: Token expired")
+            logger.debug("❌ Analytics auth: Token expired")
             return "", 401
         except (jwt.DecodeError, jwt.InvalidTokenError) as e:
             logger.debug(f"❌ Analytics auth: Invalid token - {str(e)}")

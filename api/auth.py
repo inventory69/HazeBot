@@ -19,7 +19,7 @@ jwt_decode_lock = threading.Lock()
 # Discord OAuth2 Configuration
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "https://test-hazebot-admin.hzwd.xyz/auth/callback")
+DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "https://api.haze.pro/api/discord/callback")
 DISCORD_API_ENDPOINT = "https://discord.com/api/v10"
 
 # Role-based permissions

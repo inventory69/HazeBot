@@ -371,6 +371,37 @@
 
         // Check if user is already logged in
         window.addEventListener('load', () => {
+            // Check if Discord OAuth returned a token in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const tokenFromUrl = urlParams.get('token');
+            
+            if (tokenFromUrl) {
+                // Store token from Discord OAuth
+                localStorage.setItem('jwt_token', tokenFromUrl);
+                
+                // Verify it's valid
+                fetch(`${API_BASE}/api/ping`, {
+                    headers: {
+                        'Authorization': `Bearer ${tokenFromUrl}`
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('✅ Discord OAuth successful:', data.your_username);
+                    localStorage.setItem('user', data.your_username);
+                    localStorage.setItem('role', data.your_role);
+                    
+                    // Redirect to Analytics
+                    window.location.href = redirectUrl;
+                })
+                .catch(error => {
+                    console.error('❌ Token validation failed:', error);
+                    localStorage.removeItem('jwt_token');
+                });
+                
+                return;
+            }
+            
             // Clean URL by removing redirect parameter
             if (window.location.search) {
                 const cleanUrl = window.location.pathname;
