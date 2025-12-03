@@ -288,7 +288,7 @@ def register_socketio_handlers(socketio_instance):
                             is_user_message_from_app = (
                                 message.content.startswith("**[")
                                 and not message.content.startswith("**[Admin Panel")
-                                and "**:" in message.content
+                                and "]:**" in message.content
                             )
                             
                             # Keep important bot messages
