@@ -20,6 +20,11 @@ jwt_decode_lock = None
 # Format: {"ticket_id": set(user_discord_ids)}
 active_ticket_viewers = {}
 
+# Track which WebSocket client (SID) is viewing which user_id
+# Format: {"client_sid": "user_discord_id"}
+# This allows auto-cleanup when client disconnects without sending leave_ticket
+client_to_user = {}
+
 # Create Blueprint
 notification_bp = Blueprint("notifications", __name__)
 
@@ -244,7 +249,34 @@ def register_socketio_handlers(socketio_instance):
     @socketio.on("disconnect")
     def handle_disconnect():
         """Handle WebSocket disconnection"""
-        logger.info(f"🔌 WebSocket client disconnected: {request.sid}")
+        client_sid = request.sid
+        logger.info(f"🔌 WebSocket client disconnected: {client_sid}")
+        
+        # ✅ CRITICAL: Auto-cleanup - remove user from all active_ticket_viewers
+        # This handles cases where client disconnects without sending leave_ticket
+        user_id = client_to_user.get(client_sid)
+        if user_id:
+            logger.info(f"🧹 Auto-cleanup: Removing user {user_id} from active viewers (client {client_sid} disconnected)")
+            
+            # Remove user from all tickets they were viewing
+            tickets_to_clean = []
+            for ticket_id, viewers in active_ticket_viewers.items():
+                if user_id in viewers:
+                    viewers.discard(user_id)
+                    tickets_to_clean.append(ticket_id)
+                    logger.debug(f"📱 Removed user {user_id} from ticket {ticket_id} active viewers")
+            
+            # Clean up empty sets
+            for ticket_id in tickets_to_clean:
+                if not active_ticket_viewers[ticket_id]:
+                    del active_ticket_viewers[ticket_id]
+                    logger.debug(f"📱 Removed empty viewer set for ticket {ticket_id}")
+            
+            # Remove client-to-user mapping
+            del client_to_user[client_sid]
+            
+            if tickets_to_clean:
+                logger.info(f"✅ Auto-cleanup complete: User {user_id} removed from {len(tickets_to_clean)} ticket(s)")
 
     @socketio.on("join_ticket")
     def handle_join_ticket(data):
@@ -264,6 +296,10 @@ def register_socketio_handlers(socketio_instance):
             if ticket_id not in active_ticket_viewers:
                 active_ticket_viewers[ticket_id] = set()
             active_ticket_viewers[ticket_id].add(str(user_id))
+            
+            # ✅ Track client-to-user mapping for auto-cleanup on disconnect
+            client_to_user[request.sid] = str(user_id)
+            
             logger.info(f"🎫 Client {request.sid} (user {user_id}) joined ticket room: {room}")
             logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers[ticket_id]}")
         else:
