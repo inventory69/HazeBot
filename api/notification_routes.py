@@ -357,17 +357,46 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
             body = f"{ticket_data.get('user_name', 'A user')} created a new {ticket_data.get('type', 'Support')} ticket"
 
         elif event_type == "new_message":
-            # Notify ticket owner and assigned staff
+            # Notification logic:
+            # 1. Always notify ticket creator (unless they sent the message)
+            # 2. If ticket is claimed: notify only the claimer (unless they sent the message)
+            # 3. If ticket is NOT claimed: notify all admins/mods (except message sender)
+            
             user_id = ticket_data.get("user_id")
             assigned_to = ticket_data.get("assigned_to")
-
+            
             # Don't notify the message sender
             message_author_id = message_data.get("author_id") if message_data else None
-
-            if user_id and str(user_id) != message_author_id:
+            
+            # Always notify ticket creator (unless they sent the message)
+            if user_id and str(user_id) != str(message_author_id):
                 recipients.append(str(user_id))
-            if assigned_to and str(assigned_to) != message_author_id:
-                recipients.append(str(assigned_to))
+                logger.debug(f"📱 Adding ticket creator {user_id} to notification recipients")
+            
+            # Check if ticket is claimed (assigned_to is set)
+            if assigned_to:
+                # Ticket is claimed: notify only the claimer
+                if str(assigned_to) != str(message_author_id):
+                    recipients.append(str(assigned_to))
+                    logger.debug(f"📱 Ticket claimed: Adding claimer {assigned_to} to notification recipients")
+            else:
+                # Ticket is NOT claimed: notify all admins/mods
+                from Cogs.TicketSystem import ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+                
+                admin_role = guild.get_role(ADMIN_ROLE_ID)
+                mod_role = guild.get_role(MODERATOR_ROLE_ID)
+                
+                if admin_role:
+                    for member in admin_role.members:
+                        if str(member.id) != str(message_author_id):
+                            recipients.append(str(member.id))
+                    logger.debug(f"📱 Ticket not claimed: Added {len(admin_role.members)} admins to recipients")
+                
+                if mod_role:
+                    for member in mod_role.members:
+                        if str(member.id) != str(message_author_id):
+                            recipients.append(str(member.id))
+                    logger.debug(f"📱 Ticket not claimed: Added {len(mod_role.members)} mods to recipients")
 
             title = f"New Message in Ticket #{ticket_data.get('ticket_num')}"
             if message_data:
