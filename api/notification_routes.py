@@ -354,25 +354,38 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                 recipients.extend([str(member.id) for member in mod_role.members])
 
             title = f"New Ticket #{ticket_data.get('ticket_num')}"
-            body = f"{ticket_data.get('user_name', 'A user')} created a new {ticket_data.get('type', 'Support')} ticket"
+
+            # Build body with initial message if available
+            user_name = ticket_data.get("user_name", "A user")
+            ticket_type = ticket_data.get("type", "Support")
+            initial_message = ticket_data.get("initial_message")
+
+            if initial_message:
+                # Show preview of initial message (first 80 chars)
+                message_preview = initial_message[:80]
+                if len(initial_message) > 80:
+                    message_preview += "..."
+                body = f"{user_name} created a new {ticket_type} ticket: {message_preview}"
+            else:
+                body = f"{user_name} created a new {ticket_type} ticket"
 
         elif event_type == "new_message":
             # Notification logic:
             # 1. Always notify ticket creator (unless they sent the message)
             # 2. If ticket is claimed: notify only the claimer (unless they sent the message)
             # 3. If ticket is NOT claimed: notify all admins/mods (except message sender)
-            
+
             user_id = ticket_data.get("user_id")
             assigned_to = ticket_data.get("assigned_to")
-            
+
             # Don't notify the message sender
             message_author_id = message_data.get("author_id") if message_data else None
-            
+
             # Always notify ticket creator (unless they sent the message)
             if user_id and str(user_id) != str(message_author_id):
                 recipients.append(str(user_id))
                 logger.debug(f"📱 Adding ticket creator {user_id} to notification recipients")
-            
+
             # Check if ticket is claimed (assigned_to is set)
             if assigned_to:
                 # Ticket is claimed: notify only the claimer
@@ -382,16 +395,16 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
             else:
                 # Ticket is NOT claimed: notify all admins/mods
                 from Cogs.TicketSystem import ADMIN_ROLE_ID, MODERATOR_ROLE_ID
-                
+
                 admin_role = guild.get_role(ADMIN_ROLE_ID)
                 mod_role = guild.get_role(MODERATOR_ROLE_ID)
-                
+
                 if admin_role:
                     for member in admin_role.members:
                         if str(member.id) != str(message_author_id):
                             recipients.append(str(member.id))
                     logger.debug(f"📱 Ticket not claimed: Added {len(admin_role.members)} admins to recipients")
-                
+
                 if mod_role:
                     for member in mod_role.members:
                         if str(member.id) != str(message_author_id):

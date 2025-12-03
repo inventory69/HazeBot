@@ -17,13 +17,12 @@ Performance:
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 import logging
 import sys
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import Config
 from api.analytics_db import AnalyticsDatabase
 
 logger = logging.getLogger(__name__)
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class AnalyticsAggregator:
     """High-performance analytics aggregator with SQLite backend
-    
+
     Features:
     - Real-time SQLite updates with transaction batching
     - Optimized indexes for fast queries
@@ -41,7 +40,7 @@ class AnalyticsAggregator:
 
     def __init__(self, analytics_file: Path, batch_interval: int = 300, cache_ttl: int = 300):
         """Initialize analytics with SQLite backend
-        
+
         Args:
             analytics_file: Legacy parameter (ignored, kept for compatibility)
             batch_interval: Legacy parameter (ignored)
@@ -50,7 +49,7 @@ class AnalyticsAggregator:
         # Initialize SQLite database
         db_path = analytics_file.parent / "analytics.db"
         self.db = AnalyticsDatabase(db_path)
-        
+
         logger.info(f"📊 Analytics initialized with SQLite backend: {db_path}")
 
     def _check_and_archive_old_month(self) -> None:
@@ -59,7 +58,7 @@ class AnalyticsAggregator:
         current_month = now.strftime("%Y-%m")
 
         # Check if month changed since last check
-        if hasattr(self, 'current_month') and self.current_month != current_month:
+        if hasattr(self, "current_month") and self.current_month != current_month:
             logger.info(f"Month changed from {self.current_month} to {current_month}, archiving old sessions...")
             self._archive_sessions_by_month()
             self.current_month = current_month
@@ -97,7 +96,7 @@ class AnalyticsAggregator:
             archived_counts = {}
             for month_key, sessions in sessions_by_month.items():
                 archive_file = self.archive_dir / f"{month_key}.json"
-                
+
                 # Load existing archive if it exists
                 existing_data = {"sessions": [], "daily_stats": {}, "user_stats": {}}
                 if archive_file.exists():
@@ -126,7 +125,7 @@ class AnalyticsAggregator:
 
             # Update current data with only current month sessions
             self.data["sessions"] = current_sessions
-            
+
             # Recalculate current stats
             self.data["user_stats"] = {}
             self.data["daily_stats"] = {}
@@ -153,7 +152,7 @@ class AnalyticsAggregator:
             total_time = sum(s.get("duration_minutes", 0) for s in user_sessions)
             total_sessions = len(unique_session_ids)
             device_history = list(set(s["device_info"] for s in user_sessions if s.get("device_info")))
-            
+
             sorted_sessions = sorted(user_sessions, key=lambda s: s["started_at"])
             first_seen = sorted_sessions[0]["started_at"]
             last_seen = sorted_sessions[-1].get("ended_at") or sorted_sessions[-1]["started_at"]
@@ -199,7 +198,7 @@ class AnalyticsAggregator:
     def _load_archived_months(self, start_date: datetime, end_date: datetime) -> list:
         """Load sessions from archived months within date range"""
         archived_sessions = []
-        
+
         if not self.archive_dir.exists():
             return archived_sessions
 
@@ -207,7 +206,7 @@ class AnalyticsAggregator:
         current = start_date.replace(day=1)
         end = end_date.replace(day=1)
         months_to_check = []
-        
+
         while current <= end:
             months_to_check.append(current.strftime("%Y-%m"))
             # Move to next month
@@ -224,13 +223,12 @@ class AnalyticsAggregator:
                     with open(archive_file, "r", encoding="utf-8") as f:
                         archive_data = json.load(f)
                         sessions = archive_data.get("sessions", [])
-                        
+
                         # Filter by date range
                         filtered_sessions = [
-                            s for s in sessions
-                            if start_date <= datetime.fromisoformat(s["started_at"]) <= end_date
+                            s for s in sessions if start_date <= datetime.fromisoformat(s["started_at"]) <= end_date
                         ]
-                        
+
                         archived_sessions.extend(filtered_sessions)
                         logger.debug(f"Loaded {len(filtered_sessions)} sessions from archive {month_key}")
                 except Exception as e:
@@ -388,13 +386,15 @@ class AnalyticsAggregator:
         """Update session with new activity (queued for batch processing)"""
         now = datetime.utcnow().isoformat()
 
-        self.update_queue.enqueue({
-            "type": "update_session",
-            "session_id": session_id,
-            "endpoint": endpoint,
-            "action": action,
-            "timestamp": now,
-        })
+        self.update_queue.enqueue(
+            {
+                "type": "update_session",
+                "session_id": session_id,
+                "endpoint": endpoint,
+                "action": action,
+                "timestamp": now,
+            }
+        )
 
         logger.debug(f"Queued session update: {session_id} -> {endpoint}")
 
@@ -451,9 +451,7 @@ class AnalyticsAggregator:
 
         # Get all sessions for this date
         sessions_for_date = [
-            s
-            for s in self.data["sessions"]
-            if datetime.fromisoformat(s["started_at"]).date().isoformat() == date
+            s for s in self.data["sessions"] if datetime.fromisoformat(s["started_at"]).date().isoformat() == date
         ]
 
         if not sessions_for_date:
@@ -546,26 +544,18 @@ class AnalyticsAggregator:
 
             # Count active users
             active_7d = sum(
-                1
-                for user in self.data["user_stats"].values()
-                if datetime.fromisoformat(user["last_seen"]) > week_ago
+                1 for user in self.data["user_stats"].values() if datetime.fromisoformat(user["last_seen"]) > week_ago
             )
             active_30d = sum(
-                1
-                for user in self.data["user_stats"].values()
-                if datetime.fromisoformat(user["last_seen"]) > month_ago
+                1 for user in self.data["user_stats"].values() if datetime.fromisoformat(user["last_seen"]) > month_ago
             )
 
             # Recent sessions stats
-            recent_sessions = [
-                s for s in self.data["sessions"] if datetime.fromisoformat(s["started_at"]) > week_ago
-            ]
+            recent_sessions = [s for s in self.data["sessions"] if datetime.fromisoformat(s["started_at"]) > week_ago]
 
             total_sessions_7d = len(recent_sessions)
             avg_duration_7d = (
-                sum(s["duration_minutes"] for s in recent_sessions) / total_sessions_7d
-                if total_sessions_7d > 0
-                else 0
+                sum(s["duration_minutes"] for s in recent_sessions) / total_sessions_7d if total_sessions_7d > 0 else 0
             )
 
             result = {
@@ -654,11 +644,11 @@ class AnalyticsAggregator:
                 "total_users": len(self.data["user_stats"]),
                 "total_days": len(self.data["daily_stats"]),
             }
-        
+
         # Save outside the lock to avoid deadlock
         self._save_data()
         self.cache.invalidate()
-        
+
         logger.info(f"Reprocessing complete: {result}")
         return result
 
@@ -668,7 +658,7 @@ class AnalyticsAggregator:
         archived_counts = self._archive_sessions_by_month()
         self._save_data()
         self.cache.invalidate()
-        
+
         total_archived = sum(archived_counts.values())
         logger.info(f"Archived {total_archived} sessions across {len(archived_counts)} months")
         return archived_counts
@@ -676,12 +666,7 @@ class AnalyticsAggregator:
     def get_archive_stats(self) -> Dict[str, Any]:
         """Get statistics about archived months"""
         if not self.archive_dir.exists():
-            return {
-                "archive_enabled": True,
-                "archived_months": 0,
-                "total_archived_sessions": 0,
-                "months": []
-            }
+            return {"archive_enabled": True, "archived_months": 0, "total_archived_sessions": 0, "months": []}
 
         archived_months = []
         total_sessions = 0
@@ -694,13 +679,15 @@ class AnalyticsAggregator:
                     session_count = len(data.get("sessions", []))
                     user_count = len(data.get("user_stats", {}))
                     total_sessions += session_count
-                    
-                    archived_months.append({
-                        "month": month_key,
-                        "sessions": session_count,
-                        "users": user_count,
-                        "file_size_kb": archive_file.stat().st_size // 1024
-                    })
+
+                    archived_months.append(
+                        {
+                            "month": month_key,
+                            "sessions": session_count,
+                            "users": user_count,
+                            "file_size_kb": archive_file.stat().st_size // 1024,
+                        }
+                    )
             except Exception as e:
                 logger.error(f"Failed to read archive stats for {month_key}: {e}")
 
@@ -709,7 +696,7 @@ class AnalyticsAggregator:
             "archived_months": len(archived_months),
             "total_archived_sessions": total_sessions,
             "archive_dir": str(self.archive_dir),
-            "months": archived_months
+            "months": archived_months,
         }
 
     def shutdown(self) -> None:

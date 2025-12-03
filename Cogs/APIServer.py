@@ -82,7 +82,7 @@ class APIServer(commands.Cog):
 
             # Set bot instance for API to use
             set_bot_instance(self.bot)
-            
+
             # Get analytics instances from AnalyticsManager Cog (quiet)
             analytics_cog = self.bot.get_cog("AnalyticsManager")
             if analytics_cog:

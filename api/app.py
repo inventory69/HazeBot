@@ -26,7 +26,6 @@ from Utils.Logger import Logger as logger
 
 # Import all Blueprint modules
 import api.admin_routes as admin_routes_module
-import api.analytics as analytics_module
 import api.auth as auth_module
 import api.auth_routes as auth_routes_module
 import api.cog_routes as cog_routes_module
@@ -52,10 +51,11 @@ import api.error_tracking as error_tracking_module
 analytics = None
 error_tracker = None
 
+
 def set_analytics_instances(analytics_inst, error_tracker_inst):
     """
     Set analytics and error tracker instances from AnalyticsManager Cog
-    
+
     Args:
         analytics_inst: AnalyticsAggregator instance
         error_tracker_inst: ErrorTracker instance
@@ -63,12 +63,15 @@ def set_analytics_instances(analytics_inst, error_tracker_inst):
     global analytics, error_tracker
     analytics = analytics_inst
     error_tracker = error_tracker_inst
-    
+
     # CRITICAL: Update auth_module's analytics_aggregator
     # This fixes the race condition where init_auth() is called before analytics is set
     auth_module.analytics_aggregator = analytics_inst
-    
-    logger.info(f"✅ Analytics instances connected to API - Aggregator: {analytics_inst is not None}, Auth Module: {auth_module.analytics_aggregator is not None}")
+
+    logger.info(
+        f"✅ Analytics instances connected to API - Aggregator: {analytics_inst is not None}, Auth Module: {auth_module.analytics_aggregator is not None}"
+    )
+
 
 # Thread lock for JWT decode (prevents race conditions)
 jwt_decode_lock = threading.Lock()
@@ -204,7 +207,7 @@ def internal_error(e):
             error_tracker=error_tracker,
             exception=e,
             endpoint="unknown",
-            request_data={"error_type": "500_internal_error"}
+            request_data={"error_type": "500_internal_error"},
         )
     except Exception as track_error:
         logger.error(f"Failed to track error: {track_error}")
@@ -215,35 +218,28 @@ def internal_error(e):
 def handle_exception(e):
     """Global exception handler - catches all unhandled exceptions"""
     logger.error(f"Unhandled exception: {e}", exc_info=True)
-    
+
     # Track error
     try:
         from flask import request
+
         endpoint = request.endpoint or "unknown"
-        user_id = getattr(request, 'discord_id', None)
-        username = getattr(request, 'username', None)
-        
+        user_id = getattr(request, "discord_id", None)
+        username = getattr(request, "username", None)
+
         error_tracking_module.track_api_error(
             error_tracker=error_tracker,
             exception=e,
             endpoint=endpoint,
             user_id=user_id,
             username=username,
-            request_data={
-                "method": request.method,
-                "url": request.url,
-                "remote_addr": request.remote_addr
-            }
+            request_data={"method": request.method, "url": request.url, "remote_addr": request.remote_addr},
         )
     except Exception as track_error:
         logger.error(f"Failed to track error: {track_error}")
-    
+
     # Return user-friendly error message
-    return jsonify({
-        "error": "An unexpected error occurred",
-        "message": str(e),
-        "type": type(e).__name__
-    }), 500
+    return jsonify({"error": "An unexpected error occurred", "message": str(e), "type": type(e).__name__}), 500
 
 
 # ============================================================================
@@ -294,24 +290,26 @@ def cleanup_stale_sessions():
 # ANALYTICS ENDPOINTS
 # ============================================================================
 
+
 @app.route("/api/analytics/data", methods=["GET"])
 def get_analytics_data():
     """Get main analytics data (sessions, daily_stats, user_stats)
-    
+
     This endpoint replaces the old app_analytics.json file access.
     Now data comes directly from SQLite for better performance.
-    
+
     Query params:
         days (int): Number of days to include (default: 30, None = all)
     """
     try:
         from flask import request
+
         days_param = request.args.get("days")
         days = int(days_param) if days_param else 30
-        
+
         # Get data from SQLite
         export_data = analytics.get_export_data(days=days)
-        
+
         return jsonify(export_data), 200
     except Exception as e:
         logger.error(f"Failed to get analytics data: {e}", exc_info=True)
@@ -323,6 +321,7 @@ def get_error_analytics():
     """Get error analytics summary"""
     try:
         from flask import request
+
         days = int(request.args.get("days", 7))
         summary = error_tracker.get_error_summary(days=days)
         return jsonify(summary), 200
@@ -337,17 +336,17 @@ def get_feature_analytics():
     try:
         from flask import request
         import api.feature_analytics as feature_analytics_module
-        
+
         days = int(request.args.get("days", 30))
-        
+
         # Get sessions from analytics
         export_data = analytics.get_export_data(days=days)
         sessions = export_data.get("sessions", [])
-        
+
         # Analyze feature usage
         analyzer = feature_analytics_module.FeatureUsageAnalyzer()
         analysis = analyzer.analyze_feature_usage(sessions, days=days)
-        
+
         return jsonify(analysis), 200
     except Exception as e:
         logger.error(f"Failed to get feature analytics: {e}", exc_info=True)
@@ -360,18 +359,18 @@ def get_feature_comparison():
     try:
         from flask import request
         import api.feature_analytics as feature_analytics_module
-        
+
         days1 = int(request.args.get("days1", 7))
         days2 = int(request.args.get("days2", 30))
-        
+
         # Get sessions
         export_data = analytics.get_export_data(days=days2)
         sessions = export_data.get("sessions", [])
-        
+
         # Compare feature usage
         analyzer = feature_analytics_module.FeatureUsageAnalyzer()
         comparison = analyzer.get_feature_comparison(sessions, days1=days1, days2=days2)
-        
+
         return jsonify(comparison), 200
     except Exception as e:
         logger.error(f"Failed to get feature comparison: {e}", exc_info=True)
@@ -442,12 +441,13 @@ if __name__ == "__main__":
 
     # Register shutdown handler to flush analytics queue
     import atexit
+
     def shutdown_handler():
         print("\n🛑 Shutting down...")
         flushed = analytics.force_flush()
         print(f"✅ Flushed {flushed} pending analytics updates")
         analytics.shutdown()
-    
+
     atexit.register(shutdown_handler)
 
     # Use socketio.run instead of app.run for WebSocket support

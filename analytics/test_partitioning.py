@@ -14,7 +14,6 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
-import uuid
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -107,8 +106,7 @@ def test_monthly_partitioning():
         for archive_file in sorted(archive_files):
             with open(archive_file) as f:
                 data = json.load(f)
-                print(f"  │  ├─ {archive_file.name}: {len(data['sessions'])} sessions, "
-                      f"{len(data['user_stats'])} users")
+                print(f"  │  ├─ {archive_file.name}: {len(data['sessions'])} sessions, {len(data['user_stats'])} users")
 
         # Step 4: Get archive stats
         print("\n🧪 Step 4: Get archive statistics...")
@@ -119,8 +117,10 @@ def test_monthly_partitioning():
         print(f"  └─ Archive directory: {archive_stats['archive_dir']}")
 
         for month_stat in archive_stats["months"]:
-            print(f"     ├─ {month_stat['month']}: {month_stat['sessions']} sessions, "
-                  f"{month_stat['users']} users, {month_stat['file_size_kb']}KB")
+            print(
+                f"     ├─ {month_stat['month']}: {month_stat['sessions']} sessions, "
+                f"{month_stat['users']} users, {month_stat['file_size_kb']}KB"
+            )
 
         # Step 5: Test merge-query across months
         print("\n🧪 Step 5: Test merge-query (last 90 days)...")
@@ -139,7 +139,7 @@ def test_monthly_partitioning():
         else:
             missing = expected_ids - session_ids
             extra = session_ids - expected_ids
-            print(f"\n❌ FAILED: Session mismatch!")
+            print("\n❌ FAILED: Session mismatch!")
             if missing:
                 print(f"  Missing: {missing}")
             if extra:
@@ -151,14 +151,13 @@ def test_monthly_partitioning():
         current_month = datetime.utcnow().strftime("%Y-%m")
 
         all_current = all(
-            datetime.fromisoformat(s["started_at"]).strftime("%Y-%m") == current_month
-            for s in current_month_sessions
+            datetime.fromisoformat(s["started_at"]).strftime("%Y-%m") == current_month for s in current_month_sessions
         )
 
         if all_current:
             print(f"  ✅ All {len(current_month_sessions)} sessions in current file are from {current_month}")
         else:
-            print(f"  ❌ FAILED: Found sessions from other months in current file!")
+            print("  ❌ FAILED: Found sessions from other months in current file!")
 
         analytics.shutdown()
 
@@ -170,8 +169,10 @@ def test_monthly_partitioning():
         print(f"✅ Archived {sum(archived_counts.values())} sessions to {len(archived_counts)} files")
         print(f"✅ Current month has {current_sessions} sessions")
         print(f"✅ Merge-query retrieved {len(export_data['sessions'])} sessions")
-        print(f"✅ Archive stats: {archive_stats['archived_months']} months, "
-              f"{archive_stats['total_archived_sessions']} total sessions")
+        print(
+            f"✅ Archive stats: {archive_stats['archived_months']} months, "
+            f"{archive_stats['total_archived_sessions']} total sessions"
+        )
         print("\n🎯 Monthly Partitioning: WORKING! ✨")
         print("=" * 70)
 

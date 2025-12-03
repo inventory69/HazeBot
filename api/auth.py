@@ -165,7 +165,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             #           2. session_id from JWT token
             #           3. Fallback: Hash of discord_id + token
             session_id_header = request.headers.get("X-Session-ID")
-            
+
             if session_id_header and session_id_header != "Unknown":
                 # Use session ID from Flutter app (preferred method)
                 request.session_id = session_id_header
@@ -175,7 +175,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             else:
                 # Fallback: Create session ID from user data
                 import hashlib
-                
+
                 session_data = f"{data.get('discord_id', 'unknown')}_{token[:20]}"
                 request.session_id = hashlib.sha256(session_data.encode()).hexdigest()[:32]
 

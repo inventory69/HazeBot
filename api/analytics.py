@@ -16,7 +16,7 @@ Performance:
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 import logging
 
 from api.analytics_db import AnalyticsDatabase
@@ -29,7 +29,7 @@ class AnalyticsAggregator:
 
     def __init__(self, analytics_file: Path, batch_interval: int = 300, cache_ttl: int = 300):
         """Initialize analytics with SQLite backend
-        
+
         Args:
             analytics_file: Legacy parameter (parent directory used for DB location)
             batch_interval: Legacy parameter (ignored - SQLite writes are fast enough)
@@ -145,10 +145,10 @@ class AnalyticsAggregator:
 
     def get_export_data(self, days: int = None) -> Dict[str, Any]:
         """Export analytics data for external analysis
-        
+
         Args:
             days: Number of days to export (None = all data)
-            
+
         Returns:
             Dictionary with sessions, daily_stats, user_stats
         """
@@ -157,23 +157,19 @@ class AnalyticsAggregator:
         cutoff = now - timedelta(days=days) if days else datetime(2000, 1, 1)
 
         # Get sessions
-        sessions = self.db.get_sessions(
-            start_date=cutoff.isoformat(),
-            end_date=now.isoformat()
-        )
+        sessions = self.db.get_sessions(start_date=cutoff.isoformat(), end_date=now.isoformat())
 
         # Get daily stats
         daily_stats_list = self.db.get_daily_stats(
-            start_date=cutoff.date().isoformat(),
-            end_date=now.date().isoformat()
+            start_date=cutoff.date().isoformat(), end_date=now.date().isoformat()
         )
-        
+
         # Convert daily stats list to dict (for backward compatibility)
         daily_stats = {stat["date"]: stat for stat in daily_stats_list}
 
         # Get user stats
         user_stats_list = self.db.get_user_stats()
-        
+
         # Convert user stats list to dict (for backward compatibility)
         user_stats = {
             stat["discord_id"]: {
@@ -183,7 +179,7 @@ class AnalyticsAggregator:
                 "total_sessions": stat["total_sessions"],
                 "total_time_minutes": stat["total_time_minutes"],
                 "avg_session_duration": stat["avg_session_duration"],
-                "device_history": stat["device_history"]
+                "device_history": stat["device_history"],
             }
             for stat in user_stats_list
         }
@@ -206,35 +202,19 @@ class AnalyticsAggregator:
         all_users = self.db.get_user_stats()
 
         # Count active users
-        active_7d = sum(
-            1
-            for user in all_users
-            if datetime.fromisoformat(user["last_seen"]) > week_ago
-        )
-        active_30d = sum(
-            1
-            for user in all_users
-            if datetime.fromisoformat(user["last_seen"]) > month_ago
-        )
+        active_7d = sum(1 for user in all_users if datetime.fromisoformat(user["last_seen"]) > week_ago)
+        active_30d = sum(1 for user in all_users if datetime.fromisoformat(user["last_seen"]) > month_ago)
 
         # Get recent sessions
-        recent_sessions = self.db.get_sessions(
-            start_date=week_ago.isoformat(),
-            end_date=now.isoformat()
-        )
+        recent_sessions = self.db.get_sessions(start_date=week_ago.isoformat(), end_date=now.isoformat())
 
         total_sessions_7d = len(recent_sessions)
         avg_duration_7d = (
-            sum(s["duration_minutes"] for s in recent_sessions) / total_sessions_7d
-            if total_sessions_7d > 0
-            else 0
+            sum(s["duration_minutes"] for s in recent_sessions) / total_sessions_7d if total_sessions_7d > 0 else 0
         )
 
         # Get total session count
-        all_sessions = self.db.get_sessions(
-            start_date=datetime(2000, 1, 1).isoformat(),
-            end_date=now.isoformat()
-        )
+        all_sessions = self.db.get_sessions(start_date=datetime(2000, 1, 1).isoformat(), end_date=now.isoformat())
 
         return {
             "total_users": len(all_users),
@@ -248,7 +228,7 @@ class AnalyticsAggregator:
 
     def force_flush(self) -> int:
         """Force immediate processing of queued updates
-        
+
         Legacy method for backward compatibility - SQLite writes are immediate
         """
         logger.debug("force_flush called (no-op for SQLite backend)")
@@ -256,32 +236,26 @@ class AnalyticsAggregator:
 
     def cleanup_old_sessions(self, days_to_keep: int = 90) -> int:
         """Remove sessions older than specified days to prevent database bloat
-        
+
         Args:
             days_to_keep: Number of days to retain
-            
+
         Returns:
             Number of sessions deleted
         """
         cutoff = datetime.utcnow() - timedelta(days=days_to_keep)
-        
+
         # Get count before deletion
-        old_sessions = self.db.get_sessions(
-            start_date=datetime(2000, 1, 1).isoformat(),
-            end_date=cutoff.isoformat()
-        )
-        
+        old_sessions = self.db.get_sessions(start_date=datetime(2000, 1, 1).isoformat(), end_date=cutoff.isoformat())
+
         count = len(old_sessions)
-        
+
         if count > 0:
             # Delete old sessions
             for session in old_sessions:
-                self.db.conn.execute(
-                    "DELETE FROM sessions WHERE session_id = ?",
-                    (session["session_id"],)
-                )
+                self.db.conn.execute("DELETE FROM sessions WHERE session_id = ?", (session["session_id"],))
             self.db.conn.commit()
-            
+
             # Vacuum to reclaim space
             self.db.conn.execute("VACUUM")
 
@@ -289,30 +263,30 @@ class AnalyticsAggregator:
 
     def reprocess_all_sessions(self) -> Dict[str, int]:
         """Reprocess all sessions to rebuild user_stats and daily_stats
-        
+
         Legacy method - with SQLite, stats are automatically maintained via triggers
         """
         logger.debug("reprocess_all_sessions called (no-op for SQLite backend)")
-        
+
         # Return current counts
         all_users = self.db.get_user_stats()
         all_sessions = self.db.get_sessions(
-            start_date=datetime(2000, 1, 1).isoformat(),
-            end_date=datetime.utcnow().isoformat()
+            start_date=datetime(2000, 1, 1).isoformat(), end_date=datetime.utcnow().isoformat()
         )
-        
+
         return {
             "sessions_processed": len(all_sessions),
             "total_users": len(all_users),
-            "total_days": len(self.db.get_daily_stats(
-                start_date=datetime(2000, 1, 1).date().isoformat(),
-                end_date=datetime.utcnow().date().isoformat()
-            )),
+            "total_days": len(
+                self.db.get_daily_stats(
+                    start_date=datetime(2000, 1, 1).date().isoformat(), end_date=datetime.utcnow().date().isoformat()
+                )
+            ),
         }
 
     def force_archive(self) -> Dict[str, int]:
         """Manually trigger archiving of old months
-        
+
         Legacy method - SQLite handles data retention differently
         """
         logger.debug("force_archive called (no-op for SQLite backend)")
@@ -320,7 +294,7 @@ class AnalyticsAggregator:
 
     def get_archive_stats(self) -> Dict[str, Any]:
         """Get statistics about archived months
-        
+
         Legacy method - SQLite doesn't use monthly archives
         """
         return {
@@ -328,7 +302,7 @@ class AnalyticsAggregator:
             "archived_months": 0,
             "total_archived_sessions": 0,
             "months": [],
-            "note": "SQLite backend doesn't use monthly archives - all data is in database"
+            "note": "SQLite backend doesn't use monthly archives - all data is in database",
         }
 
     def shutdown(self) -> None:

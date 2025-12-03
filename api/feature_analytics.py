@@ -111,20 +111,15 @@ class FeatureUsageAnalyzer:
         """
         # Filter sessions by date
         cutoff = datetime.utcnow() - timedelta(days=days)
-        recent_sessions = [
-            s for s in sessions if datetime.fromisoformat(s["started_at"]) > cutoff
-        ]
+        recent_sessions = [s for s in sessions if datetime.fromisoformat(s["started_at"]) > cutoff]
 
         if not recent_sessions:
             return self._get_empty_analysis()
 
         # Track feature usage
-        feature_data = defaultdict(lambda: {
-            "total_uses": 0,
-            "users": set(),
-            "user_counts": defaultdict(int),
-            "endpoints": defaultdict(int)
-        })
+        feature_data = defaultdict(
+            lambda: {"total_uses": 0, "users": set(), "user_counts": defaultdict(int), "endpoints": defaultdict(int)}
+        )
 
         total_users = set()
         total_actions = 0
@@ -141,7 +136,7 @@ class FeatureUsageAnalyzer:
             # Categorize each endpoint
             for endpoint, count in endpoints_used.items():
                 category = categorize_endpoint(endpoint)
-                
+
                 feature_data[category]["total_uses"] += count
                 feature_data[category]["users"].add(user_id)
                 feature_data[category]["user_counts"][username] += count
@@ -158,11 +153,7 @@ class FeatureUsageAnalyzer:
             avg_uses = total_uses / unique_users if unique_users > 0 else 0
 
             # Top users for this feature
-            top_users = sorted(
-                data["user_counts"].items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:10]
+            top_users = sorted(data["user_counts"].items(), key=lambda x: x[1], reverse=True)[:10]
 
             features[category] = {
                 "total_uses": total_uses,
@@ -170,14 +161,12 @@ class FeatureUsageAnalyzer:
                 "adoption_rate": round(adoption_rate, 3),
                 "avg_uses_per_user": round(avg_uses, 2),
                 "top_users": top_users,
-                "endpoints": dict(data["endpoints"])
+                "endpoints": dict(data["endpoints"]),
             }
 
         # Feature ranking by total uses
         feature_ranking = sorted(
-            [(name, stats["total_uses"]) for name, stats in features.items()],
-            key=lambda x: x[1],
-            reverse=True
+            [(name, stats["total_uses"]) for name, stats in features.items()], key=lambda x: x[1], reverse=True
         )
 
         # Power users analysis
@@ -186,7 +175,7 @@ class FeatureUsageAnalyzer:
         for session in recent_sessions:
             username = session["username"]
             endpoints_used = session.get("endpoints_used", {})
-            
+
             for endpoint, count in endpoints_used.items():
                 category = categorize_endpoint(endpoint)
                 power_users[username]["features"].add(category)
@@ -197,17 +186,15 @@ class FeatureUsageAnalyzer:
             username: {
                 "features_used": sorted(list(data["features"])),
                 "feature_count": len(data["features"]),
-                "total_actions": data["total_actions"]
+                "total_actions": data["total_actions"],
             }
             for username, data in power_users.items()
         }
 
         # Sort by total actions
-        power_users_sorted = dict(sorted(
-            power_users_list.items(),
-            key=lambda x: x[1]["total_actions"],
-            reverse=True
-        )[:20])  # Top 20 power users
+        power_users_sorted = dict(
+            sorted(power_users_list.items(), key=lambda x: x[1]["total_actions"], reverse=True)[:20]
+        )  # Top 20 power users
 
         return {
             "total_users": total_unique_users,
@@ -216,7 +203,7 @@ class FeatureUsageAnalyzer:
             "features": features,
             "feature_ranking": feature_ranking,
             "power_users": power_users_sorted,
-            "analysis_date": datetime.utcnow().isoformat()
+            "analysis_date": datetime.utcnow().isoformat(),
         }
 
     def _get_empty_analysis(self) -> Dict[str, Any]:
@@ -228,7 +215,7 @@ class FeatureUsageAnalyzer:
             "features": {},
             "feature_ranking": [],
             "power_users": {},
-            "analysis_date": datetime.utcnow().isoformat()
+            "analysis_date": datetime.utcnow().isoformat(),
         }
 
     def get_feature_comparison(self, sessions: List[Dict[str, Any]], days1: int = 7, days2: int = 30) -> Dict[str, Any]:
@@ -268,5 +255,5 @@ class FeatureUsageAnalyzer:
             "period1_days": days1,
             "period2_days": days2,
             "comparison": comparison,
-            "analysis_date": datetime.utcnow().isoformat()
+            "analysis_date": datetime.utcnow().isoformat(),
         }

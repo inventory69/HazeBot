@@ -109,39 +109,39 @@ def main():
             """Proxy API requests to the bot's Flask API server"""
             import urllib.request
             import json
-            
+
             # Try multiple API endpoints (Docker, Pterodactyl, localhost)
             # Priority order: Docker container IP from Nginx config first
             api_endpoints = [
-                ("172.18.0.2", 5070),            # Docker container (Pterodactyl - from nginx config)
-                ("172.18.0.1", 5070),            # Docker gateway (Pterodactyl network)
-                ("172.17.0.1", 5070),            # Docker default bridge network
+                ("172.18.0.2", 5070),  # Docker container (Pterodactyl - from nginx config)
+                ("172.18.0.1", 5070),  # Docker gateway (Pterodactyl network)
+                ("172.17.0.1", 5070),  # Docker default bridge network
                 ("host.docker.internal", 5070),  # Docker Desktop (Windows/Mac)
-                ("localhost", 5070),             # Native (non-Docker)
+                ("localhost", 5070),  # Native (non-Docker)
             ]
-            
+
             # Try each endpoint until one works
             last_error = None
             for api_host, api_port in api_endpoints:
                 api_url = f"http://{api_host}:{api_port}{self.path}"
-                
+
                 try:
                     print(f"🔄 Trying API: {api_url}")
-                    
+
                     # Forward request to API server
                     with urllib.request.urlopen(api_url, timeout=2) as response:
                         data = response.read()
-                        
+
                         # Send successful response
                         self.send_response(200)
                         self.send_header("Content-Type", "application/json")
                         self.send_header("Content-Length", len(data))
                         self.end_headers()
                         self.wfile.write(data)
-                        
+
                         print(f"✅ API request successful via {api_host}:{api_port}")
                         return  # Success! Exit function
-                        
+
                 except urllib.error.URLError as e:
                     last_error = f"{api_host}:{api_port} - {e}"
                     print(f"❌ Failed: {api_host}:{api_port} - {e}")
@@ -150,7 +150,7 @@ def main():
                     last_error = f"{api_host}:{api_port} - {e}"
                     print(f"❌ Error: {api_host}:{api_port} - {e}")
                     continue  # Try next endpoint
-            
+
             # All endpoints failed
             print(f"❌ All API endpoints failed. Last error: {last_error}")
             self.send_response(503)
@@ -160,7 +160,7 @@ def main():
                 "error": "API server not reachable",
                 "details": last_error,
                 "tried_endpoints": [f"{h}:{p}" for h, p in api_endpoints],
-                "hint": "Make sure the bot is running (API server on port 5070). Check Docker network or firewall."
+                "hint": "Make sure the bot is running (API server on port 5070). Check Docker network or firewall.",
             }
             self.wfile.write(json.dumps(error_msg).encode())
 

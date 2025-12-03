@@ -401,7 +401,35 @@ async def create_ticket(
     # If initial_message provided, send it in the channel
     if initial_message:
         await channel.send(f"**Initial details from {interaction.user.name}:**\n{initial_message}")
+
     logger.info(f"Ticket #{ticket_num} created by {interaction.user}.")
+
+    # Send push notifications to admins/mods
+    try:
+        from api.notification_routes import send_push_notification_for_ticket_event
+        import asyncio
+
+        # Prepare ticket data for notification
+        notification_ticket_data = {
+            "ticket_id": ticket_data["ticket_id"],
+            "ticket_num": ticket_num,
+            "user_id": interaction.user.id,
+            "user_name": interaction.user.name,
+            "type": ticket_type,
+            "status": "Open",
+            "assigned_to": None,
+            "initial_message": initial_message,  # Include initial message for notification preview
+        }
+
+        asyncio.create_task(
+            send_push_notification_for_ticket_event(ticket_data["ticket_id"], "new_ticket", notification_ticket_data)
+        )
+        logger.info(f"📱 Push notification task created for new ticket #{ticket_num}")
+    except Exception as e:
+        logger.error(f"❌ Failed to send push notification for new ticket: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
 
 
 # === Select for assignment ===

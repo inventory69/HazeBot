@@ -116,7 +116,12 @@ class HazeWorldBot(commands.Bot):
 
         # Load other cogs
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_") or cog.stem in ["AnalyticsManager", "APIServer", "CogManager", "DiscordLogging"]:
+            if cog.name.startswith("_") or cog.stem in [
+                "AnalyticsManager",
+                "APIServer",
+                "CogManager",
+                "DiscordLogging",
+            ]:
                 continue
             if cog.stem in disabled_cogs:
                 Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")

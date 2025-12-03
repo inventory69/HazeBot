@@ -7,7 +7,7 @@ import json
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 import logging
 import hashlib
 
@@ -38,7 +38,7 @@ class ErrorTracker:
             "errors": [],
             "error_groups": {},
             "daily_error_counts": {},
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.utcnow().isoformat(),
         }
 
     def _save_data(self):
@@ -54,7 +54,7 @@ class ErrorTracker:
     def _generate_error_signature(self, error_type: str, message: str, endpoint: str) -> str:
         """Generate unique signature for error grouping"""
         # Use first line of message for grouping (ignore dynamic parts)
-        message_first_line = message.split('\n')[0][:100]
+        message_first_line = message.split("\n")[0][:100]
         signature_str = f"{error_type}:{endpoint}:{message_first_line}"
         return hashlib.md5(signature_str.encode()).hexdigest()[:16]
 
@@ -66,11 +66,11 @@ class ErrorTracker:
         user_id: Optional[str] = None,
         username: Optional[str] = None,
         stacktrace: Optional[str] = None,
-        request_data: Optional[Dict] = None
+        request_data: Optional[Dict] = None,
     ) -> None:
         """
         Track an error occurrence
-        
+
         Args:
             error_type: Exception type (e.g., "KeyError", "ValueError")
             message: Error message
@@ -96,7 +96,7 @@ class ErrorTracker:
             "username": username,
             "stacktrace": stacktrace,
             "request_data": request_data,
-            "signature": signature
+            "signature": signature,
         }
 
         # Add to errors list (keep last 1000)
@@ -108,24 +108,24 @@ class ErrorTracker:
         if signature not in self.data["error_groups"]:
             self.data["error_groups"][signature] = {
                 "error_type": error_type,
-                "message": message.split('\n')[0][:200],  # First line only
+                "message": message.split("\n")[0][:200],  # First line only
                 "endpoint": endpoint,
                 "first_seen": now.isoformat(),
                 "last_seen": now.isoformat(),
                 "count": 0,
-                "affected_users": set()
+                "affected_users": set(),
             }
 
         group = self.data["error_groups"][signature]
         group["count"] += 1
         group["last_seen"] = now.isoformat()
-        
+
         # Track affected users (convert set to list for JSON)
         if isinstance(group["affected_users"], list):
             affected_users = set(group["affected_users"])
         else:
             affected_users = group["affected_users"]
-        
+
         if user_id:
             affected_users.add(user_id)
         group["affected_users"] = list(affected_users)
@@ -144,19 +144,13 @@ class ErrorTracker:
         cutoff = now - timedelta(days=days)
 
         # Filter recent errors
-        recent_errors = [
-            e for e in self.data["errors"]
-            if datetime.fromisoformat(e["timestamp"]) > cutoff
-        ]
+        recent_errors = [e for e in self.data["errors"] if datetime.fromisoformat(e["timestamp"]) > cutoff]
 
         # Get top error groups
         error_groups_list = []
         for signature, group in self.data["error_groups"].items():
             if datetime.fromisoformat(group["last_seen"]) > cutoff:
-                error_groups_list.append({
-                    "signature": signature,
-                    **group
-                })
+                error_groups_list.append({"signature": signature, **group})
 
         # Sort by count
         error_groups_list.sort(key=lambda x: x["count"], reverse=True)
@@ -173,7 +167,7 @@ class ErrorTracker:
             "top_errors": error_groups_list[:10],
             "recent_errors": recent_errors[-50:],  # Last 50 errors
             "daily_trend": daily_trend,
-            "error_rate_per_hour": len(recent_errors) / (days * 24) if days > 0 else 0
+            "error_rate_per_hour": len(recent_errors) / (days * 24) if days > 0 else 0,
         }
 
     def cleanup_old_errors(self, days_to_keep: int = 30) -> int:
@@ -181,10 +175,7 @@ class ErrorTracker:
         cutoff = datetime.utcnow() - timedelta(days=days_to_keep)
         original_count = len(self.data["errors"])
 
-        self.data["errors"] = [
-            e for e in self.data["errors"]
-            if datetime.fromisoformat(e["timestamp"]) > cutoff
-        ]
+        self.data["errors"] = [e for e in self.data["errors"] if datetime.fromisoformat(e["timestamp"]) > cutoff]
 
         # Cleanup error groups with no recent occurrences
         groups_to_remove = []
@@ -209,11 +200,11 @@ def track_api_error(
     endpoint: str,
     user_id: Optional[str] = None,
     username: Optional[str] = None,
-    request_data: Optional[Dict] = None
+    request_data: Optional[Dict] = None,
 ) -> None:
     """
     Helper function to track an API error
-    
+
     Args:
         error_tracker: ErrorTracker instance
         exception: The exception that was caught
@@ -224,7 +215,7 @@ def track_api_error(
     """
     error_type = type(exception).__name__
     message = str(exception)
-    stacktrace = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+    stacktrace = "".join(traceback.format_exception(type(exception), exception, exception.__traceback__))
 
     error_tracker.track_error(
         error_type=error_type,
@@ -233,5 +224,5 @@ def track_api_error(
         user_id=user_id,
         username=username,
         stacktrace=stacktrace,
-        request_data=request_data
+        request_data=request_data,
     )
