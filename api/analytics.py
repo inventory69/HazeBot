@@ -54,6 +54,8 @@ class AnalyticsAggregator:
         ip_address: str,
     ) -> None:
         """Record session start (idempotent - won't fail if session exists)"""
+        logger.info(f"🔍 [Analytics] start_session called: session_id={session_id[:16]}..., user={username}, device={device_info}, platform={platform}")
+        
         # Check if session already exists
         existing = self.db.get_session(session_id)
         if existing:
