@@ -1020,7 +1020,7 @@ def get_ticket_messages_endpoint(ticket_id):
                         continue
 
                 # Get avatar URL with fallback
-                # For admin panel messages, extract the real admin's username and get their avatar
+                # For admin panel messages and user messages from app, extract the real user's username and get their avatar
                 avatar_url = None
                 is_admin = False
                 user_role = None  # 'admin', 'moderator', or None
@@ -1037,6 +1037,7 @@ def get_ticket_messages_endpoint(ticket_id):
                             user_role = "moderator"
                             break
 
+                # Check if this is an admin panel message or user message from app
                 if message.content.startswith("**[Admin Panel"):
                     is_admin = True
                     # Parse admin username from message like "**[Admin Panel - username]:**"
@@ -1074,8 +1075,36 @@ def get_ticket_messages_endpoint(ticket_id):
                                     avatar_url = str(admin_member.avatar.url)
                             except (AttributeError, Exception) as e:
                                 logger.debug(f"Could not get avatar for admin {admin_member.id}: {e}")
+                
+                elif is_user_message_from_app:
+                    # Parse username from user message like "**[username]:**"
+                    import re
+                    
+                    user_match = re.search(r"\*\*\[([^\]]+)\]:\*\*", message.content)
+                    if user_match:
+                        username = user_match.group(1)
+                        # Try to find member by username
+                        guild = message.guild
+                        user_member = None
+                        for member in guild.members:
+                            if (
+                                member.name == username
+                                or member.display_name == username
+                                or member.global_name == username
+                            ):
+                                user_member = member
+                                break
+                        
+                        if user_member:
+                            try:
+                                if user_member.display_avatar:
+                                    avatar_url = str(user_member.display_avatar.url)
+                                elif user_member.avatar:
+                                    avatar_url = str(user_member.avatar.url)
+                            except (AttributeError, Exception) as e:
+                                logger.debug(f"Could not get avatar for user {user_member.id}: {e}")
 
-                # If not an admin message or avatar not found, use message author's avatar
+                # If not an admin/user message from app or avatar not found, use message author's avatar
                 if avatar_url is None:
                     try:
                         if message.author.display_avatar:
