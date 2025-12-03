@@ -193,9 +193,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             platform_header = request.headers.get("X-Platform", "Unknown")
             app_version = request.headers.get("X-App-Version", "Unknown")
             
-            logger.info(f"🔍 [Device Detection] X-Platform={platform_header}, X-Device-Info={device_info}, X-App-Version={app_version}")
-            logger.info(f"🔍 [Device Detection] User-Agent={user_agent[:80]}...")
-            
             if not device_info or device_info == "Unknown":
                 # Priority 1: Use X-Platform header if present (sent by Flutter app)
                 # This works for ALL Flutter builds: Web, Android, iOS, Desktop
@@ -235,8 +232,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     # Extract first part of User-Agent (e.g., "Dart/3.5" → "Dart")
                     device_info = user_agent.split("/")[0] if "/" in user_agent else "Unknown"
             
-            logger.info(f"🔍 [Device Detection] Final device_info={device_info}")
-            
             # Determine endpoint and check if it's analytics-related (before session tracking)
             endpoint_name = request.endpoint or "unknown"
             referer = request.headers.get("Referer", "")
@@ -248,9 +243,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             token_age_seconds = token_exp - time.time() if token_exp else 999999
             # OAuth tokens are valid for 7 days (604800s), fresh ones will be ~604800s away from expiry
             is_fresh_token = token_age_seconds > 604790  # Less than 10 seconds old
-            
-            logger.info(f"🔍 [Analytics Check] endpoint={endpoint_name}, path={request.path}, referer={referer[:80] if referer else 'None'}")
-            logger.info(f"🔍 [Analytics Check] token_age_from_expiry={604800 - token_age_seconds:.1f}s, is_fresh_token={is_fresh_token}")
             
             # Check if this is a Discord OAuth login
             # OAuth login creates a fresh token, so first few API calls will have a very fresh token
@@ -270,8 +262,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 is_discord_oauth
             )
             
-            logger.info(f"🔍 [Analytics Check] is_analytics_request={is_analytics_request} (is_discord_oauth={is_discord_oauth})")
-            
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
@@ -289,8 +279,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             # Check if this is a new session (first time seeing this session_id)
             is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
-
-            logger.info(f"🔍 [Session Tracking] is_new_session={is_new_session}, will_track={is_new_session and not is_analytics_request}")
 
             # Analytics: Start session tracking for new sessions (skip analytics dashboard)
             if is_new_session and analytics_aggregator is not None and not is_analytics_request:

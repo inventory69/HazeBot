@@ -177,7 +177,7 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 15px;
             margin-bottom: 15px;
         }
@@ -334,9 +334,20 @@
             }
         }
 
+        /* Tablet/Medium screens - better responsive behavior */
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            }
+        }
+
         @media (max-width: 768px) {
             .charts-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr !important;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
             
             h1 {
@@ -513,10 +524,9 @@
             </div>
         </div>
 
-        <!-- Error Analytics & Recent Sessions Side-by-Side -->
-        <div class="charts-grid" style="margin-bottom: 15px;">
-            <div id="errorAnalyticsSection" class="table-container" style="display: none;">
-                <h3 class="chart-title">🐛 Error Analytics</h3>
+        <!-- Error Analytics Section -->
+        <div id="errorAnalyticsSection" class="table-container" style="margin-bottom: 15px; display: none;">
+            <h3 class="chart-title">🐛 Error Analytics</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
                 <div style="text-align: center;">
                     <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
@@ -547,10 +557,11 @@
                     <tr><td colspan="6">Loading...</td></tr>
                 </tbody>
             </table>
-            </div>
+        </div>
 
-            <div class="table-container">
-                <h3 class="chart-title">🕐 Recent Sessions</h3>
+        <!-- Recent Sessions Section -->
+        <div class="table-container" style="margin-bottom: 15px;">
+            <h3 class="chart-title">🕐 Recent Sessions</h3>
             <table id="sessionsTable">
                 <thead>
                     <tr>
@@ -566,7 +577,6 @@
                     <tr><td colspan="6">Loading...</td></tr>
                 </tbody>
             </table>
-            </div>
         </div>
     </div>
 
