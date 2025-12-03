@@ -232,6 +232,23 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     # Extract first part of User-Agent (e.g., "Dart/3.5" → "Dart")
                     device_info = user_agent.split("/")[0] if "/" in user_agent else "Unknown"
             
+            # Determine endpoint and check if it's analytics-related (before session tracking)
+            endpoint_name = request.endpoint or "unknown"
+            referer = request.headers.get("Referer", "")
+            
+            is_analytics_request = (
+                # Endpoint name checks
+                endpoint_name.startswith("get_analytics") or
+                endpoint_name.startswith("reset_analytics") or
+                endpoint_name.startswith("get_error_analytics") or
+                endpoint_name.startswith("get_feature") or
+                # Path checks
+                "/analytics/" in request.path.lower() or
+                # Referer checks (login from analytics page)
+                "/analytics/" in referer.lower() or
+                "/login" in referer.lower() and "/analytics/" in referer.lower()
+            )
+            
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
@@ -240,7 +257,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "last_seen": Config.get_utc_now().isoformat(),
                 "ip": real_ip,
                 "user_agent": user_agent,
-                "endpoint": request.endpoint or "unknown",
+                "endpoint": endpoint_name,
                 "app_version": request.headers.get("X-App-Version", "Unknown"),
                 "platform": request.headers.get("X-Platform", "Unknown"),
                 "device_info": device_info,
@@ -250,8 +267,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
 
-            # Analytics: Start session tracking for new sessions
-            if is_new_session and analytics_aggregator is not None:
+            # Analytics: Start session tracking for new sessions (skip analytics dashboard)
+            if is_new_session and analytics_aggregator is not None and not is_analytics_request:
                 try:
                     analytics_aggregator.start_session(
                         session_id=request.session_id,
@@ -265,8 +282,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 except Exception as e:
                     logger.error(f"Failed to start analytics session: {e}")
 
-            # Analytics: Update session activity (skip high-frequency endpoints)
-            if analytics_aggregator is not None:
+            # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard)
+            if analytics_aggregator is not None and not is_analytics_request:
                 # Endpoints to exclude from analytics (reduce noise)
                 excluded_endpoints = [
                     'auth_routes.ping',           # Health checks
@@ -275,7 +292,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     'admin_routes.active_sessions', # Live monitoring
                 ]
                 
-                endpoint_name = request.endpoint or "unknown"
                 if endpoint_name not in excluded_endpoints:
                     try:
                         analytics_aggregator.update_session(
@@ -288,7 +304,6 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             update_app_usage(request.discord_id, app_usage_file, Config)
 
             # Log activity (filtering is done inside log_user_activity)
-            endpoint_name = request.endpoint or "unknown"
             log_user_activity(
                 request.username,
                 request.discord_id,
