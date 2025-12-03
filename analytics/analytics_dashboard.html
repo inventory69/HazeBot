@@ -308,7 +308,7 @@
             }
 
             #featureAnalyticsSection .chart-wrapper {
-                height: 300px;
+                height: 220px;
             }
 
             #errorAnalyticsSection {
@@ -404,6 +404,7 @@
                 <button onclick="applyCustomRange()" style="padding: 6px 16px;">Apply</button>
             </div>
             <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button onclick="resetAnalytics()" style="background: #dc2626;">🗑️ Reset Analytics</button>
                 <button onclick="exportToCSV('sessions')">📥 Export Sessions</button>
                 <button onclick="exportToCSV('daily')">📥 Export Daily Stats</button>
                 <button onclick="exportToCSV('users')">📥 Export Users</button>
@@ -491,21 +492,21 @@
             <div class="chart-wrapper">
                 <canvas id="featureUsageChart"></canvas>
             </div>
-            <div style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                <div style="background: var(--card-hover); padding: 12px; border-radius: 8px;">
-                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Most Used</div>
-                    <div style="font-size: 1.2em; color: var(--accent-primary); font-weight: bold;" id="topFeature">-</div>
-                    <div style="font-size: 0.8em; color: var(--text-secondary);" id="topFeatureUses">-</div>
+            <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;">
+                <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Most Used</div>
+                    <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topFeature">-</div>
+                    <div style="font-size: 0.7em; color: var(--text-secondary);" id="topFeatureUses">-</div>
                 </div>
-                <div style="background: var(--card-hover); padding: 12px; border-radius: 8px;">
-                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Highest Adoption</div>
-                    <div style="font-size: 1.2em; color: var(--accent-primary); font-weight: bold;" id="topAdoptionFeature">-</div>
-                    <div style="font-size: 0.8em; color: var(--text-secondary);" id="topAdoptionRate">-</div>
+                <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Highest Adoption</div>
+                    <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topAdoptionFeature">-</div>
+                    <div style="font-size: 0.7em; color: var(--text-secondary);" id="topAdoptionRate">-</div>
                 </div>
-                <div style="background: var(--card-hover); padding: 12px; border-radius: 8px;">
-                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Top Power User</div>
-                    <div style="font-size: 1.2em; color: var(--accent-primary); font-weight: bold;" id="topPowerUser">-</div>
-                    <div style="font-size: 0.8em; color: var(--text-secondary);" id="topPowerUserActions">-</div>
+                <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 4px;">Top Power User</div>
+                    <div style="font-size: 1em; color: var(--accent-primary); font-weight: bold;" id="topPowerUser">-</div>
+                    <div style="font-size: 0.7em; color: var(--text-secondary);" id="topPowerUserActions">-</div>
                 </div>
             </div>
         </div>
@@ -1136,8 +1137,10 @@
             const tbody = document.getElementById('sessionsTableBody');
             tbody.innerHTML = '';
 
-            // Get last 20 sessions
-            const recent = sessions.slice(-20).reverse();
+            // Get last 20 sessions (newest first)
+            const recent = sessions.slice(-20).sort((a, b) => 
+                new Date(b.started_at) - new Date(a.started_at)
+            );
 
             recent.forEach(session => {
                 const row = tbody.insertRow();
@@ -1762,6 +1765,73 @@
             }
 
             console.log(`✅ Exported ${filename}`);
+        }
+
+        // Reset Analytics Function
+        async function resetAnalytics() {
+            const confirmed = confirm('⚠️ WARNING: This will DELETE ALL analytics data!\n\nThis includes:\n- All sessions\n- All user stats\n- All daily stats\n- All error logs\n\nThis action CANNOT be undone!\n\nAre you sure?');
+            
+            if (!confirmed) {
+                return;
+            }
+
+            // Double confirmation
+            const doubleConfirm = confirm('🚨 FINAL WARNING: Really delete ALL analytics data?\n\nType YES in the next prompt to confirm.');
+            if (!doubleConfirm) {
+                return;
+            }
+
+            const finalConfirm = prompt('Type "YES" to confirm deletion:');
+            if (finalConfirm !== 'YES') {
+                alert('❌ Deletion cancelled.');
+                return;
+            }
+
+            try {
+                console.log('🗑️ Resetting analytics...');
+                
+                const apiEndpoints = [
+                    '/api/analytics/reset',
+                    'http://localhost:5070/api/analytics/reset'
+                ];
+                
+                let response;
+                let lastError;
+                
+                for (const url of apiEndpoints) {
+                    try {
+                        console.log(`Trying: ${url}`);
+                        response = await fetch(url, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        if (response.ok) {
+                            console.log(`✅ Connected to API: ${url}`);
+                            break;
+                        } else {
+                            lastError = `HTTP ${response.status}: ${response.statusText}`;
+                        }
+                    } catch (e) {
+                        lastError = e.message;
+                        console.log(`❌ Failed: ${url} - ${e.message}`);
+                    }
+                }
+                
+                if (!response || !response.ok) {
+                    throw new Error(`Could not reset analytics. Last error: ${lastError}`);
+                }
+                
+                const result = await response.json();
+                alert(`✅ Analytics reset successful!\n\nDeleted:\n- ${result.sessions_deleted || 0} sessions\n- ${result.users_deleted || 0} users\n- ${result.daily_stats_deleted || 0} daily stats\n- ${result.errors_deleted || 0} error logs`);
+                
+                // Reload data
+                loadData();
+            } catch (error) {
+                console.error('Failed to reset analytics:', error);
+                alert(`❌ Failed to reset analytics: ${error.message}`);
+            }
         }
     </script>
 </body>

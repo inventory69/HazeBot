@@ -187,14 +187,21 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 or request.remote_addr
             )
 
-            # Better device detection from User-Agent if header not present
+            # Better device detection with proper priority
             user_agent = request.headers.get("User-Agent", "Unknown")
             device_info = request.headers.get("X-Device-Info")
+            platform_header = request.headers.get("X-Platform", "Unknown")
+            app_version = request.headers.get("X-App-Version", "Unknown")
             
             if not device_info or device_info == "Unknown":
-                # Parse User-Agent for device info
-                if "Chillventory" in user_agent or "Testventory" in user_agent:
-                    # Flutter app
+                # Priority 1: Use X-Platform header if present (sent by Flutter app)
+                # This works for ALL Flutter builds: Web, Android, iOS, Desktop
+                if platform_header and platform_header != "Unknown":
+                    device_info = platform_header
+                
+                # Priority 2: Check for Flutter App identifiers in User-Agent
+                elif "Chillventory" in user_agent or "Testventory" in user_agent:
+                    # Flutter app with custom User-Agent
                     if "Android" in user_agent:
                         device_info = "Android"
                     elif "iPhone" in user_agent or "iPad" in user_agent:
@@ -207,9 +214,22 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                         device_info = "macOS Desktop"
                     else:
                         device_info = "Flutter App"
-                elif "Chrome" in user_agent or "Firefox" in user_agent or "Safari" in user_agent:
-                    device_info = "Web Browser"
+                
+                # Priority 3: Detect Web Browser (Analytics Dashboard or external)
+                elif "Mozilla" in user_agent and ("Chrome" in user_agent or "Firefox" in user_agent or "Safari" in user_agent or "Edge" in user_agent):
+                    # Check if this is Analytics Dashboard (no app version header)
+                    if app_version == "Unknown" and request.endpoint and "analytics" in request.endpoint.lower():
+                        device_info = "Analytics Dashboard"
+                    else:
+                        device_info = "Web Browser"
+                
+                # Priority 4: API Client / Script
+                elif "python-requests" in user_agent.lower() or "curl" in user_agent.lower() or "postman" in user_agent.lower():
+                    device_info = "API Client"
+                
+                # Priority 5: Fallback
                 else:
+                    # Extract first part of User-Agent (e.g., "Dart/3.5" → "Dart")
                     device_info = user_agent.split("/")[0] if "/" in user_agent else "Unknown"
             
             session_info = {

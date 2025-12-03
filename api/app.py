@@ -353,6 +353,32 @@ def get_feature_analytics():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/analytics/reset", methods=["DELETE"])
+def reset_analytics():
+    """Reset ALL analytics data (admin only)
+    
+    WARNING: This deletes ALL analytics data permanently!
+    - All sessions
+    - All user stats
+    - All daily stats
+    - All error logs
+    """
+    try:
+        # Reset analytics database
+        result = analytics.db.reset_all_data()
+        
+        logger.info(f"🗑️ Analytics reset by user (deleted {result['sessions_deleted']} sessions)")
+        
+        return jsonify({
+            "success": True,
+            "message": "Analytics data reset successfully",
+            **result
+        }), 200
+    except Exception as e:
+        logger.error(f"Failed to reset analytics: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/analytics/features/comparison", methods=["GET"])
 def get_feature_comparison():
     """Get feature usage comparison between two periods"""

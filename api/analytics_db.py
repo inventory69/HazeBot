@@ -550,6 +550,55 @@ class AnalyticsDatabase:
         except Exception:
             return 0
 
+    def reset_all_data(self) -> Dict[str, int]:
+        """
+        Delete ALL analytics data from all tables
+        
+        Returns:
+            Dictionary with count of deleted rows per table
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Count rows before deletion
+                cursor.execute("SELECT COUNT(*) FROM sessions")
+                sessions_count = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM user_stats")
+                users_count = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM daily_stats")
+                daily_count = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM error_logs")
+                errors_count = cursor.fetchone()[0]
+                
+                # Delete all data
+                cursor.execute("DELETE FROM sessions")
+                cursor.execute("DELETE FROM user_stats")
+                cursor.execute("DELETE FROM daily_stats")
+                cursor.execute("DELETE FROM error_logs")
+                
+                # Reset autoincrement counters
+                cursor.execute("DELETE FROM sqlite_sequence WHERE name='error_logs'")
+                
+                # Vacuum to reclaim space
+                conn.commit()
+                cursor.execute("VACUUM")
+                
+                logger.info(f"🗑️ Analytics reset: {sessions_count} sessions, {users_count} users, {daily_count} daily stats, {errors_count} errors deleted")
+                
+                return {
+                    "sessions_deleted": sessions_count,
+                    "users_deleted": users_count,
+                    "daily_stats_deleted": daily_count,
+                    "errors_deleted": errors_count
+                }
+        except Exception as e:
+            logger.error(f"Failed to reset analytics data: {e}")
+            raise
+
     def close(self):
         """Close database connection"""
         if hasattr(self._local, "connection"):
