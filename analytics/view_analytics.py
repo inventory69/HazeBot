@@ -94,8 +94,8 @@ def main():
             if self.path.startswith("/api/"):
                 self.proxy_to_api()
                 return
-            # Serve login page
-            elif self.path == "/login" or self.path == "/analytics/login":
+            # Serve login page (strip query parameters)
+            elif self.path.startswith("/login") or self.path.startswith("/analytics/login"):
                 self.path = "/analytics/login.html"
                 super().do_GET()
                 return
