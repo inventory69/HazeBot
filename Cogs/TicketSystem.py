@@ -254,13 +254,23 @@ def create_transcript_embed(transcript: str, bot_user: discord.User) -> discord.
 
 
 # === Modal for initial message ===
-class InitialMessageModal(discord.ui.Modal, title="Provide additional details (optional)"):
-    initial_message = discord.ui.TextInput(
-        label="Describe your issue or question briefly",
-        placeholder="E.g., 'My game crashes when...' or leave empty",
+class InitialMessageModal(discord.ui.Modal, title="Create Ticket"):
+    subject = discord.ui.TextInput(
+        label="Subject (Brief title for your ticket)",
+        placeholder="E.g., 'Game crashes on startup'",
+        style=discord.TextStyle.short,
+        required=True,
+        min_length=3,
+        max_length=100,
+    )
+    
+    description = discord.ui.TextInput(
+        label="Description (Detailed explanation)",
+        placeholder="Describe your issue, question, or application in detail...",
         style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=500,
+        required=True,
+        min_length=10,
+        max_length=2000,
     )
 
     def __init__(self, ticket_type: str) -> None:
@@ -268,7 +278,9 @@ class InitialMessageModal(discord.ui.Modal, title="Provide additional details (o
         self.ticket_type = ticket_type
 
     async def on_submit(self, interaction: discord.Interaction):
-        await create_ticket(interaction, self.ticket_type, self.initial_message.value or None)
+        # Format as API-style initial_message for consistency
+        initial_message = f"**Subject:** {self.subject.value}\n\n**Description:**\n{self.description.value}"
+        await create_ticket(interaction, self.ticket_type, initial_message)
 
 
 # === Dropdown for ticket type selection ===

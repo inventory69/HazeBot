@@ -100,7 +100,9 @@ class AnalyticsAggregator:
         # Get current session
         session = self.db.get_session(session_id)
         if not session:
-            logger.warning(f"Session {session_id} not found for update")
+            # Session not in DB yet - will be created on next start_session call
+            # This can happen due to race conditions or server restarts
+            logger.debug(f"Session {session_id} not in DB yet, skipping update")
             return
 
         # Update actions count

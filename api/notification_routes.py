@@ -254,6 +254,96 @@ def register_socketio_handlers(socketio_instance):
         room = f"ticket_{ticket_id}"
         join_room(room)
         logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
+        
+        # Send recent message history to newly joined client
+        try:
+            from flask import current_app
+            from Cogs.TicketSystem import load_tickets, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
+            import asyncio
+            
+            bot = current_app.config.get("bot_instance")
+            if bot:
+                async def fetch_recent_messages():
+                    tickets = await load_tickets()
+                    ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
+                    
+                    if not ticket:
+                        return []
+                    
+                    channel_id = ticket.get("channel_id")
+                    channel = bot.get_channel(channel_id)
+                    
+                    if not channel:
+                        return []
+                    
+                    messages = []
+                    async for message in channel.history(limit=50, oldest_first=False):
+                        # Skip bot system messages except important ones
+                        if message.author.bot:
+                            if not (
+                                message.content.startswith("**Initial details")
+                                or message.content.startswith("**Subject:")  # API-created tickets
+                                or message.content.startswith("**[Admin Panel")
+                                or "Ticket successfully closed" in message.content
+                                or "Ticket claimed by" in message.content
+                                or "Ticket assigned to" in message.content
+                                or "Ticket has been reopened" in message.content
+                            ):
+                                continue
+                        
+                        # Get avatar URL
+                        avatar_url = None
+                        is_admin = False
+                        user_role = None
+                        
+                        # Check if author has admin or moderator role
+                        if hasattr(message.author, "roles") and message.author.roles:
+                            for role in message.author.roles:
+                                if role.id == ADMIN_ROLE_ID:
+                                    is_admin = True
+                                    user_role = "admin"
+                                    break
+                                elif role.id == MODERATOR_ROLE_ID:
+                                    is_admin = True
+                                    user_role = "moderator"
+                                    break
+                        
+                        if message.content.startswith("**[Admin Panel"):
+                            is_admin = True
+                        
+                        try:
+                            if message.author.display_avatar:
+                                avatar_url = str(message.author.display_avatar.url)
+                            elif message.author.avatar:
+                                avatar_url = str(message.author.avatar.url)
+                        except Exception:
+                            pass
+                        
+                        messages.append({
+                            "id": str(message.id),
+                            "author_id": str(message.author.id),
+                            "author_name": message.author.name,
+                            "author_avatar": avatar_url,
+                            "content": message.content,
+                            "timestamp": message.created_at.isoformat(),
+                            "is_bot": message.author.bot,
+                            "is_admin": is_admin,
+                            "role": user_role,
+                        })
+                    
+                    # Reverse to get oldest first
+                    messages.reverse()
+                    return messages
+                
+                loop = bot.loop
+                future = asyncio.run_coroutine_threadsafe(fetch_recent_messages(), loop)
+                messages = future.result(timeout=10)
+                
+                emit("message_history", {"ticket_id": ticket_id, "messages": messages})
+                logger.info(f"📨 Sent {len(messages)} message(s) history to client {request.sid}")
+        except Exception as e:
+            logger.error(f"Failed to fetch message history: {e}")
+        
         emit("joined_ticket", {"ticket_id": ticket_id, "room": room})
 
     @socketio.on("leave_ticket")
