@@ -192,13 +192,13 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             device_info = request.headers.get("X-Device-Info")
             platform_header = request.headers.get("X-Platform", "Unknown")
             app_version = request.headers.get("X-App-Version", "Unknown")
-            
+
             if not device_info or device_info == "Unknown":
                 # Priority 1: Use X-Platform header if present (sent by Flutter app)
                 # This works for ALL Flutter builds: Web, Android, iOS, Desktop
                 if platform_header and platform_header != "Unknown":
                     device_info = platform_header
-                
+
                 # Priority 2: Check for Flutter App identifiers in User-Agent
                 elif "Chillventory" in user_agent or "Testventory" in user_agent:
                     # Flutter app with custom User-Agent
@@ -214,54 +214,64 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                         device_info = "macOS Desktop"
                     else:
                         device_info = "Flutter App"
-                
+
                 # Priority 3: Detect Web Browser (Analytics Dashboard or external)
-                elif "Mozilla" in user_agent and ("Chrome" in user_agent or "Firefox" in user_agent or "Safari" in user_agent or "Edge" in user_agent):
+                elif "Mozilla" in user_agent and (
+                    "Chrome" in user_agent or "Firefox" in user_agent or "Safari" in user_agent or "Edge" in user_agent
+                ):
                     # Check if this is Analytics Dashboard (no app version header)
                     if app_version == "Unknown" and request.endpoint and "analytics" in request.endpoint.lower():
                         device_info = "Analytics Dashboard"
                     else:
                         device_info = "Web Browser"
-                
+
                 # Priority 4: API Client / Script
-                elif "python-requests" in user_agent.lower() or "curl" in user_agent.lower() or "postman" in user_agent.lower():
+                elif (
+                    "python-requests" in user_agent.lower()
+                    or "curl" in user_agent.lower()
+                    or "postman" in user_agent.lower()
+                ):
                     device_info = "API Client"
-                
+
                 # Priority 5: Fallback
                 else:
                     # Extract first part of User-Agent (e.g., "Dart/3.5" → "Dart")
                     device_info = user_agent.split("/")[0] if "/" in user_agent else "Unknown"
-            
+
             # Determine endpoint and check if it's analytics-related (before session tracking)
             endpoint_name = request.endpoint or "unknown"
             referer = request.headers.get("Referer", "")
-            
+
             # Check if this is a fresh OAuth login by checking token age
             # JWT tokens from OAuth have 'exp' and we can calculate how old the token is
             import time
+
             token_exp = data.get("exp", 0)
             token_age_seconds = token_exp - time.time() if token_exp else 999999
             # OAuth tokens are valid for 7 days (604800s), fresh ones will be ~604800s away from expiry
             is_fresh_token = token_age_seconds > 604790  # Less than 10 seconds old
-            
+
             # Check if this is a Discord OAuth login
             # OAuth login creates a fresh token, so first few API calls will have a very fresh token
             is_discord_oauth = is_fresh_token and request.discord_id
-            
+
             is_analytics_request = (
                 # Endpoint name checks
-                endpoint_name.startswith("get_analytics") or
-                endpoint_name.startswith("reset_analytics") or
-                endpoint_name.startswith("get_error_analytics") or
-                endpoint_name.startswith("get_feature") or
+                endpoint_name.startswith("get_analytics")
+                or endpoint_name.startswith("reset_analytics")
+                or endpoint_name.startswith("get_error_analytics")
+                or endpoint_name.startswith("get_feature")
+                or
                 # Path checks
-                "/analytics/" in request.path.lower() or
+                "/analytics/" in request.path.lower()
+                or
                 # Referer checks (any request originating from analytics dashboard)
-                "/analytics/" in referer.lower() or
+                "/analytics/" in referer.lower()
+                or
                 # Discord OAuth login (regardless of referer)
                 is_discord_oauth
             )
-            
+
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
@@ -299,17 +309,15 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             if analytics_aggregator is not None and not is_analytics_request:
                 # Endpoints to exclude from analytics (reduce noise)
                 excluded_endpoints = [
-                    'auth_routes.ping',           # Health checks
-                    'auth_routes.verify_token',   # Token verification
-                    'auth_routes.refresh_token',  # Token refresh
-                    'admin_routes.active_sessions', # Live monitoring
+                    "auth_routes.ping",  # Health checks
+                    "auth_routes.verify_token",  # Token verification
+                    "auth_routes.refresh_token",  # Token refresh
+                    "admin_routes.active_sessions",  # Live monitoring
                 ]
-                
+
                 if endpoint_name not in excluded_endpoints:
                     try:
-                        analytics_aggregator.update_session(
-                            session_id=request.session_id, endpoint=endpoint_name
-                        )
+                        analytics_aggregator.update_session(session_id=request.session_id, endpoint=endpoint_name)
                     except Exception as e:
                         logger.error(f"Failed to update analytics session: {e}")
 

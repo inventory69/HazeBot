@@ -65,10 +65,10 @@ class AnalyticsAggregator:
                     "device_info": device_info,
                     "platform": platform,
                     "app_version": app_version,
-                }
+                },
             )
             return
-        
+
         now = datetime.utcnow().isoformat()
 
         session = {

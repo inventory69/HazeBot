@@ -670,7 +670,7 @@ def claim_ticket_endpoint(ticket_id):
             return jsonify({"error": "user_id required"}), 400
 
         loop = bot.loop
-        
+
         # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
@@ -685,9 +685,7 @@ def claim_ticket_endpoint(ticket_id):
         channel_id = ticket.get("channel_id")
 
         # Use Discord bot function to claim (ensures button updates, logging, etc.)
-        future = asyncio.run_coroutine_threadsafe(
-            claim_ticket_from_api(bot, channel_id, int(user_id), ticket), loop
-        )
+        future = asyncio.run_coroutine_threadsafe(claim_ticket_from_api(bot, channel_id, int(user_id), ticket), loop)
         result = future.result(timeout=10)
 
         if not result.get("success"):
@@ -730,7 +728,7 @@ def assign_ticket_endpoint(ticket_id):
             return jsonify({"error": "assigned_to user_id required"}), 400
 
         loop = bot.loop
-        
+
         # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
@@ -796,7 +794,7 @@ def close_ticket_endpoint(ticket_id):
         close_message = data.get("close_message", "")
 
         loop = bot.loop
-        
+
         # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
@@ -812,8 +810,7 @@ def close_ticket_endpoint(ticket_id):
 
         # Use Discord bot function to close (ensures transcript, email, button updates, etc.)
         future = asyncio.run_coroutine_threadsafe(
-            close_ticket_from_api(bot, channel_id, ticket, close_message if close_message.strip() else None),
-            loop
+            close_ticket_from_api(bot, channel_id, ticket, close_message if close_message.strip() else None), loop
         )
         result = future.result(timeout=10)
 
@@ -965,7 +962,7 @@ def get_ticket_messages_endpoint(ticket_id):
                         and not message.content.startswith("**[Admin Panel")
                         and "]:**" in message.content
                     )
-                    
+
                     # Include important bot messages (initial, admin panel, user messages, close/claim/assign/reopen)
                     if not (
                         message.content.startswith("**Initial details")
@@ -1035,11 +1032,11 @@ def get_ticket_messages_endpoint(ticket_id):
                                     avatar_url = str(admin_member.avatar.url)
                             except (AttributeError, Exception) as e:
                                 logger.debug(f"Could not get avatar for admin {admin_member.id}: {e}")
-                
+
                 elif is_user_message_from_app:
                     # Parse username from user message like "**[username]:**"
                     import re
-                    
+
                     user_match = re.search(r"\*\*\[([^\]]+)\]:\*\*", message.content)
                     if user_match:
                         username = user_match.group(1)
@@ -1054,7 +1051,7 @@ def get_ticket_messages_endpoint(ticket_id):
                             ):
                                 user_member = member
                                 break
-                        
+
                         if user_member:
                             try:
                                 if user_member.display_avatar:

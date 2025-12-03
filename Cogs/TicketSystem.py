@@ -264,7 +264,7 @@ class InitialMessageModal(discord.ui.Modal, title="Create Ticket"):
         min_length=3,
         max_length=100,
     )
-    
+
     description = discord.ui.TextInput(
         label="Description (Detailed explanation)",
         placeholder="Describe your issue, question, or application in detail...",
@@ -705,37 +705,37 @@ async def claim_ticket_from_api(
     """
     Claim a ticket via API (without Discord Interaction).
     Uses same logic as Discord button to ensure consistency.
-    
+
     Returns: Dict with success status and message
     """
     try:
         channel = bot.get_channel(channel_id)
         if not channel:
             return {"success": False, "error": "Channel not found"}
-        
+
         guild = bot.get_guild(Config.GUILD_ID)
         if not guild:
             return {"success": False, "error": "Guild not found"}
-        
+
         claimer = guild.get_member(user_id)
         if not claimer:
             return {"success": False, "error": "User not found in guild"}
-        
+
         # Check if already claimed
         if ticket.get("claimed_by"):
             return {"success": False, "error": "Ticket already claimed"}
-        
+
         # Check permissions (simulate is_allowed_for_ticket_actions check)
         has_permission = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in claimer.roles)
         if not has_permission:
             return {"success": False, "error": "Not authorized"}
-        
+
         # Update ticket in database
         await update_ticket(channel_id, {"claimed_by": user_id, "status": "Claimed"})
-        
+
         # Send message to channel (visible for all users)
         await channel.send(f"🎫 **Ticket claimed by {claimer.display_name}**\nStatus changed to: **Claimed**")
-        
+
         # Update embed and disable Claim button
         tickets = await load_tickets()
         updated_ticket = next((t for t in tickets if t["channel_id"] == channel_id), None)
@@ -752,10 +752,10 @@ async def claim_ticket_from_api(
                 await msg.edit(embed=embed, view=view)
             except Exception as e:
                 logger.error(f"Error updating embed after claim: {e}")
-        
+
         logger.info(f"🎫 [TicketSystem] Ticket in {channel.name} claimed by {claimer.name}.")
         return {"success": True, "message": "Ticket claimed successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error in claim_ticket_from_api: {e}\n{traceback.format_exc()}")
         return {"success": False, "error": str(e)}
@@ -767,30 +767,28 @@ async def assign_ticket_from_api(
     """
     Assign a ticket via API (without Discord Interaction).
     Uses same logic as Discord button to ensure consistency.
-    
+
     Returns: Dict with success status and message
     """
     try:
         channel = bot.get_channel(channel_id)
         if not channel:
             return {"success": False, "error": "Channel not found"}
-        
+
         guild = bot.get_guild(Config.GUILD_ID)
         if not guild:
             return {"success": False, "error": "Guild not found"}
-        
+
         assignee = guild.get_member(assigned_to_id)
         if not assignee:
             return {"success": False, "error": "Assigned user not found in guild"}
-        
+
         # Update ticket in database
         await update_ticket(channel_id, {"assigned_to": assigned_to_id})
-        
+
         # Send assignment message to channel (with mention for notification)
-        await channel.send(
-            f"👤 **Ticket assigned to {assignee.display_name}** ({assignee.mention})"
-        )
-        
+        await channel.send(f"👤 **Ticket assigned to {assignee.display_name}** ({assignee.mention})")
+
         # Update embed and disable Assign button
         tickets = await load_tickets()
         updated_ticket = next((t for t in tickets if t["channel_id"] == channel_id), None)
@@ -807,10 +805,10 @@ async def assign_ticket_from_api(
                 await msg.edit(embed=embed, view=view)
             except Exception as e:
                 logger.error(f"Error updating embed after assign: {e}")
-        
+
         logger.info(f"🎫 [TicketSystem] Ticket in {channel.name} assigned to {assignee.name}.")
         return {"success": True, "message": "Ticket assigned successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error in assign_ticket_from_api: {e}\n{traceback.format_exc()}")
         return {"success": False, "error": str(e)}
@@ -822,32 +820,30 @@ async def close_ticket_from_api(
     """
     Close a ticket via API (without Discord Interaction).
     Uses same close_ticket_async logic to ensure consistency (transcript, email, etc.).
-    
+
     Returns: Dict with success status and message
     """
     try:
         channel = bot.get_channel(channel_id)
         if not channel:
             return {"success": False, "error": "Channel not found"}
-        
+
         if ticket.get("status") == "Closed":
             return {"success": False, "error": "Ticket already closed"}
-        
+
         # Send closing message placeholder
         closing_msg = await channel.send("🔒 Closing ticket...")
-        
+
         # Update ticket status immediately
         await update_ticket(channel_id, {"status": "Closed"})
-        
+
         # Use existing close_ticket_async function (handles transcript, email, archive, etc.)
         # Pass None for followup since we don't have an interaction
-        asyncio.create_task(
-            close_ticket_async(bot, channel, ticket, None, closing_msg, close_message)
-        )
-        
+        asyncio.create_task(close_ticket_async(bot, channel, ticket, None, closing_msg, close_message))
+
         logger.info(f"🎫 [TicketSystem] Ticket #{ticket.get('ticket_num')} closed via API.")
         return {"success": True, "message": "Ticket closed successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error in close_ticket_from_api: {e}\n{traceback.format_exc()}")
         return {"success": False, "error": str(e)}

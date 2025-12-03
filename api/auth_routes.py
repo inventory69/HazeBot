@@ -394,9 +394,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                 exp_date = datetime.utcfromtimestamp(exp_timestamp)
                 time_until_expiry = exp_date - Config.get_utc_now().replace(tzinfo=None)
                 if time_until_expiry.total_seconds() < 0:
-                    logger.debug(
-                        f"❌ Analytics auth: Token expired | User: {data.get('user')} | Expired: {exp_date}"
-                    )
+                    logger.debug(f"❌ Analytics auth: Token expired | User: {data.get('user')} | Expired: {exp_date}")
                     return "", 401
 
             # Verify user has admin/mod permissions

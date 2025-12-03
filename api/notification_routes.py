@@ -251,13 +251,15 @@ def register_socketio_handlers(socketio_instance):
         """Handle WebSocket disconnection"""
         client_sid = request.sid
         logger.info(f"🔌 WebSocket client disconnected: {client_sid}")
-        
+
         # ✅ CRITICAL: Auto-cleanup - remove user from all active_ticket_viewers
         # This handles cases where client disconnects without sending leave_ticket
         user_id = client_to_user.get(client_sid)
         if user_id:
-            logger.info(f"🧹 Auto-cleanup: Removing user {user_id} from active viewers (client {client_sid} disconnected)")
-            
+            logger.info(
+                f"🧹 Auto-cleanup: Removing user {user_id} from active viewers (client {client_sid} disconnected)"
+            )
+
             # Remove user from all tickets they were viewing
             tickets_to_clean = []
             for ticket_id, viewers in active_ticket_viewers.items():
@@ -265,16 +267,16 @@ def register_socketio_handlers(socketio_instance):
                     viewers.discard(user_id)
                     tickets_to_clean.append(ticket_id)
                     logger.debug(f"📱 Removed user {user_id} from ticket {ticket_id} active viewers")
-            
+
             # Clean up empty sets
             for ticket_id in tickets_to_clean:
                 if not active_ticket_viewers[ticket_id]:
                     del active_ticket_viewers[ticket_id]
                     logger.debug(f"📱 Removed empty viewer set for ticket {ticket_id}")
-            
+
             # Remove client-to-user mapping
             del client_to_user[client_sid]
-            
+
             if tickets_to_clean:
                 logger.info(f"✅ Auto-cleanup complete: User {user_id} removed from {len(tickets_to_clean)} ticket(s)")
 
@@ -283,55 +285,56 @@ def register_socketio_handlers(socketio_instance):
         """Join a ticket room to receive real-time updates"""
         ticket_id = data.get("ticket_id")
         user_id = data.get("user_id")  # ✅ NEW: Get user_id to track active viewers
-        
+
         if not ticket_id:
             emit("error", {"message": "ticket_id required"})
             return
 
         room = f"ticket_{ticket_id}"
         join_room(room)
-        
+
         # ✅ Track this user as actively viewing the ticket (suppress push notifications)
         if user_id:
             if ticket_id not in active_ticket_viewers:
                 active_ticket_viewers[ticket_id] = set()
             active_ticket_viewers[ticket_id].add(str(user_id))
-            
+
             # ✅ Track client-to-user mapping for auto-cleanup on disconnect
             client_to_user[request.sid] = str(user_id)
-            
+
             logger.info(f"🎫 Client {request.sid} (user {user_id}) joined ticket room: {room}")
             logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers[ticket_id]}")
         else:
             logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
-        
+
         # Send recent message history to newly joined client
         try:
             from flask import current_app
             from Cogs.TicketSystem import load_tickets, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
             import asyncio
-            
+
             bot = current_app.config.get("bot_instance")
             if bot:
+
                 async def fetch_recent_messages():
                     tickets = await load_tickets()
                     ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
-                    
+
                     if not ticket:
                         return []
-                    
+
                     channel_id = ticket.get("channel_id")
                     channel = bot.get_channel(channel_id)
-                    
+
                     if not channel:
                         return []
-                    
+
                     messages = []
                     total_fetched = 0
                     total_filtered = 0
                     async for message in channel.history(limit=100, oldest_first=False):
                         total_fetched += 1
-                        
+
                         # Skip bot system messages except important ones
                         if message.author.bot:
                             # Check if it's a user message from app (has [username]: prefix)
@@ -340,7 +343,7 @@ def register_socketio_handlers(socketio_instance):
                                 and not message.content.startswith("**[Admin Panel")
                                 and "]:**" in message.content
                             )
-                            
+
                             # Keep important bot messages
                             if not (
                                 message.content.startswith("**Initial details")
@@ -355,12 +358,12 @@ def register_socketio_handlers(socketio_instance):
                                 total_filtered += 1
                                 logger.debug(f"🔇 Filtered bot message: {message.content[:50]}...")
                                 continue
-                        
+
                         # Get avatar URL
                         avatar_url = None
                         is_admin = False
                         user_role = None
-                        
+
                         # Check if author has admin or moderator role
                         if hasattr(message.author, "roles") and message.author.roles:
                             for role in message.author.roles:
@@ -372,10 +375,10 @@ def register_socketio_handlers(socketio_instance):
                                     is_admin = True
                                     user_role = "moderator"
                                     break
-                        
+
                         if message.content.startswith("**[Admin Panel"):
                             is_admin = True
-                        
+
                         try:
                             if message.author.display_avatar:
                                 avatar_url = str(message.author.display_avatar.url)
@@ -383,33 +386,37 @@ def register_socketio_handlers(socketio_instance):
                                 avatar_url = str(message.author.avatar.url)
                         except Exception:
                             pass
-                        
-                        messages.append({
-                            "id": str(message.id),
-                            "author_id": str(message.author.id),
-                            "author_name": message.author.name,
-                            "author_avatar": avatar_url,
-                            "content": message.content,
-                            "timestamp": message.created_at.isoformat(),
-                            "is_bot": message.author.bot,
-                            "is_admin": is_admin,
-                            "role": user_role,
-                        })
-                    
+
+                        messages.append(
+                            {
+                                "id": str(message.id),
+                                "author_id": str(message.author.id),
+                                "author_name": message.author.name,
+                                "author_avatar": avatar_url,
+                                "content": message.content,
+                                "timestamp": message.created_at.isoformat(),
+                                "is_bot": message.author.bot,
+                                "is_admin": is_admin,
+                                "role": user_role,
+                            }
+                        )
+
                     # Reverse to get oldest first
                     messages.reverse()
-                    logger.debug(f"📊 Message history: fetched={total_fetched}, filtered={total_filtered}, sent={len(messages)}")
+                    logger.debug(
+                        f"📊 Message history: fetched={total_fetched}, filtered={total_filtered}, sent={len(messages)}"
+                    )
                     return messages
-                
+
                 loop = bot.loop
                 future = asyncio.run_coroutine_threadsafe(fetch_recent_messages(), loop)
                 messages = future.result(timeout=10)
-                
+
                 emit("message_history", {"ticket_id": ticket_id, "messages": messages})
                 logger.info(f"📨 Sent {len(messages)} message(s) history to client {request.sid}")
         except Exception as e:
             logger.error(f"Failed to fetch message history: {e}")
-        
+
         emit("joined_ticket", {"ticket_id": ticket_id, "room": room})
 
     @socketio.on("leave_ticket")
@@ -417,13 +424,13 @@ def register_socketio_handlers(socketio_instance):
         """Leave a ticket room"""
         ticket_id = data.get("ticket_id")
         user_id = data.get("user_id")  # ✅ NEW: Get user_id to remove from active viewers
-        
+
         if not ticket_id:
             return
 
         room = f"ticket_{ticket_id}"
         leave_room(room)
-        
+
         # ✅ Remove user from active viewers (re-enable push notifications)
         if user_id and ticket_id in active_ticket_viewers:
             active_ticket_viewers[ticket_id].discard(str(user_id))
@@ -434,7 +441,7 @@ def register_socketio_handlers(socketio_instance):
             logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers.get(ticket_id, set())}")
         else:
             logger.info(f"🎫 Client {request.sid} left ticket room: {room}")
-        
+
         emit("left_ticket", {"ticket_id": ticket_id, "room": room})
 
 
@@ -612,7 +619,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
 
         # Remove duplicates
         recipients = list(set(recipients))
-        
+
         logger.debug(f"📱 Initial notification recipients: {recipients}")
 
         # ✅ Filter out users who are actively viewing the ticket via WebSocket
@@ -623,7 +630,9 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
             recipients = [uid for uid in recipients if uid not in active_viewers]
             filtered_count = original_count - len(recipients)
             if filtered_count > 0:
-                logger.info(f"📱 Filtered out {filtered_count} active viewer(s) from push recipients for ticket {ticket_id}")
+                logger.info(
+                    f"📱 Filtered out {filtered_count} active viewer(s) from push recipients for ticket {ticket_id}"
+                )
                 logger.debug(f"📱 Active viewers: {active_viewers}, Final recipients: {recipients}")
         else:
             logger.debug(f"📱 No active viewers for ticket {ticket_id}, sending to all recipients")
