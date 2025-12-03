@@ -94,6 +94,23 @@ def main():
             if self.path.startswith("/api/"):
                 self.proxy_to_api()
                 return
+            # Serve login page
+            elif self.path == "/login" or self.path == "/analytics/login":
+                self.path = "/analytics/login.html"
+                super().do_GET()
+                return
+            # Redirect /analytics to /analytics/ (with trailing slash)
+            elif self.path == "/analytics":
+                self.send_response(301)
+                self.send_header("Location", "/analytics/")
+                self.end_headers()
+                return
+            # Redirect /analytics/ to dashboard
+            elif self.path == "/analytics/":
+                self.send_response(301)
+                self.send_header("Location", "/analytics/analytics_dashboard.html")
+                self.end_headers()
+                return
             # Redirect root to analytics dashboard
             elif self.path == "/":
                 self.send_response(301)

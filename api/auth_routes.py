@@ -354,4 +354,73 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             }
         )
 
+    @auth_routes.route("/api/auth/verify-token", methods=["GET"])
+    def verify_token():
+        """
+        JWT verification endpoint for NGINX auth_request
+        Returns 200 if token is valid, 401 if invalid/missing
+        This endpoint is called by NGINX to verify JWT tokens before proxying to Analytics
+        """
+        token = request.headers.get("Authorization")
+
+        if not token:
+            logger.debug(f"❌ Analytics auth: No Authorization header")
+            return "", 401
+
+        try:
+            # Strip "Bearer " prefix if present
+            if token.startswith("Bearer "):
+                token = token[7:]
+
+            # Validate token is not empty
+            if not token or token.strip() == "":
+                logger.debug(f"❌ Analytics auth: Empty token")
+                return "", 401
+
+            # Validate JWT structure
+            parts = token.split(".")
+            if len(parts) != 3 or not all(parts):
+                logger.debug(f"❌ Analytics auth: Malformed token structure")
+                return "", 401
+
+            # Decode and verify JWT
+            data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+
+            # Check token expiry
+            from datetime import datetime
+
+            exp_timestamp = data.get("exp")
+            if exp_timestamp:
+                exp_date = datetime.utcfromtimestamp(exp_timestamp)
+                time_until_expiry = exp_date - Config.get_utc_now().replace(tzinfo=None)
+                if time_until_expiry.total_seconds() < 0:
+                    logger.debug(
+                        f"❌ Analytics auth: Token expired | User: {data.get('user')} | Expired: {exp_date}"
+                    )
+                    return "", 401
+
+            # Verify user has admin/mod permissions
+            user_role = data.get("role", "lootling")
+            permissions = data.get("permissions", [])
+
+            if user_role not in ["admin", "mod"] and "all" not in permissions:
+                logger.warning(
+                    f"❌ Analytics auth: Insufficient permissions | User: {data.get('user')} | Role: {user_role}"
+                )
+                return "", 403  # Forbidden
+
+            # Token is valid and user has permissions
+            logger.debug(f"✅ Analytics auth: Token valid | User: {data.get('user')} | Role: {user_role}")
+            return "", 200
+
+        except jwt.ExpiredSignatureError:
+            logger.debug(f"❌ Analytics auth: Token expired")
+            return "", 401
+        except (jwt.DecodeError, jwt.InvalidTokenError) as e:
+            logger.debug(f"❌ Analytics auth: Invalid token - {str(e)}")
+            return "", 401
+        except Exception as e:
+            logger.error(f"❌ Analytics auth: Unexpected error - {str(e)}")
+            return "", 401
+
     return auth_routes
