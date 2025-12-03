@@ -16,6 +16,9 @@ logger = None
 socketio = None
 jwt_decode_lock = None
 
+# Track which users are actively viewing which tickets (to suppress push notifications)
+# Format: {"ticket_id": set(user_discord_ids)}
+active_ticket_viewers = {}
 
 # Create Blueprint
 notification_bp = Blueprint("notifications", __name__)
@@ -247,13 +250,24 @@ def register_socketio_handlers(socketio_instance):
     def handle_join_ticket(data):
         """Join a ticket room to receive real-time updates"""
         ticket_id = data.get("ticket_id")
+        user_id = data.get("user_id")  # ✅ NEW: Get user_id to track active viewers
+        
         if not ticket_id:
             emit("error", {"message": "ticket_id required"})
             return
 
         room = f"ticket_{ticket_id}"
         join_room(room)
-        logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
+        
+        # ✅ Track this user as actively viewing the ticket (suppress push notifications)
+        if user_id:
+            if ticket_id not in active_ticket_viewers:
+                active_ticket_viewers[ticket_id] = set()
+            active_ticket_viewers[ticket_id].add(str(user_id))
+            logger.info(f"🎫 Client {request.sid} (user {user_id}) joined ticket room: {room}")
+            logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers[ticket_id]}")
+        else:
+            logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
         
         # Send recent message history to newly joined client
         try:
@@ -366,12 +380,25 @@ def register_socketio_handlers(socketio_instance):
     def handle_leave_ticket(data):
         """Leave a ticket room"""
         ticket_id = data.get("ticket_id")
+        user_id = data.get("user_id")  # ✅ NEW: Get user_id to remove from active viewers
+        
         if not ticket_id:
             return
 
         room = f"ticket_{ticket_id}"
         leave_room(room)
-        logger.info(f"🎫 Client {request.sid} left ticket room: {room}")
+        
+        # ✅ Remove user from active viewers (re-enable push notifications)
+        if user_id and ticket_id in active_ticket_viewers:
+            active_ticket_viewers[ticket_id].discard(str(user_id))
+            # Clean up empty sets
+            if not active_ticket_viewers[ticket_id]:
+                del active_ticket_viewers[ticket_id]
+            logger.info(f"🎫 Client {request.sid} (user {user_id}) left ticket room: {room}")
+            logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers.get(ticket_id, set())}")
+        else:
+            logger.info(f"🎫 Client {request.sid} left ticket room: {room}")
+        
         emit("left_ticket", {"ticket_id": ticket_id, "room": room})
 
 
@@ -549,6 +576,21 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
 
         # Remove duplicates
         recipients = list(set(recipients))
+        
+        logger.debug(f"📱 Initial notification recipients: {recipients}")
+
+        # ✅ Filter out users who are actively viewing the ticket via WebSocket
+        # These users see real-time updates and don't need push notifications
+        if ticket_id in active_ticket_viewers:
+            active_viewers = active_ticket_viewers[ticket_id]
+            original_count = len(recipients)
+            recipients = [uid for uid in recipients if uid not in active_viewers]
+            filtered_count = original_count - len(recipients)
+            if filtered_count > 0:
+                logger.info(f"📱 Filtered out {filtered_count} active viewer(s) from push recipients for ticket {ticket_id}")
+                logger.debug(f"📱 Active viewers: {active_viewers}, Final recipients: {recipients}")
+        else:
+            logger.debug(f"📱 No active viewers for ticket {ticket_id}, sending to all recipients")
 
         # Send notification to each recipient
         for user_id in recipients:
