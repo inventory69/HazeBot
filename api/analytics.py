@@ -53,7 +53,22 @@ class AnalyticsAggregator:
         app_version: str,
         ip_address: str,
     ) -> None:
-        """Record session start"""
+        """Record session start (idempotent - won't fail if session exists)"""
+        # Check if session already exists
+        existing = self.db.get_session(session_id)
+        if existing:
+            # Session already exists - just update the metadata
+            logger.debug(f"Session {session_id} already exists, updating metadata")
+            self.db.update_session(
+                session_id,
+                {
+                    "device_info": device_info,
+                    "platform": platform,
+                    "app_version": app_version,
+                }
+            )
+            return
+        
         now = datetime.utcnow().isoformat()
 
         session = {
@@ -72,8 +87,11 @@ class AnalyticsAggregator:
             "endpoints_used": {},
         }
 
-        self.db.create_session(session)
-        logger.debug(f"Session started: {session_id} for user {username}")
+        success = self.db.create_session(session)
+        if success:
+            logger.debug(f"Session started: {session_id} for user {username}")
+        else:
+            logger.warning(f"Failed to create session {session_id} (duplicate?)")
 
     def update_session(self, session_id: str, endpoint: str, action: str = "API_CALL") -> None:
         """Update session with new activity"""

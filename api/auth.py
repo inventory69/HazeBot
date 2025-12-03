@@ -187,6 +187,31 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 or request.remote_addr
             )
 
+            # Better device detection from User-Agent if header not present
+            user_agent = request.headers.get("User-Agent", "Unknown")
+            device_info = request.headers.get("X-Device-Info")
+            
+            if not device_info or device_info == "Unknown":
+                # Parse User-Agent for device info
+                if "Chillventory" in user_agent or "Testventory" in user_agent:
+                    # Flutter app
+                    if "Android" in user_agent:
+                        device_info = "Android"
+                    elif "iPhone" in user_agent or "iPad" in user_agent:
+                        device_info = "iOS"
+                    elif "Windows" in user_agent:
+                        device_info = "Windows Desktop"
+                    elif "Linux" in user_agent:
+                        device_info = "Linux Desktop"
+                    elif "Macintosh" in user_agent:
+                        device_info = "macOS Desktop"
+                    else:
+                        device_info = "Flutter App"
+                elif "Chrome" in user_agent or "Firefox" in user_agent or "Safari" in user_agent:
+                    device_info = "Web Browser"
+                else:
+                    device_info = user_agent.split("/")[0] if "/" in user_agent else "Unknown"
+            
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
@@ -194,11 +219,11 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "permissions": request.user_permissions,
                 "last_seen": Config.get_utc_now().isoformat(),
                 "ip": real_ip,
-                "user_agent": request.headers.get("User-Agent", "Unknown"),
+                "user_agent": user_agent,
                 "endpoint": request.endpoint or "unknown",
                 "app_version": request.headers.get("X-App-Version", "Unknown"),
                 "platform": request.headers.get("X-Platform", "Unknown"),
-                "device_info": request.headers.get("X-Device-Info", "Unknown"),
+                "device_info": device_info,
             }
 
             # Check if this is a new session (first time seeing this session_id)
@@ -220,14 +245,24 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 except Exception as e:
                     logger.error(f"Failed to start analytics session: {e}")
 
-            # Analytics: Update session activity
+            # Analytics: Update session activity (skip high-frequency endpoints)
             if analytics_aggregator is not None:
-                try:
-                    analytics_aggregator.update_session(
-                        session_id=request.session_id, endpoint=request.endpoint or "unknown"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to update analytics session: {e}")
+                # Endpoints to exclude from analytics (reduce noise)
+                excluded_endpoints = [
+                    'auth_routes.ping',           # Health checks
+                    'auth_routes.verify_token',   # Token verification
+                    'auth_routes.refresh_token',  # Token refresh
+                    'admin_routes.active_sessions', # Live monitoring
+                ]
+                
+                endpoint_name = request.endpoint or "unknown"
+                if endpoint_name not in excluded_endpoints:
+                    try:
+                        analytics_aggregator.update_session(
+                            session_id=request.session_id, endpoint=endpoint_name
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to update analytics session: {e}")
 
             # Update app usage tracking (persistent)
             update_app_usage(request.discord_id, app_usage_file, Config)
