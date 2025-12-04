@@ -1181,7 +1181,7 @@ def send_ticket_message_endpoint(ticket_id):
             elif any(role.id == MODERATOR_ROLE_ID for role in member.roles):
                 user_role = "moderator"
 
-            logger.info(
+            logger.debug(
                 f"📤 Message sent from {member.name} (ID: {member.id}) - "
                 f"avatar_url: {avatar_url or 'None'}, is_admin: {is_admin_or_mod}, role: {user_role}"
             )
@@ -1203,7 +1203,7 @@ def send_ticket_message_endpoint(ticket_id):
         message_data = future.result(timeout=10)
 
         # Notify WebSocket clients about new message
-        logger.info(f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}...")
+        logger.debug(f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}...")
         notify_ticket_update(ticket_id, "new_message", message_data)
 
         # Send push notification for new message
