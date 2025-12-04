@@ -4,15 +4,15 @@ Test Script: Push Notification zu Flutter App senden
 Sendet eine Test-Notification um das neue Monochrome Icon zu testen
 """
 
-import sys
-import os
 import asyncio
+import os
+import sys
 
 # Add project root to path (parent directory of scripts/)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from Utils.notification_service import initialize_firebase, send_notification, is_fcm_enabled
+from Utils.notification_service import initialize_firebase, is_fcm_enabled, send_notification  # noqa: E402
 
 
 async def test_push_notification():

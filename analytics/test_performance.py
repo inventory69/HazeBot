@@ -146,14 +146,14 @@ def test_load_performance(session_counts: list):
             print("  ├─ Export (uncached)...", end=" ", flush=True)
             analytics.cache.invalidate()
             start = time.time()
-            export_data = analytics.get_export_data(days=7)
+            _export_data = analytics.get_export_data(days=7)
             export_uncached_time = time.time() - start
             print(f"✓ ({export_uncached_time:.2f}s)")
 
             # Test export (cached)
             print("  ├─ Export (cached)...", end=" ", flush=True)
             start = time.time()
-            export_data = analytics.get_export_data(days=7)
+            _export_data = analytics.get_export_data(days=7)
             export_cached_time = time.time() - start
             print(f"✓ ({export_cached_time:.2f}s)")
 
@@ -161,14 +161,14 @@ def test_load_performance(session_counts: list):
             print("  ├─ Summary (uncached)...", end=" ", flush=True)
             analytics.cache.invalidate()
             start = time.time()
-            summary = analytics.get_summary_stats()
+            _summary = analytics.get_summary_stats()
             summary_uncached_time = time.time() - start
             print(f"✓ ({summary_uncached_time:.2f}s)")
 
             # Test summary (cached)
             print("  ├─ Summary (cached)...", end=" ", flush=True)
             start = time.time()
-            summary = analytics.get_summary_stats()
+            _summary = analytics.get_summary_stats()
             summary_cached_time = time.time() - start
             print(f"✓ ({summary_cached_time:.2f}s)")
 

@@ -65,7 +65,7 @@ class AnalyticsDatabase:
 
             # Check if tables already exist
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
-            tables_exist = cursor.fetchone() is not None
+            _tables_exist = cursor.fetchone() is not None
 
             # Sessions table - Core analytics data
             cursor.execute("""
@@ -588,7 +588,8 @@ class AnalyticsDatabase:
                 cursor.execute("VACUUM")
 
                 logger.info(
-                    f"🗑️ Analytics reset: {sessions_count} sessions, {users_count} users, {daily_count} daily stats, {errors_count} errors deleted"
+                    f"🗑️ Analytics reset: {sessions_count} sessions, {users_count} users, "
+                    f"{daily_count} daily stats, {errors_count} errors deleted"
                 )
 
                 return {

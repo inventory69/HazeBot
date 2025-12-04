@@ -3,6 +3,7 @@ Flask API for HazeBot Configuration
 Modular REST API with Blueprint architecture
 """
 
+import logging
 import os
 import sys
 import threading
@@ -38,13 +39,45 @@ import api.rocket_league_routes as rocket_league_routes_module
 import api.ticket_routes as ticket_routes_module
 import api.user_routes as user_routes_module
 
+# Import error tracking module for error handling
+import api.error_tracking as error_tracking_module
+
+# ============================================================================
+# LOGGING FILTERS
+# ============================================================================
+
+
+class GeventInvalidHTTPFilter(logging.Filter):
+    """
+    Filter to suppress gevent 'Invalid HTTP method' errors.
+
+    These errors occur when non-HTTP traffic (port scanners, binary protocols)
+    attempts to connect to the Flask server. They are not security issues,
+    just noise in the logs.
+
+    Note: Port 5070 is publicly accessible and receives scanner traffic
+    from IPs like 185.243.96.116. This is normal and not a security concern.
+    The filter prevents log spam from these non-HTTP connection attempts.
+    """
+
+    def filter(self, record):
+        msg = record.getMessage()
+        # Suppress "Invalid HTTP method" errors from gevent
+        if "Invalid HTTP method" in msg:
+            return False
+        # Suppress gevent socket errors with binary data
+        if "gevent._socket3.socket" in msg and "Invalid" in msg:
+            return False
+        return True
+
+
+# Apply filter to root logger (catches gevent errors)
+logging.getLogger().addFilter(GeventInvalidHTTPFilter())
+
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for Flutter web
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", logger=False, engineio_logger=False)
-
-# Import error tracking module for error handling
-import api.error_tracking as error_tracking_module
 
 # Analytics and Error Tracking instances (set by set_analytics_instances)
 # These will be injected by the AnalyticsManager Cog
@@ -69,7 +102,8 @@ def set_analytics_instances(analytics_inst, error_tracker_inst):
     auth_module.analytics_aggregator = analytics_inst
 
     logger.info(
-        f"✅ Analytics instances connected to API - Aggregator: {analytics_inst is not None}, Auth Module: {auth_module.analytics_aggregator is not None}"
+        f"✅ Analytics instances connected to API - Aggregator: {analytics_inst is not None}, "
+        f"Auth Module: {auth_module.analytics_aggregator is not None}"
     )
 
 

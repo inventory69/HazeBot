@@ -152,10 +152,23 @@ class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
             await interaction.response.send_message("❌ Rocket League system not available.", ephemeral=True)
             return
 
+        # Defer immediately to prevent timeout
         await interaction.response.defer(ephemeral=True)
+
+        # Send loading message immediately after defer
+        loading_msg = await interaction.followup.send(
+            "🔍 Verifying Rocket League account...\n"
+            "⏱️ This may take 30-60 seconds due to API rate limits.\n"
+            "Please wait, do not close this window.",
+            ephemeral=True,
+        )
+
+        # NOW fetch stats (can take 30-90 seconds)
         stats = await rl_cog.get_player_stats(platform, username)
 
+        # Delete loading message and show result
         if not stats:
+            await loading_msg.delete()
             if platform == "steam":
                 await interaction.followup.send(
                     "❌ Player not found. For Steam, try using your 17-digit Steam ID instead of the display name.\n"
@@ -168,6 +181,9 @@ class LinkAccountModal(discord.ui.Modal, title="Link Rocket League Account"):
                     ephemeral=True,
                 )
             return
+
+        # Delete loading message before showing confirmation
+        await loading_msg.delete()
 
         # Show confirmation
         embed = discord.Embed(

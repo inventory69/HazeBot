@@ -458,7 +458,7 @@ class CogManager(commands.Cog):
             else:
                 await ctx.send(embed=embed)
 
-            logger.info(f"🔧 [CogManager] Cog {class_name} (from {cog_name}.py) loaded by {ctx.author}")
+            logger.info(f"Cog {class_name} (from {cog_name}.py) loaded by {ctx.author}")
             return True
 
         except Exception as e:
@@ -612,7 +612,7 @@ class CogManager(commands.Cog):
             else:
                 await ctx.send(embed=embed)
 
-            logger.info(f"🔧 [CogManager] Cog {class_name} (from {file_name}.py) unloaded by {ctx.author}")
+            logger.info(f"Cog {class_name} (from {file_name}.py) unloaded by {ctx.author}")
             return True
 
         except Exception as e:
@@ -758,7 +758,7 @@ class CogManager(commands.Cog):
             else:
                 await ctx.send(embed=embed)
 
-            logger.info(f"🔧 [CogManager] Cog {class_name} (from {file_name}.py) reloaded by {ctx.author}")
+            logger.info(f"Cog {class_name} (from {file_name}.py) reloaded by {ctx.author}")
             return True
 
         except Exception as e:

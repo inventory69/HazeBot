@@ -437,7 +437,7 @@ async def create_ticket(
         asyncio.create_task(
             send_push_notification_for_ticket_event(ticket_data["ticket_id"], "new_ticket", notification_ticket_data)
         )
-        logger.info(f"📱 Push notification task created for new ticket #{ticket_num}")
+        logger.debug(f"📱 Push notification task created for new ticket #{ticket_num}")
     except Exception as e:
         logger.error(f"❌ Failed to send push notification for new ticket: {e}")
         import traceback
@@ -524,12 +524,14 @@ async def disable_buttons_for_closed_ticket(channel: discord.TextChannel, ticket
         if isinstance(item, discord.ui.Button):
             if item.label != "Reopen":
                 item.disabled = True
-        try:
-            msg = await channel.fetch_message(ticket["embed_message_id"])
-            await msg.edit(embed=embed, view=view)
-            logger.info(f"Embed for ticket {ticket['ticket_num']} updated.")
-        except Exception as e:
-            logger.error(f"Error updating embed for ticket {ticket['ticket_num']}: {e}")
+
+    # Update embed ONCE after all buttons configured (moved outside loop to prevent 4x API calls)
+    try:
+        msg = await channel.fetch_message(ticket["embed_message_id"])
+        await msg.edit(embed=embed, view=view)
+        logger.info(f"Embed for ticket {ticket['ticket_num']} updated.")
+    except Exception as e:
+        logger.error(f"Error updating embed for ticket {ticket['ticket_num']}: {e}")
 
 
 # === Asynchronous function for ticket closing ===
@@ -644,6 +646,9 @@ async def close_ticket_async(
     ticket["status"] = "Closed"
     ticket["closed_at"] = datetime.now().isoformat()
 
+    # Small delay to avoid Discord rate limiting (previous messages sent above)
+    await asyncio.sleep(0.5)
+
     # Disable buttons and update embed before archiving
     await disable_buttons_for_closed_ticket(channel, ticket)
 
@@ -753,7 +758,7 @@ async def claim_ticket_from_api(
             except Exception as e:
                 logger.error(f"Error updating embed after claim: {e}")
 
-        logger.info(f"🎫 [TicketSystem] Ticket in {channel.name} claimed by {claimer.name}.")
+        logger.info(f"Ticket in {channel.name} claimed by {claimer.name}.")
         return {"success": True, "message": "Ticket claimed successfully"}
 
     except Exception as e:
@@ -806,7 +811,7 @@ async def assign_ticket_from_api(
             except Exception as e:
                 logger.error(f"Error updating embed after assign: {e}")
 
-        logger.info(f"🎫 [TicketSystem] Ticket in {channel.name} assigned to {assignee.name}.")
+        logger.info(f"Ticket in {channel.name} assigned to {assignee.name}.")
         return {"success": True, "message": "Ticket assigned successfully"}
 
     except Exception as e:
@@ -841,7 +846,7 @@ async def close_ticket_from_api(
         # Pass None for followup since we don't have an interaction
         asyncio.create_task(close_ticket_async(bot, channel, ticket, None, closing_msg, close_message))
 
-        logger.info(f"🎫 [TicketSystem] Ticket #{ticket.get('ticket_num')} closed via API.")
+        logger.info(f"Ticket #{ticket.get('ticket_num')} closed via API.")
         return {"success": True, "message": "Ticket closed successfully"}
 
     except Exception as e:
@@ -1109,20 +1114,20 @@ class TicketSystem(commands.Cog):
             from api.notification_routes import notify_ticket_update
 
             notify_ticket_update(ticket["ticket_id"], "new_message", message_data)
-            logger.info(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
+            logger.debug(f"📡 WebSocket notification sent for message in ticket {ticket['ticket_num']}")
         except Exception as e:
             logger.error(f"Failed to send WebSocket notification: {e}")
 
         # Send push notifications
         try:
-            logger.info(f"📱 About to send push notification for ticket {ticket['ticket_id']}")
+            logger.debug(f"📱 About to send push notification for ticket {ticket['ticket_id']}")
             from api.notification_routes import send_push_notification_for_ticket_event
             import asyncio
 
             asyncio.create_task(
                 send_push_notification_for_ticket_event(ticket["ticket_id"], "new_message", ticket, message_data)
             )
-            logger.info(f"📱 Push notification task created for ticket {ticket['ticket_num']}")
+            logger.debug(f"📱 Push notification task created for ticket {ticket['ticket_num']}")
         except Exception as e:
             logger.error(f"❌ Failed to send push notification: {e}")
             import traceback

@@ -954,7 +954,8 @@ def get_ticket_messages_endpoint(ticket_id):
 
             messages = []
             async for message in channel.history(limit=100, oldest_first=True):
-                # Skip bot system messages (but keep Initial details, Admin Panel, user messages, important system messages)
+                # Skip bot system messages
+                # (but keep Initial details, Admin Panel, user messages, important system messages)
                 if message.author.bot:
                     # Check if it's a user message from app (has [username]: prefix)
                     is_user_message_from_app = (
@@ -977,7 +978,8 @@ def get_ticket_messages_endpoint(ticket_id):
                         continue
 
                 # Get avatar URL with fallback
-                # For admin panel messages and user messages from app, extract the real user's username and get their avatar
+                # For admin panel messages and user messages from app,
+                # extract the real user's username and get their avatar
                 avatar_url = None
                 is_admin = False
                 user_role = None  # 'admin', 'moderator', or None
@@ -1205,23 +1207,23 @@ def send_ticket_message_endpoint(ticket_id):
 
         # Send push notification for new message
         if send_push_notification_for_ticket_event:
-            logger.info(f"📱 About to schedule push notification for ticket {ticket_id}")
+            logger.debug(f"📱 About to schedule push notification for ticket {ticket_id}")
 
             async def notify_push():
                 try:
-                    logger.info(f"📱 Starting push notification for new message in ticket {ticket_id}")
+                    logger.debug(f"📱 Starting push notification for new message in ticket {ticket_id}")
                     await send_push_notification_for_ticket_event(ticket_id, "new_message", ticket, message_data)
-                    logger.info(f"📱 Push notification completed for ticket {ticket_id}")
+                    logger.debug(f"📱 Push notification completed for ticket {ticket_id}")
                 except Exception as e:
                     logger.error(f"❌ Exception in notify_push: {e}")
                     logger.error(traceback.format_exc())
 
             try:
                 future = asyncio.run_coroutine_threadsafe(notify_push(), loop)
-                logger.info("📱 Push notification scheduled, waiting for result...")
+                logger.debug("📱 Push notification scheduled, waiting for result...")
                 # Wait for it to complete to see any errors
                 future.result(timeout=5)
-                logger.info("📱 Push notification future completed")
+                logger.debug("📱 Push notification future completed")
             except Exception as e:
                 logger.error(f"❌ Push notification future failed: {e}")
                 logger.error(traceback.format_exc())

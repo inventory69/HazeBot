@@ -107,7 +107,7 @@ class MemeHubView(discord.ui.View):
             source_name = meme.get("subreddit", "unknown")
             if source_name not in ["9gag"]:
                 source_name = f"r/{source_name}"
-            logger.info(f"🎭 [DailyMeme] Meme Hub: Meme requested by {interaction.user} from {source_name}")
+            logger.info(f"Meme Hub: Meme requested by {interaction.user} from {source_name}")
 
             # Increment meme request count
             user_id = str(interaction.user.id)
@@ -280,7 +280,7 @@ class SourceSelectionView(discord.ui.View):
                 # Normal ephemeral response
                 await interaction.followup.send(embed=embed)
 
-            logger.info(f"🎭 [DailyMeme] Specific meme fetched by {interaction.user} from {source_name}")
+            logger.info(f"Specific meme fetched by {interaction.user} from {source_name}")
 
             # Increment meme request count
             user_id = str(interaction.user.id)
@@ -321,7 +321,7 @@ class SubredditManagementView(discord.ui.View):
         await interaction.response.send_message(
             f"✅ Reset to {len(self.cog.meme_subreddits)} default subreddits!", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Subreddits reset by {interaction.user}")
+        logger.info(f"Subreddits reset by {interaction.user}")
 
 
 class AddSubredditModal(discord.ui.Modal, title="Add Subreddit"):
@@ -348,7 +348,7 @@ class AddSubredditModal(discord.ui.Modal, title="Add Subreddit"):
         await interaction.response.send_message(
             f"✅ Added r/{subreddit}! Now using {len(self.cog.meme_subreddits)} subreddits.", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Subreddit r/{subreddit} added by {interaction.user}")
+        logger.info(f"Subreddit r/{subreddit} added by {interaction.user}")
 
 
 class RemoveSubredditModal(discord.ui.Modal, title="Remove Subreddit"):
@@ -379,7 +379,7 @@ class RemoveSubredditModal(discord.ui.Modal, title="Remove Subreddit"):
         await interaction.response.send_message(
             f"✅ Removed r/{subreddit}! Now using {len(self.cog.meme_subreddits)} subreddits.", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Subreddit r/{subreddit} removed by {interaction.user}")
+        logger.info(f"Subreddit r/{subreddit} removed by {interaction.user}")
 
 
 # ===== LEMMY MANAGEMENT =====
@@ -413,7 +413,7 @@ class LemmyManagementView(discord.ui.View):
         await interaction.response.send_message(
             f"✅ Reset to {len(self.cog.meme_lemmy)} default Lemmy communities!", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Lemmy communities reset by {interaction.user}")
+        logger.info(f"Lemmy communities reset by {interaction.user}")
 
 
 class AddLemmyModal(discord.ui.Modal, title="Add Lemmy Community"):
@@ -450,7 +450,7 @@ class AddLemmyModal(discord.ui.Modal, title="Add Lemmy Community"):
         await interaction.response.send_message(
             f"✅ Added {community}! Now using {len(self.cog.meme_lemmy)} Lemmy communities.", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Lemmy community {community} added by {interaction.user}")
+        logger.info(f"Lemmy community {community} added by {interaction.user}")
 
 
 class RemoveLemmyModal(discord.ui.Modal, title="Remove Lemmy Community"):
@@ -484,7 +484,7 @@ class RemoveLemmyModal(discord.ui.Modal, title="Remove Lemmy Community"):
         await interaction.response.send_message(
             f"✅ Removed {community}! Now using {len(self.cog.meme_lemmy)} Lemmy communities.", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Lemmy community {community} removed by {interaction.user}")
+        logger.info(f"Lemmy community {community} removed by {interaction.user}")
 
 
 # ===== SOURCE MANAGEMENT =====
@@ -535,13 +535,13 @@ class SourceManagementView(discord.ui.View):
                 self.cog.meme_sources.remove(source_id)
                 self.cog.save_sources()
                 await interaction.response.send_message(f"❌ Disabled {source_name}", ephemeral=True)
-                logger.info(f"🎭 [DailyMeme] Source {source_id} disabled by {interaction.user}")
+                logger.info(f"Source {source_id} disabled by {interaction.user}")
             else:
                 # Enable source
                 self.cog.meme_sources.append(source_id)
                 self.cog.save_sources()
                 await interaction.response.send_message(f"✅ Enabled {source_name}", ephemeral=True)
-                logger.info(f"🎭 [DailyMeme] Source {source_id} enabled by {interaction.user}")
+                logger.info(f"Source {source_id} enabled by {interaction.user}")
 
             # Update buttons to reflect new state
             self._update_buttons()
@@ -557,7 +557,7 @@ class SourceManagementView(discord.ui.View):
         await interaction.response.send_message(
             f"✅ Reset to {len(self.cog.meme_sources)} default sources!", ephemeral=True
         )
-        logger.info(f"🎭 [DailyMeme] Sources reset by {interaction.user}")
+        logger.info(f"Sources reset by {interaction.user}")
 
         # Update buttons
         self._update_buttons()
@@ -693,7 +693,7 @@ class TestMemeButton(discord.ui.Button):
         if meme:
             await cog.post_meme(meme, channel, requested_by=interaction.user)
             await interaction.followup.send("✅ Test meme posted successfully!", ephemeral=True)
-            logger.info(f"🎭 [DailyMeme] Test meme posted by {interaction.user}")
+            logger.info(f"Test meme posted by {interaction.user}")
         else:
             await interaction.followup.send("❌ Failed to fetch test meme", ephemeral=True)
 

@@ -243,20 +243,20 @@ def register_socketio_handlers(socketio_instance):
     @socketio.on("connect")
     def handle_connect():
         """Handle WebSocket connection"""
-        logger.info(f"🔌 WebSocket client connected: {request.sid}")
+        logger.debug(f"🔌 WebSocket client connected: {request.sid}")
         emit("connected", {"message": "Connected to HazeBot API"})
 
     @socketio.on("disconnect")
     def handle_disconnect():
         """Handle WebSocket disconnection"""
         client_sid = request.sid
-        logger.info(f"🔌 WebSocket client disconnected: {client_sid}")
+        logger.debug(f"🔌 WebSocket client disconnected: {client_sid}")
 
         # ✅ CRITICAL: Auto-cleanup - remove user from all active_ticket_viewers
         # This handles cases where client disconnects without sending leave_ticket
         user_id = client_to_user.get(client_sid)
         if user_id:
-            logger.info(
+            logger.debug(
                 f"🧹 Auto-cleanup: Removing user {user_id} from active viewers (client {client_sid} disconnected)"
             )
 
@@ -278,7 +278,7 @@ def register_socketio_handlers(socketio_instance):
             del client_to_user[client_sid]
 
             if tickets_to_clean:
-                logger.info(f"✅ Auto-cleanup complete: User {user_id} removed from {len(tickets_to_clean)} ticket(s)")
+                logger.debug(f"✅ Auto-cleanup complete: User {user_id} removed from {len(tickets_to_clean)} ticket(s)")
 
     @socketio.on("join_ticket")
     def handle_join_ticket(data):
@@ -302,10 +302,10 @@ def register_socketio_handlers(socketio_instance):
             # ✅ Track client-to-user mapping for auto-cleanup on disconnect
             client_to_user[request.sid] = str(user_id)
 
-            logger.info(f"🎫 Client {request.sid} (user {user_id}) joined ticket room: {room}")
+            logger.debug(f"🎫 Client {request.sid} (user {user_id}) joined ticket room: {room}")
             logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers[ticket_id]}")
         else:
-            logger.info(f"🎫 Client {request.sid} joined ticket room: {room}")
+            logger.debug(f"🎫 Client {request.sid} joined ticket room: {room}")
 
         # Send recent message history to newly joined client
         try:
@@ -413,7 +413,7 @@ def register_socketio_handlers(socketio_instance):
                 messages = future.result(timeout=10)
 
                 emit("message_history", {"ticket_id": ticket_id, "messages": messages})
-                logger.info(f"📨 Sent {len(messages)} message(s) history to client {request.sid}")
+                logger.debug(f"📨 Sent {len(messages)} message(s) history to client {request.sid}")
         except Exception as e:
             logger.error(f"Failed to fetch message history: {e}")
 
@@ -437,10 +437,10 @@ def register_socketio_handlers(socketio_instance):
             # Clean up empty sets
             if not active_ticket_viewers[ticket_id]:
                 del active_ticket_viewers[ticket_id]
-            logger.info(f"🎫 Client {request.sid} (user {user_id}) left ticket room: {room}")
+            logger.debug(f"🎫 Client {request.sid} (user {user_id}) left ticket room: {room}")
             logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers.get(ticket_id, set())}")
         else:
-            logger.info(f"🎫 Client {request.sid} left ticket room: {room}")
+            logger.debug(f"🎫 Client {request.sid} left ticket room: {room}")
 
         emit("left_ticket", {"ticket_id": ticket_id, "room": room})
 
@@ -460,7 +460,7 @@ def notify_ticket_update(ticket_id, event_type, data):
         {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
         room=room,
     )
-    logger.info(f"📡 Broadcast to {room}: {event_type}")
+    logger.debug(f"📡 Broadcast to {room}: {event_type}")
 
 
 def clean_admin_panel_prefix(content):
@@ -630,7 +630,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
             recipients = [uid for uid in recipients if uid not in active_viewers]
             filtered_count = original_count - len(recipients)
             if filtered_count > 0:
-                logger.info(
+                logger.debug(
                     f"📱 Filtered out {filtered_count} active viewer(s) from push recipients for ticket {ticket_id}"
                 )
                 logger.debug(f"📱 Active viewers: {active_viewers}, Final recipients: {recipients}")
@@ -652,7 +652,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                         "route": f"/tickets/{ticket_id}",
                     },
                 )
-                logger.info(f"📱 Sent push notification to user {user_id} for {event_type}")
+                logger.debug(f"📱 Sent push notification to user {user_id} for {event_type}")
             except Exception as e:
                 logger.warning(f"Failed to send push notification to user {user_id}: {e}")
 
