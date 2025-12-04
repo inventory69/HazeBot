@@ -83,10 +83,18 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
     @auth_routes.route("/api/discord/auth", methods=["GET"])
     def discord_auth():
         """Initiate Discord OAuth2 flow"""
-        from flask import make_response
-        
         # Get state parameter from query (to track which frontend initiated OAuth)
         frontend_source = request.args.get("state", "")
+        
+        # Fallback: Detect from Referer header if state is empty
+        if not frontend_source:
+            referer = request.headers.get("Referer", "")
+            if "/login" in referer or "/analytics" in referer:
+                frontend_source = "analytics"
+                logger.info(f"🔍 Detected Analytics from Referer: {referer}")
+            elif "admin.haze.pro" in referer:
+                frontend_source = "web"
+                logger.info(f"🔍 Detected Flutter Web from Referer: {referer}")
         
         params = {
             "client_id": DISCORD_CLIENT_ID,
@@ -102,27 +110,31 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         auth_url = f"{DISCORD_API_ENDPOINT}/oauth2/authorize?{urlencode(params)}"
         logger.info(f"🔐 Generated OAuth URL for source='{frontend_source}'")
         
-        # Store frontend source in a cookie that will be available during callback
-        response = make_response(jsonify({"auth_url": auth_url}))
-        if frontend_source:
-            # Set cookie for 5 minutes (enough time for OAuth flow)
-            response.set_cookie('oauth_source', frontend_source, max_age=300, samesite='Lax')
-            logger.info(f"🍪 Set oauth_source cookie: '{frontend_source}'")
-        
-        return response
+        return jsonify({"auth_url": auth_url})
 
     @auth_routes.route("/api/discord/callback", methods=["GET"])
     def discord_callback():
-        """Handle Discord OAuth2 callback"""
-        # Get state from multiple sources (Discord may not always return it reliably)
+        """Handle Discord OAuth2 callback with multi-layer source detection"""
+        # Layer 1: State parameter from Discord (most reliable when present)
         state = request.args.get("state", "")
-        cookie_source = request.cookies.get("oauth_source", "")
         
-        # Prefer state parameter, fallback to cookie
-        frontend_source = state if state else cookie_source
+        # Layer 2: Referer header detection (robust fallback)
+        referer = request.headers.get("Referer", "")
+        referer_hint = ""
+        if "discord.com" in referer:
+            # Discord redirected us - this is the common case
+            # We can't detect from Discord's referer, so rely on state
+            referer_hint = ""
+        elif "/login" in referer or "/analytics" in referer or "api.haze.pro/login" in referer:
+            referer_hint = "analytics"
+        elif "admin.haze.pro" in referer:
+            referer_hint = "web"
+        
+        # Determine frontend source with fallback chain
+        frontend_source = state or referer_hint or "web"
         
         # Debug logging
-        logger.info(f"🔍 Discord OAuth callback - state: '{state}', cookie: '{cookie_source}', using: '{frontend_source}'")
+        logger.info(f"🔍 OAuth callback - state: '{state}' | referer: '{referer}' | hint: '{referer_hint}' | using: '{frontend_source}'")
         
         code = request.args.get("code")
         if not code:
