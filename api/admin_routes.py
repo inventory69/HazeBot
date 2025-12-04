@@ -107,34 +107,40 @@ def get_active_sessions_endpoint():
     for session_id in expired_sessions:
         del active_sessions[session_id]
 
-    # Format active sessions
-    sessions_list = []
+    # Format active sessions and deduplicate by discord_id (show only most recent session per user)
+    user_sessions = {}  # {discord_id: session_data}
+    
     for session_id, session_data in active_sessions.items():
         try:
             last_seen = datetime.fromisoformat(session_data["last_seen"])
             seconds_ago = int((current_time - last_seen).total_seconds())
+            discord_id = session_data.get("discord_id", "Unknown")
 
-            sessions_list.append(
-                {
-                    "session_id": session_id,
-                    "username": session_data.get("username", "Unknown"),
-                    "discord_id": session_data.get("discord_id", "Unknown"),
-                    "role": session_data.get("role", "unknown"),
-                    "permissions": session_data.get("permissions", []),
-                    "last_seen": session_data["last_seen"],
-                    "seconds_ago": seconds_ago,
-                    "ip": session_data.get("ip", "Unknown"),
-                    "user_agent": session_data.get("user_agent", "Unknown"),
-                    "last_endpoint": session_data.get("endpoint", "unknown"),
-                    "app_version": session_data.get("app_version", "Unknown"),
-                    "platform": session_data.get("platform", "Unknown"),
-                    "device_info": session_data.get("device_info", "Unknown"),
-                }
-            )
+            session_entry = {
+                "session_id": session_id,
+                "username": session_data.get("username", "Unknown"),
+                "discord_id": discord_id,
+                "role": session_data.get("role", "unknown"),
+                "permissions": session_data.get("permissions", []),
+                "last_seen": session_data["last_seen"],
+                "seconds_ago": seconds_ago,
+                "ip": session_data.get("ip", "Unknown"),
+                "user_agent": session_data.get("user_agent", "Unknown"),
+                "last_endpoint": session_data.get("endpoint", "unknown"),
+                "app_version": session_data.get("app_version", "Unknown"),
+                "platform": session_data.get("platform", "Unknown"),
+                "device_info": session_data.get("device_info", "Unknown"),
+            }
+            
+            # Keep only the most recent session per user
+            if discord_id not in user_sessions or last_seen > datetime.fromisoformat(user_sessions[discord_id]["last_seen"]):
+                user_sessions[discord_id] = session_entry
+                
         except Exception:
             continue
 
-    # Sort by last_seen (most recent first)
+    # Convert to list and sort by last_seen (most recent first)
+    sessions_list = list(user_sessions.values())
     sessions_list.sort(key=lambda x: x["last_seen"], reverse=True)
 
     # Get recent activity (already sorted by timestamp, most recent first)
