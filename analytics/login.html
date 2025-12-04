@@ -353,7 +353,8 @@
         // Handle Discord login
         document.getElementById('discord-btn').addEventListener('click', async () => {
             try {
-                const response = await fetch(`${API_BASE}/api/discord/auth`);
+                // Add state=analytics to identify this is from Analytics Dashboard
+                const response = await fetch(`${API_BASE}/api/discord/auth?state=analytics`);
                 const data = await response.json();
                 
                 if (data.auth_url) {

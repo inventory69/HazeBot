@@ -83,12 +83,19 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
     @auth_routes.route("/api/discord/auth", methods=["GET"])
     def discord_auth():
         """Initiate Discord OAuth2 flow"""
+        # Get state parameter from query (to track which frontend initiated OAuth)
+        state = request.args.get("state", "")
+        
         params = {
             "client_id": DISCORD_CLIENT_ID,
             "redirect_uri": DISCORD_REDIRECT_URI,
             "response_type": "code",
             "scope": "identify guilds.members.read",
         }
+        
+        # Pass state parameter through Discord OAuth flow
+        if state:
+            params["state"] = state
 
         auth_url = f"{DISCORD_API_ENDPOINT}/oauth2/authorize?{urlencode(params)}"
         return jsonify({"auth_url": auth_url})
@@ -217,16 +224,18 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         # Log the action
         log_action(user_data["username"], "discord_oauth_login", {"role": role, "permissions": permissions})
 
-        # Detect if request is from mobile app (check 'state' parameter from OAuth flow)
+        # Multi-frontend routing based on state parameter from OAuth flow
         state = request.args.get("state", "")
-        is_mobile_app = state == "mobile"
 
-        if is_mobile_app:
-            # Redirect to deep link for mobile app
+        if state == "mobile":
+            # Mobile Apps (Android/iOS) → Deep Link
             return redirect(f"hazebot://oauth?token={token}")
+        elif state == "analytics":
+            # Analytics Dashboard → Relative path on api.haze.pro
+            return redirect(f"https://api.haze.pro/analytics/analytics_dashboard.html?token={token}")
         else:
-            # Get frontend URL from environment variable
-            frontend_url = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://api.haze.pro/login")
+            # Flutter Web App (default) → admin.haze.pro
+            frontend_url = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://admin.haze.pro")
             return redirect(f"{frontend_url}?token={token}")
 
     @auth_routes.route("/api/auth/me", methods=["GET"])
