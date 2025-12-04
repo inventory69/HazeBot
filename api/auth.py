@@ -290,8 +290,16 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
 
+            # DEBUG: Log analytics decision
+            logger.info(
+                f"🔍 Analytics Check | Endpoint: {endpoint_name} | "
+                f"is_new={is_new_session} | aggregator={'✅' if analytics_aggregator else '❌'} | "
+                f"is_analytics_req={is_analytics_request} | session_id={request.session_id[:16]}..."
+            )
+
             # Analytics: Start session tracking for new sessions (skip analytics dashboard)
             if is_new_session and analytics_aggregator is not None and not is_analytics_request:
+                logger.info(f"📊 Starting NEW analytics session for {request.username} (session: {request.session_id[:16]}...)")
                 try:
                     analytics_aggregator.start_session(
                         session_id=request.session_id,
@@ -302,8 +310,9 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                         app_version=session_info["app_version"],
                         ip_address=real_ip,
                     )
+                    logger.info(f"✅ Analytics session started successfully")
                 except Exception as e:
-                    logger.error(f"Failed to start analytics session: {e}")
+                    logger.error(f"❌ Failed to start analytics session: {e}")
 
             # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard)
             if analytics_aggregator is not None and not is_analytics_request:
@@ -316,6 +325,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 ]
 
                 if endpoint_name not in excluded_endpoints:
+                    logger.info(f"📊 Updating analytics session: {endpoint_name} (session: {request.session_id[:16]}...)")
                     try:
                         analytics_aggregator.update_session(session_id=request.session_id, endpoint=endpoint_name)
                     except Exception as e:
