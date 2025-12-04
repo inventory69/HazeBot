@@ -756,6 +756,37 @@
             return originalFetch(resource, config);
         };
 
+        // Check for OAuth token in URL (from Discord callback)
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            if (token) {
+                console.log('🔐 OAuth token found in URL, storing in localStorage');
+                localStorage.setItem('jwt_token', token);
+                
+                // Verify token and get user info
+                fetch('/api/ping', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('✅ Token validated:', data.your_username, '| Role:', data.your_role);
+                    localStorage.setItem('user', data.your_username);
+                    localStorage.setItem('role', data.your_role);
+                    
+                    // Remove token from URL for security
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                })
+                .catch(error => {
+                    console.error('❌ Token validation failed:', error);
+                    localStorage.removeItem('jwt_token');
+                });
+            }
+        })();
+
         // Initialize after auth check
         checkAuth().then(isAuthenticated => {
             if (isAuthenticated) {
