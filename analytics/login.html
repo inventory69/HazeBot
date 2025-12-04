@@ -358,8 +358,16 @@
                 const data = await response.json();
                 
                 if (data.auth_url) {
+                    // Store marker in localStorage that this OAuth flow is from Analytics
+                    localStorage.setItem('oauth_source', 'analytics');
+                    localStorage.setItem('oauth_timestamp', Date.now().toString());
+                    
                     // Store redirect URL in session storage
                     sessionStorage.setItem('auth_redirect', redirectUrl);
+                    
+                    console.log('🔐 Starting Analytics OAuth flow with state=analytics');
+                    console.log('📝 Set oauth_source=analytics in localStorage');
+                    
                     // Redirect to Discord OAuth
                     window.location.href = data.auth_url;
                 }

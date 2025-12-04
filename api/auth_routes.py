@@ -83,8 +83,10 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
     @auth_routes.route("/api/discord/auth", methods=["GET"])
     def discord_auth():
         """Initiate Discord OAuth2 flow"""
+        from flask import make_response
+        
         # Get state parameter from query (to track which frontend initiated OAuth)
-        state = request.args.get("state", "")
+        frontend_source = request.args.get("state", "")
         
         params = {
             "client_id": DISCORD_CLIENT_ID,
@@ -94,18 +96,33 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         }
         
         # Pass state parameter through Discord OAuth flow
-        if state:
-            params["state"] = state
+        if frontend_source:
+            params["state"] = frontend_source
 
         auth_url = f"{DISCORD_API_ENDPOINT}/oauth2/authorize?{urlencode(params)}"
-        return jsonify({"auth_url": auth_url})
+        logger.info(f"🔐 Generated OAuth URL for source='{frontend_source}'")
+        
+        # Store frontend source in a cookie that will be available during callback
+        response = make_response(jsonify({"auth_url": auth_url}))
+        if frontend_source:
+            # Set cookie for 5 minutes (enough time for OAuth flow)
+            response.set_cookie('oauth_source', frontend_source, max_age=300, samesite='Lax')
+            logger.info(f"🍪 Set oauth_source cookie: '{frontend_source}'")
+        
+        return response
 
     @auth_routes.route("/api/discord/callback", methods=["GET"])
     def discord_callback():
         """Handle Discord OAuth2 callback"""
-        # Get state parameter FIRST (Discord returns it from OAuth flow)
+        # Get state from multiple sources (Discord may not always return it reliably)
         state = request.args.get("state", "")
-        logger.info(f"🔍 Discord OAuth callback - state parameter: '{state}'")
+        cookie_source = request.cookies.get("oauth_source", "")
+        
+        # Prefer state parameter, fallback to cookie
+        frontend_source = state if state else cookie_source
+        
+        # Debug logging
+        logger.info(f"🔍 Discord OAuth callback - state: '{state}', cookie: '{cookie_source}', using: '{frontend_source}'")
         
         code = request.args.get("code")
         if not code:
@@ -228,14 +245,14 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         # Log the action
         log_action(user_data["username"], "discord_oauth_login", {"role": role, "permissions": permissions})
 
-        # Multi-frontend routing based on state parameter (already extracted at callback start)
-        logger.info(f"🎯 Routing user to frontend based on state: '{state}'")
+        # Multi-frontend routing based on frontend_source (already extracted at callback start)
+        logger.info(f"🎯 Routing user to frontend based on source: '{frontend_source}'")
 
-        if state == "mobile":
+        if frontend_source == "mobile":
             # Mobile Apps (Android/iOS) → Deep Link
             logger.info(f"📱 Redirecting to Mobile Deep Link")
             return redirect(f"hazebot://oauth?token={token}")
-        elif state == "analytics":
+        elif frontend_source == "analytics":
             # Analytics Dashboard → Relative path on api.haze.pro
             logger.info(f"📊 Redirecting to Analytics Dashboard")
             return redirect(f"https://api.haze.pro/analytics/analytics_dashboard.html?token={token}")
