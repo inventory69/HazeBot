@@ -302,10 +302,9 @@ def register_socketio_handlers(socketio_instance):
             # ✅ Track client-to-user mapping for auto-cleanup on disconnect
             client_to_user[request.sid] = str(user_id)
 
-            logger.debug(f"🎫 Client {request.sid} (user {user_id}) joined ticket room: {room}")
-            logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers[ticket_id]}")
+            logger.info(f"🎫 JOIN | Client: {request.sid} | User: {user_id} | Room: {room} | Active viewers: {len(active_ticket_viewers[ticket_id])}")
         else:
-            logger.debug(f"🎫 Client {request.sid} joined ticket room: {room}")
+            logger.info(f"🎫 JOIN | Client: {request.sid} | Room: {room} | No user_id provided")
 
         # Send recent message history to newly joined client
         try:
@@ -437,10 +436,9 @@ def register_socketio_handlers(socketio_instance):
             # Clean up empty sets
             if not active_ticket_viewers[ticket_id]:
                 del active_ticket_viewers[ticket_id]
-            logger.debug(f"🎫 Client {request.sid} (user {user_id}) left ticket room: {room}")
-            logger.debug(f"📱 Active viewers for {ticket_id}: {active_ticket_viewers.get(ticket_id, set())}")
+            logger.info(f"🚪 LEAVE | Client: {request.sid} | User: {user_id} | Room: {room} | Remaining viewers: {len(active_ticket_viewers.get(ticket_id, set()))}")
         else:
-            logger.debug(f"🎫 Client {request.sid} left ticket room: {room}")
+            logger.info(f"🚪 LEAVE | Client: {request.sid} | Room: {room}")
 
         emit("left_ticket", {"ticket_id": ticket_id, "room": room})
 
@@ -455,12 +453,19 @@ def notify_ticket_update(ticket_id, event_type, data):
         data: Event data
     """
     room = f"ticket_{ticket_id}"
+    
+    # DEBUG: Log WebSocket emit details
+    payload = {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()}
+    logger.info(f"🔌 WebSocket EMIT | Room: {room} | Event: {event_type} | Payload keys: {list(payload.keys())}")
+    
     socketio.emit(
         "ticket_update",
-        {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()},
+        payload,
         room=room,
     )
-    logger.debug(f"📡 Broadcast to {room}: {event_type}")
+    
+    # DEBUG: Log after emit (to confirm it was called)
+    logger.info(f"✅ WebSocket EMITTED | Room: {room} | Event: {event_type}")
 
 
 def clean_admin_panel_prefix(content):
