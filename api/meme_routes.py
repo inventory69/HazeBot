@@ -463,6 +463,7 @@ def proxy_image():
             "external-preview.redd.it",
             "i.imgflip.com",
             "imgflip.com",
+            "trackercdn.com",  # Rocket League rank images
         ]
 
         parsed_url = urlparse(image_url)
