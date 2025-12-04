@@ -103,6 +103,10 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
     @auth_routes.route("/api/discord/callback", methods=["GET"])
     def discord_callback():
         """Handle Discord OAuth2 callback"""
+        # Get state parameter FIRST (Discord returns it from OAuth flow)
+        state = request.args.get("state", "")
+        logger.info(f"🔍 Discord OAuth callback - state parameter: '{state}'")
+        
         code = request.args.get("code")
         if not code:
             return jsonify({"error": "No authorization code provided"}), 400
@@ -224,18 +228,21 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         # Log the action
         log_action(user_data["username"], "discord_oauth_login", {"role": role, "permissions": permissions})
 
-        # Multi-frontend routing based on state parameter from OAuth flow
-        state = request.args.get("state", "")
+        # Multi-frontend routing based on state parameter (already extracted at callback start)
+        logger.info(f"🎯 Routing user to frontend based on state: '{state}'")
 
         if state == "mobile":
             # Mobile Apps (Android/iOS) → Deep Link
+            logger.info(f"📱 Redirecting to Mobile Deep Link")
             return redirect(f"hazebot://oauth?token={token}")
         elif state == "analytics":
             # Analytics Dashboard → Relative path on api.haze.pro
+            logger.info(f"📊 Redirecting to Analytics Dashboard")
             return redirect(f"https://api.haze.pro/analytics/analytics_dashboard.html?token={token}")
         else:
             # Flutter Web App (default) → admin.haze.pro
             frontend_url = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://admin.haze.pro")
+            logger.info(f"🌐 Redirecting to Flutter Web App: {frontend_url}")
             return redirect(f"{frontend_url}?token={token}")
 
     @auth_routes.route("/api/auth/me", methods=["GET"])
