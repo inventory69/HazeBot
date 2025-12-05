@@ -560,7 +560,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                 "discord_id": "monitoring_service",
                 "exp": expiry_date,
                 "role": "monitoring",
-                "permissions": ["health_check", "ping", "analytics_read"],
+                "permissions": ["health_check", "ping", "analytics_read", "tickets_read"],
                 "auth_type": "monitoring",
                 "session_id": "monitoring_" + secrets.token_hex(8),
             },
@@ -574,7 +574,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             "token": monitoring_token,
             "expires": expiry_date.isoformat(),
             "expires_in_days": 90,
-            "permissions": ["health_check", "ping", "analytics_read"],
+            "permissions": ["health_check", "ping", "analytics_read", "tickets_read"],
             "note": "Store this token securely. Use it in Authorization header as 'Bearer <token>'"
         }), 200
 
