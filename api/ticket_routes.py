@@ -59,7 +59,7 @@ def init_ticket_routes(
 
     # NOW apply decorators to already-registered view functions
     vf = app.view_functions
-    vf["tickets.get_tickets"] = token_required(require_permission("all")(vf["tickets.get_tickets"]))
+    vf["tickets.get_tickets"] = token_required(require_permission("tickets_read")(vf["tickets.get_tickets"]))
     vf["tickets.get_my_tickets"] = token_required(vf["tickets.get_my_tickets"])
     vf["tickets.create_ticket_endpoint"] = token_required(vf["tickets.create_ticket_endpoint"])
     vf["tickets.get_ticket"] = token_required(vf["tickets.get_ticket"])
