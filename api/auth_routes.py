@@ -105,7 +105,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                 from api.cache import cache
                 # Prüfe ob Cache erreichbar ist
                 test_key = "_health_check_test"
-                cache.set(test_key, "ok", timeout=5)
+                cache.set(test_key, "ok", ttl=5)
                 cache_test = cache.get(test_key)
                 checks["cache"] = {
                     "status": "ok" if cache_test == "ok" else "warning",
