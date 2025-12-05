@@ -1,5 +1,11 @@
+"""
+Start HazeBot (Bot Only)
+Runs only the Discord bot without the API server
+"""
+
 import logging
 
+# Setup logging first
 logging.basicConfig(
     level=logging.INFO,
     format="[{asctime}] 🛈  INFO  │ {message}",
@@ -10,14 +16,14 @@ logging.getLogger("discord").handlers.clear()
 logging.getLogger("discord").propagate = False
 logging.getLogger("discord").setLevel(logging.ERROR)  # Suppress discord.py warnings
 
-# Setze Root-Logger auf WARNING und entferne alle Handler
+# Set root logger
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)
 root_logger.handlers.clear()
 
-# Jetzt erst die restlichen Imports!
-import asyncio  # For async sleep
-import difflib  # For fuzzy matching
+# Now imports
+import asyncio
+import difflib
 import pathlib
 
 import discord
@@ -39,10 +45,11 @@ from Config import (
     get_guild_id,
 )
 from Utils.ConfigLoader import load_config_from_file
-from Utils.EmbedUtils import set_pink_footer  # Import the missing function
+from Utils.EmbedUtils import set_pink_footer
 from Utils.Env import LoadEnv
 from Utils.Logger import Logger
 
+# Load environment
 load_dotenv()
 Token = BOT_TOKEN
 EnvDict = LoadEnv()
@@ -52,10 +59,8 @@ print("🔄 Loading configuration from file...")
 load_config_from_file()
 print(f"🔍 After load: RL_RANK_CHECK_INTERVAL_HOURS = {Config.RL_RANK_CHECK_INTERVAL_HOURS}")
 
-# Now log the summary, since Logger is initialized
 loaded_count = sum(1 for v in EnvDict.values() if v is not None)
 Logger.info(f"🌍 Environment variables loaded: {loaded_count}/{len(list(EnvDict.keys()))}")
-# Removed early mode/guild/data logs - moved to setup_hook
 
 
 class HazeWorldBot(commands.Bot):
@@ -68,24 +73,7 @@ class HazeWorldBot(commands.Bot):
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
 
-        # Load CogManager first to access disabled cogs
-        try:
-            await self.load_extension("Cogs.CogManager")
-            loaded_cogs.append("CogManager")
-            Logger.info("   └─ ✅ Loaded: CogManager")
-        except Exception as e:
-            Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
-            return  # Can't continue without CogManager
-
-        # Load DiscordLogging second to capture as many startup logs as possible
-        try:
-            await self.load_extension("Cogs.DiscordLogging")
-            loaded_cogs.append("DiscordLogging")
-            Logger.info("   └─ ✅ Loaded: DiscordLogging")
-        except Exception as e:
-            Logger.error(f"   └─ ❌ Failed to load DiscordLogging: {e}")
-
-        # Load AnalyticsManager third (before APIServer needs it)
+        # Load AnalyticsManager first (needed by some cogs)
         try:
             await self.load_extension("Cogs.AnalyticsManager")
             loaded_cogs.append("AnalyticsManager")
@@ -93,13 +81,35 @@ class HazeWorldBot(commands.Bot):
         except Exception as e:
             Logger.error(f"   └─ ❌ Failed to load AnalyticsManager: {e}")
 
-        # Get disabled cogs from CogManager
+        # Load CogManager second (to manage cogs)
+        try:
+            await self.load_extension("Cogs.CogManager")
+            loaded_cogs.append("CogManager")
+            Logger.info("   └─ ✅ Loaded: CogManager")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load CogManager: {e}")
+            return
+
+        # Load DiscordLogging third
+        try:
+            await self.load_extension("Cogs.DiscordLogging")
+            loaded_cogs.append("DiscordLogging")
+            Logger.info("   └─ ✅ Loaded: DiscordLogging")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load DiscordLogging: {e}")
+
+        # Get disabled cogs
         cog_manager = self.get_cog("CogManager")
         disabled_cogs = cog_manager.get_disabled_cogs() if cog_manager else []
 
-        # Load other cogs, skipping disabled ones and already loaded ones
+        # Load other cogs
         for cog in pathlib.Path("Cogs").glob("*.py"):
-            if cog.name.startswith("_") or cog.stem in ["CogManager", "DiscordLogging", "AnalyticsManager"]:
+            if cog.name.startswith("_") or cog.stem in [
+                "AnalyticsManager",
+                "APIServer",
+                "CogManager",
+                "DiscordLogging",
+            ]:
                 continue
             if cog.stem in disabled_cogs:
                 Logger.info(f"   └─ ⏸️ Skipped (disabled): {cog.stem}")
@@ -116,23 +126,23 @@ class HazeWorldBot(commands.Bot):
         else:
             Logger.warning("⚠️ No Cogs loaded!")
         Logger.info("🎯 Cog loading sequence complete.")
-        # List available ! commands and their slash availability
-        slash_commands = SLASH_COMMANDS  # List of commands with slash versions
+
+        # List commands
+        slash_commands = SLASH_COMMANDS
         Logger.info("📋 Available ! commands:")
         for cog_name, cog in self.cogs.items():
             for cmd in cog.get_commands():
                 if not cmd.hidden:
                     slash_available = cmd.name in slash_commands
                     Logger.info(f"   └─ ! {cmd.name} (Cog: {cog_name}) {'(/ available)' if slash_available else ''}")
-        # Clear global commands to prevent duplicates
+
+        # Sync commands
         self.tree.clear_commands(guild=None)
-        # Copy global commands to guild and sync
         guild = discord.Object(id=get_guild_id())
         self.tree.copy_global_to(guild=guild)
         synced = await self.tree.sync(guild=guild)
         Logger.info(f"Synced commands: {[cmd.name for cmd in synced]}")
         Logger.info(f"🔗 Synced {len(synced)} guild slash commands.")
-        # Now log mode and config info after sync
         Logger.info(f"🤖 HazeWorldBot starting in {'PRODUCTION' if PROD_MODE else 'TEST'} mode")
         Logger.info(f"📊 Using Guild ID: {GUILD_ID}")
         Logger.info(f"📁 Using Data Directory: {DATA_DIR}")
@@ -141,11 +151,10 @@ class HazeWorldBot(commands.Bot):
         Logger.info(f"{BotName} is online as {self.user}!")
 
     async def on_command_completion(self, ctx: commands.Context) -> None:
-        # Deletes the entered message after each command
         try:
             await ctx.message.delete()
         except Exception:
-            pass  # Ignore errors, e.g., missing permissions
+            pass
 
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
         """Handle command errors with detailed responses."""
@@ -245,7 +254,6 @@ class HazeWorldBot(commands.Bot):
         if message.author.bot:
             return
 
-        # Check message cooldown (skip for admin commands)
         now = message.created_at.timestamp()
         is_admin_command = message.content.startswith("!") and any(
             cmd in message.content.lower() for cmd in ["load", "unload", "reload", "listcogs"]
@@ -254,7 +262,7 @@ class HazeWorldBot(commands.Bot):
         if not is_admin_command:
             if message.author.id in self.UserCooldowns:
                 if now - self.UserCooldowns[message.author.id] < MessageCooldown:
-                    return  # Ignore message if on cooldown
+                    return
             self.UserCooldowns[message.author.id] = now
 
         await self.process_commands(message)
@@ -272,5 +280,17 @@ class HazeWorldBot(commands.Bot):
         Logger.info(f"🗑️ Message deleted by {message.author} in {message.channel}: '{message.content}'")
 
 
-bot = HazeWorldBot()
-bot.run(Token)
+def main():
+    """Main entry point"""
+    bot = HazeWorldBot()
+
+    Logger.info("🤖 Starting Discord bot (Bot only mode - no API server)...")
+
+    try:
+        bot.run(Token)
+    except KeyboardInterrupt:
+        Logger.info("🛑 Keyboard interrupt received, shutting down...")
+
+
+if __name__ == "__main__":
+    main()

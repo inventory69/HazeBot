@@ -25,6 +25,7 @@ HazeBot is a comprehensive Discord bot built with Python and discord.py, featuri
 
 ## 🚀 Quick Start
 
+### Option 1: Bot Only (Recommended for Testing)
 ```bash
 # Clone and setup
 git clone https://github.com/inventory69/HazeBot.git
@@ -33,16 +34,37 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configure
+# Configure environment
 cp .env.example .env
-# Edit .env with your Discord token
+# Edit .env with your DISCORD_BOT_TOKEN and DISCORD_GUILD_ID
 
-# Run
-python Main.py                 # Bot only
-python start_with_api.py       # Bot + API (Port 5070)
+# Configure server IDs
+# Edit Config.py PROD_IDS dictionary with your channel/role IDs
+
+# Run bot only (APIServer cog is automatically skipped)
+python Main.py
 ```
 
-**📖 Detailed Instructions:** [docs/BOT_SETUP.md](docs/BOT_SETUP.md)
+### Option 2: Bot + API Server (Production with Admin Panel)
+```bash
+# After completing basic setup above, install API dependencies:
+pip install -r api_requirements.txt
+
+# Add API configuration to .env:
+# API_PORT=5070
+# SECRET_KEY=your-secret-key-here  # Generate: python -c "import secrets; print(secrets.token_hex(32))"
+# API_ADMIN_USER=admin
+# API_ADMIN_PASS=secure-password
+# CORS_ORIGINS=https://your-domain.com,http://localhost:3000
+
+# Run bot with API (loads APIServer cog automatically)
+python start_with_api.py
+```
+
+**Note:** `Main.py` skips APIServer cog | `start_with_api.py` loads it
+
+**📖 Detailed Instructions:** [docs/BOT_SETUP.md](docs/BOT_SETUP.md)  
+**🔧 First Time?** Follow the [Complete Setup Guide](docs/BOT_SETUP.md) for step-by-step instructions
 
 ---
 
@@ -66,11 +88,13 @@ python start_with_api.py       # Bot + API (Port 5070)
 - Message cache for instant loading
 
 ### 📊 Analytics System
-- SQLite-based session tracking
-- Real-time user monitoring
-- Export to JSON with date filtering
-- Performance metrics and caching
-- 30-day data retention
+- SQLite database with table partitioning
+- Real-time session tracking and active user monitoring
+- Interactive dashboard with charts (user growth, devices, features)
+- JWT authentication with admin/mod access control
+- REST API for metrics and session details
+- Performance optimized (cached aggregates, indexed queries)
+- **[📊 Analytics Documentation](analytics/README.md)**
 
 ### 🛠️ Bot Management
 - 22 modular cogs with hot-reload
@@ -82,14 +106,40 @@ python start_with_api.py       # Bot + API (Port 5070)
 
 ## 📚 Documentation
 
+> **📋 [Complete Documentation Index](docs/README.md)** - Comprehensive guide to all documentation
+
+### 🚀 Getting Started
 - 📖 **[Features](docs/FEATURES.md)** - Complete feature list & commands
 - 🔧 **[Bot Setup Guide](docs/BOT_SETUP.md)** - Discord bot installation & configuration
-- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture & structure
 - 📋 **[Requirements](docs/REQUIREMENTS.md)** - Dependencies & system requirements
-- 🌐 **[REST API](api/README.md)** - REST API endpoints & Blueprint details
-- 📱 **[Admin Panel](https://github.com/inventory69/HazeBot-Admin)** - Flutter app setup & documentation
-- 🚀 **[Deployment](docs/DEPLOYMENT_CHECKLIST.md)** - Production deployment
-- 🤝 **[Contributing](docs/CONTRIBUTING.md)** - Development guidelines
+- ⚡ **[Quick Start](docs/QUICKSTART.md)** - Fast setup for development
+
+### 🏗️ System Architecture
+- 🏗️ **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture & design patterns
+- 🌐 **[REST API Documentation](api/README.md)** - Complete API reference with examples
+- 📊 **[Analytics System](analytics/README.md)** - Analytics dashboard & tracking system
+
+### 🔐 Authentication & Security
+- 🔐 **[JWT Authentication Setup](analytics/ANALYTICS_JWT_SETUP.md)** - Secure authentication guide
+- 📦 **[Analytics Deployment](analytics/DEPLOYMENT_SUMMARY.md)** - Analytics deployment checklist
+
+### 📱 Client Applications
+- 📱 **[HazeBot Admin Panel](https://github.com/inventory69/HazeBot-Admin)** - Flutter cross-platform app
+- 🔧 **[Admin Panel Setup](docs/ADMIN_PANEL_SETUP.md)** - Flutter app configuration
+
+### 🚢 Deployment & Operations
+- 🚀 **[Deployment Checklist](docs/DEPLOYMENT_CHECKLIST.md)** - Production deployment guide
+- 🌐 **[NGINX Configuration](docs/NGINX_NATIVE_CONFIG.md)** - Web server setup
+- ☁️ **[Cloudflare Tunnel](docs/CLOUDFLARE_TUNNEL_CONFIG.md)** - Secure tunnel setup
+
+### 🔧 Development
+- 🤝 **[Contributing](docs/CONTRIBUTING.md)** - Development guidelines & code style
+- 🔄 **[API with Bot](docs/API_WITH_BOT.md)** - Running API alongside bot
+
+### 📊 Performance & Optimization
+- ⚡ **[Performance Optimization](docs/PERFORMANCE_OPTIMIZATION.md)** - Speed improvements
+- 🗄️ **[SQLite Migration Guide](docs/SQLITE_MIGRATION_GUIDE.md)** - Database migration
+- 💾 **[Session Cache Improvements](docs/SESSION_CACHE_IMPROVEMENTS.md)** - Caching strategies
 
 ---
 

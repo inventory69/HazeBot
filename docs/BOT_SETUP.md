@@ -7,11 +7,31 @@ Complete guide for setting up HazeBot Discord bot with or without API integratio
 ## 📋 Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Choosing Your Setup Mode](#choosing-your-setup-mode)
 - [Option 1: Bot Only (No API)](#option-1-bot-only-no-api)
 - [Option 2: Bot + API (With Admin Panel)](#option-2-bot--api-with-admin-panel)
 - [Environment Variables](#environment-variables)
 - [Optional Services](#optional-services)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Choosing Your Setup Mode
+
+HazeBot can run in two modes:
+
+| Mode | File | Loads APIServer Cog? | Use Case |
+|------|------|---------------------|----------|
+| **Bot Only** | `Main.py` | ❌ No | Testing, development, or Discord-only features |
+| **Bot + API** | `start_with_api.py` | ✅ Yes | Production with web/mobile admin panel |
+
+**Key Differences:**
+- `Main.py` - Automatically skips APIServer cog, no Flask/API dependencies needed
+- `start_with_api.py` - Loads APIServer as a cog, enables REST API + WebSocket
+
+**Recommended:**
+- Start with `Main.py` for testing
+- Switch to `start_with_api.py` for production with admin panel
 
 ---
 
@@ -113,26 +133,63 @@ OPENAI_API_KEY=sk-...
 
 ### Step 6: Configure Bot Settings
 
-Edit `Config.py` to customize:
+HazeBot uses `Config.py` for channel/role IDs and feature settings. Most configuration is done via `.env`, but you need to update IDs in `Config.py`:
+
+**Edit `Config.py`** and update the `PROD_IDS` dictionary (lines 161-203):
 
 ```python
-# Guild & Channel IDs
-GUILD_ID = 123456789  # Your server ID
-LOG_CHANNEL_ID = 123456789  # Bot logs
-MEME_CHANNEL_ID = 123456789  # Daily memes
-TICKET_CATEGORY_ID = 123456789  # Support tickets
-
-# Role IDs
-ADMIN_ROLE_ID = 123456789
-MODERATOR_ROLE_ID = 123456789
-
-# Feature Toggles
-ENABLE_DAILY_MEME = True
-ENABLE_TICKETS = True
-ENABLE_ROCKET_LEAGUE = True
+PROD_IDS = {
+    # Role IDs
+    "ADMIN_ROLE_ID": 123456789,           # Admin role
+    "MODERATOR_ROLE_ID": 987654321,       # Moderator role
+    "NORMAL_ROLE_ID": 111222333,          # Normal member role
+    "MEMBER_ROLE_ID": 444555666,          # Member role
+    "CHANGELOG_ROLE_ID": 777888999,       # Changelog notification role
+    "MEME_ROLE_ID": 123123123,            # Meme notification role (optional)
+    
+    # Channel IDs
+    "LOG_CHANNEL_ID": 111111111,          # Bot logging channel
+    "CHANGELOG_CHANNEL_ID": 222222222,    # Changelog posts
+    "TODO_CHANNEL_ID": 333333333,         # Todo list channel
+    "RL_CHANNEL_ID": 444444444,           # Rocket League stats
+    "MEME_CHANNEL_ID": 555555555,         # Daily memes (optional)
+    "SERVER_GUIDE_CHANNEL_ID": 666666666, # Server guide (optional)
+    "GAMING_CHANNEL_ID": 777777777,       # Gaming channel (optional)
+    "WELCOME_RULES_CHANNEL_ID": 888888888,# Welcome/rules channel
+    "WELCOME_PUBLIC_CHANNEL_ID": 999999999,# Public welcome channel
+    "TICKETS_CATEGORY_ID": 101010101,     # Support tickets category
+    "TRANSCRIPT_CHANNEL_ID": 121212121,   # Ticket transcripts
+    
+    # Additional Configuration
+    "INTEREST_ROLE_IDS": [],              # Interest role IDs (optional)
+    "INTEREST_ROLES": {},                 # Interest role names (optional)
+}
 ```
 
-💡 **Tip:** Use Discord Developer Mode to copy IDs (Right-click → Copy ID)
+**Important Settings in `Config.py`:**
+```python
+# Lines 89-93: Bot behavior
+BotName = "Haze World Bot"
+CommandPrefix = "!"
+PresenceUpdateInterval = 3600  # seconds between presence updates
+MessageCooldown = 5  # seconds between user messages
+FuzzyMatchingThreshold = 0.6  # command matching sensitivity
+
+# Lines 481-483: Rocket League settings
+RL_RANK_CHECK_INTERVAL_HOURS = 3  # How often to check ranks
+RL_RANK_CACHE_TTL_SECONDS = 10500  # Cache duration
+
+# Lines 569-595: Meme system (auto-loaded from Data/ files)
+DEFAULT_MEME_SUBREDDITS = ["memes", "dankmemes", ...]
+DEFAULT_MEME_LEMMY = ["196@lemmy.blahaj.zone", ...]
+MEME_TEMPLATES_CACHE_DURATION = 86400  # 24 hours
+```
+
+💡 **Tips:** 
+- Use Discord Developer Mode to copy IDs (Right-click → Copy ID)
+- Most IDs can stay at defaults if you don't use that feature
+- Use `TEST_IDS` dictionary (lines 204-246) for test server configuration
+- Set `PROD_MODE=false` in `.env` to use TEST_IDS instead of PROD_IDS
 
 ### Step 7: Run the Bot
 
@@ -142,11 +199,20 @@ python Main.py
 
 You should see:
 ```
-🤖 Bot is ready!
-Logged in as: HazeBot#1234
-Connected to 1 guild
-22 cogs loaded
+🚀 Starting Cog loading sequence...
+   └─ ✅ Loaded: AnalyticsManager
+   └─ ✅ Loaded: CogManager
+   └─ ✅ Loaded: DiscordLogging
+   └─ ✅ Loaded: General
+   └─ ✅ Loaded: Moderation
+   ... (more cogs)
+🧩 All Cogs loaded: AnalyticsManager, CogManager, DiscordLogging, General, ...
+🔗 Synced 15 guild slash commands.
+🤖 HazeWorldBot starting in PRODUCTION mode
+HazeBot is online as HazeBot#1234!
 ```
+
+**Note:** APIServer cog is automatically skipped in bot-only mode.
 
 ### Step 8: Test Basic Commands
 
@@ -196,7 +262,7 @@ Add to your `.env` file:
 API_PORT=5070
 
 # JWT Secret Key (generate with: python -c "import secrets; print(secrets.token_hex(32))")
-API_SECRET_KEY=your-very-secret-key-change-in-production
+SECRET_KEY=your-very-secret-key-change-in-production
 
 # Admin Credentials
 API_ADMIN_USER=admin
@@ -205,8 +271,16 @@ API_ADMIN_PASS=your_secure_password_here
 # Additional users (optional, format: username:password,username2:password2)
 API_EXTRA_USERS=moderator:pass123,user:pass456
 
-# Debug Mode (false in production!)
-API_DEBUG=false
+# CORS Origins (comma-separated, for web/mobile access)
+CORS_ORIGINS=https://your-domain.com,http://localhost:3000
+
+# Discord OAuth2 (optional, for Discord login in admin panel)
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+DISCORD_REDIRECT_URI=https://your-domain.com/api/discord/callback
+
+# Firebase Cloud Messaging (optional, for push notifications)
+FCM_SERVER_KEY=your_fcm_server_key
 ```
 
 ### Step 9: Firebase Setup (Optional - for Push Notifications)
@@ -231,12 +305,22 @@ python start_with_api.py
 
 You should see:
 ```
-🤖 Starting HazeBot with API integration...
-✅ Discord bot started
-🌐 API server starting on port 5070
+🚀 Starting Cog loading sequence...
+   └─ ✅ Loaded: AnalyticsManager
+   └─ ✅ Loaded: APIServer
+   └─ ✅ Loaded: CogManager
+   └─ ✅ Loaded: DiscordLogging
+   ... (more cogs)
+🧩 All Cogs loaded: AnalyticsManager, APIServer, CogManager, ...
+🔗 Synced 15 guild slash commands.
+🌐 API Server: Starting Flask app on 0.0.0.0:5070
  * Running on http://0.0.0.0:5070
 📡 WebSocket server ready
+🤖 Starting Discord bot (API will start via APIServer cog)...
+HazeBot is online as HazeBot#1234!
 ```
+
+**Note:** API is now loaded as a Cog (APIServer) and starts automatically with the bot.
 
 ### Step 11: Verify API is Running
 
@@ -245,7 +329,15 @@ You should see:
 curl http://localhost:5070/api/health
 
 # Expected response:
-{"status": "ok", "bot_connected": true}
+{"status": "ok", "timestamp": "2024-12-05T10:30:00Z"}
+
+# Test authentication
+curl -X POST http://localhost:5070/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"your_password"}'
+
+# Expected response:
+{"token": "eyJ...", "user": "admin", "role": "admin"}
 ```
 
 ### Step 12: Setup Admin Panel (Optional)
@@ -287,49 +379,98 @@ Full instructions: [ADMIN_PANEL_SETUP.md](ADMIN_PANEL_SETUP.md)
 
 ### Complete `.env` Template
 
+**Legend:**
+- ✅ **Required** - Must be set for basic functionality
+- 📱 **Optional** - Enables specific features
+- 🌐 **API Only** - Only needed when running `start_with_api.py`
+
 ```env
 # ============================================================================
-# DISCORD CONFIGURATION
+# DISCORD CONFIGURATION ✅ (Required for both modes)
 # ============================================================================
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_GUILD_ID=your_guild_id_here
 
-# ============================================================================
-# ROCKET LEAGUE (Optional)
-# ============================================================================
-ROCKET_API_BASE=https://api_url_of_your_choice
-ROCKET_API_KEY=your_rocket_api_key_here
-FLARESOLVERR_URL=https://your_flaresolverr_url_here  # For bypassing Cloudflare
+# Optional: Test mode configuration (set PROD_MODE=false to use these)
+TEST_DISCORD_BOT_TOKEN=your_test_bot_token
+DISCORD_TEST_GUILD_ID=your_test_guild_id
+DISCORD_TEST_GUILD_NAME=Test Server Name
+
+# Production mode toggle (default: false)
+PROD_MODE=true
 
 # ============================================================================
-# EMAIL / SMTP (Optional - for ticket transcripts)
+# ANALYTICS 📱 (Optional - set backend type)
+# ============================================================================
+ANALYTICS_BACKEND=sqlite  # Options: sqlite (default), json
+TIMEZONE=Europe/Berlin    # Timezone for analytics
+
+# ============================================================================
+# ROCKET LEAGUE 📱 (Optional - for RL stats tracking)
+# ============================================================================
+ROCKET_API_BASE=https://api.tracker.gg
+ROCKET_API_KEY=your_rocket_api_key_here
+FLARESOLVERR_URL=http://localhost:8191  # For bypassing Cloudflare
+
+# ============================================================================
+# EMAIL / SMTP 📱 (Optional - for ticket transcripts)
 # ============================================================================
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=465
 SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
-SUPPORT_EMAIL=support@example.com
+SMTP_PASS=your_app_password_here
+SUPPORT_EMAIL=support@yourdomain.com
 
 # ============================================================================
-# OPENAI (Optional - for AI changelog generation)
+# OPENAI 📱 (Optional - for AI changelog generation)
 # ============================================================================
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=sk-proj-...
 
 # ============================================================================
-# API CONFIGURATION (Only needed for Option 2)
+# IMGFLIP 📱 (Optional - for meme template generation)
+# ============================================================================
+IMGFLIP_USERNAME=your_imgflip_username
+IMGFLIP_PASSWORD=your_imgflip_password
+
+# ============================================================================
+# API CONFIGURATION 🌐 (Only needed with start_with_api.py)
 # ============================================================================
 API_PORT=5070
-API_SECRET_KEY=change-this-to-a-random-string
+
+# JWT Secret Key (generate with: python -c "import secrets; print(secrets.token_hex(32))")
+SECRET_KEY=change-this-to-a-random-string-use-secrets-token-hex-32
+
+# Admin Credentials
 API_ADMIN_USER=admin
-API_ADMIN_PASS=secure_password
-API_EXTRA_USERS=
-API_DEBUG=false
+API_ADMIN_PASS=secure_password_change_in_production
+
+# Additional users (format: username:password,username2:password2)
+API_EXTRA_USERS=moderator:pass123,user:pass456
+
+# CORS Origins (comma-separated, for web/mobile access)
+CORS_ORIGINS=https://your-domain.com,http://localhost:3000,http://192.168.1.100:3000
+
+# Discord OAuth2 (optional, for Discord login in admin panel)
+DISCORD_CLIENT_ID=your_client_id
+DISCORD_CLIENT_SECRET=your_client_secret
+DISCORD_REDIRECT_URI=https://your-domain.com/api/discord/callback
+
+# Discord Role IDs (for API access control)
+ADMIN_ROLE_ID=123456789
+MODERATOR_ROLE_ID=987654321
+LOOTLING_ROLE_ID=111222333  # Regular user role
 
 # ============================================================================
-# FIREBASE (Optional - for mobile push notifications)
+# FIREBASE 🌐 (Optional - for mobile push notifications with API)
 # ============================================================================
 FIREBASE_CREDENTIALS=firebase-credentials.json
+FCM_SERVER_KEY=your_fcm_server_key
 ```
+
+**Priority Setup:**
+1. **Minimum (Bot only)**: `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`
+2. **With API**: Add `API_PORT`, `SECRET_KEY`, `API_ADMIN_USER`, `API_ADMIN_PASS`
+3. **Full features**: Add optional services as needed (RL, OpenAI, SMTP, etc.)
 
 ---
 
@@ -401,31 +542,49 @@ SUPPORT_EMAIL=support@yourdomain.com
 **Check loaded cogs:**
 ```bash
 # In bot logs, look for:
-✅ Loaded: Cog.DailyMeme
-❌ Failed to load: Cog.RocketLeague (missing dependencies)
+   └─ ✅ Loaded: DailyMeme
+   └─ ❌ Failed to load RocketLeague: No module named 'rlapi'
+   └─ ⏸️ Skipped (disabled): TestCog
 ```
 
-**Reload a specific cog:**
+**Common reasons:**
+- Missing dependencies (install with `pip install -r requirements.txt`)
+- Cog is persistently disabled (use `!enablecog CogName` to re-enable)
+- Python syntax error in cog file
+
+**Manage cogs:**
 ```discord
-!reload CogName
+!listcogs              # Show all cogs and their status
+!reload CogName        # Reload a specific cog
+!disablecog CogName    # Persistently disable a cog
+!enablecog CogName     # Re-enable a disabled cog
 ```
 
-**List all cogs:**
-```discord
-!listcogs
-```
+**Note:** In bot-only mode (`Main.py`), APIServer cog is automatically skipped.
 
 ### API not accessible
 
 **Error: `Connection refused` when accessing API**
-- ✅ Make sure you started with `python start_with_api.py` not `python Main.py`
+- ✅ Make sure you started with `python start_with_api.py` (not `python Main.py`)
+- ✅ Look for `✅ Loaded: APIServer` in startup logs
 - ✅ Check firewall allows port 5070
-- ✅ Verify API_PORT in `.env` matches
+- ✅ Verify `API_PORT` in `.env` matches (default: 5070)
+
+**Error: `401 Unauthorized` when accessing endpoints**
+- ✅ Obtain JWT token via `/api/auth/login` endpoint
+- ✅ Include token in header: `Authorization: Bearer <token>`
+- ✅ Check username/password in `.env` (API_ADMIN_USER, API_ADMIN_PASS)
 
 **From mobile device:**
 - Use your PC's local IP (not localhost)
 - Find IP: `ip addr show` (Linux) or `ipconfig` (Windows)
 - Example: `http://192.168.1.100:5070/api`
+- Make sure `CORS_ORIGINS` in `.env` includes your access URL
+
+**WebSocket not connecting:**
+- ✅ Use `wss://` for HTTPS or `ws://` for HTTP
+- ✅ Include JWT token in connection auth object
+- ✅ Check browser console for specific error messages
 
 ### Permission errors
 
@@ -447,16 +606,49 @@ SUPPORT_EMAIL=support@yourdomain.com
 
 ## Quick Reference
 
-| File | Purpose |
-|------|---------|
-| `Main.py` | Start bot only (no API) |
-| `start_with_api.py` | Start bot + API server |
-| `Config.py` | Bot configuration (IDs, settings) |
-| `.env` | Secrets & environment variables |
-| `Cogs/` | Modular bot features |
-| `api/` | Flask API for admin panel |
+### File Structure
 
-**Need help?** Open an issue on [GitHub](https://github.com/inventory69/HazeBot/issues) or check the [documentation](README.md)!
+| File/Folder | Purpose |
+|-------------|---------|
+| `Main.py` | Start bot only (no API) - skips APIServer cog |
+| `start_with_api.py` | Start bot + API server - loads APIServer cog |
+| `Config.py` | Bot configuration (IDs, settings, feature toggles) |
+| `.env` | Secrets & environment variables (tokens, passwords) |
+| `Cogs/` | Modular bot features (22 cogs) |
+| `api/` | Flask API for admin panel (REST + WebSocket) |
+| `Data/` | Production data (JSON/SQLite files) |
+| `TestData/` | Test mode data (when PROD_MODE=false) |
+| `Utils/` | Helper functions and utilities |
+
+### Config.py Key Sections
+
+| Lines | Section | Description |
+|-------|---------|-------------|
+| 25-46 | Environment | `PROD_MODE`, `BOT_TOKEN`, `GUILD_ID`, `DATA_DIR` |
+| 89-93 | Bot Behavior | `BotName`, `CommandPrefix`, `MessageCooldown` |
+| 161-203 | PROD_IDS | Production server channel/role IDs |
+| 204-246 | TEST_IDS | Test server channel/role IDs |
+| 254-286 | ID Exports | Exports correct IDs based on PROD_MODE |
+| 294-318 | Slash Commands | List of commands with slash (/) support |
+| 392-426 | Server Guide | Server guide configuration |
+| 431-476 | Welcome System | Rules, messages, button replies |
+| 477-564 | Rocket League | Rank tracking, emojis, congrats messages |
+| 565-604 | Meme System | Subreddits, Lemmy communities, templates |
+
+### Configuration Priority
+
+**1. Required (.env)**
+- `DISCORD_BOT_TOKEN` - Bot authentication
+- `DISCORD_GUILD_ID` - Server ID
+
+**2. Required (Config.py PROD_IDS)**
+- All channel IDs and role IDs for your server
+
+**3. Optional Features**
+- Enable in `.env` as needed (RL, OpenAI, SMTP, etc.)
+- Configure in `Config.py` for feature-specific settings
+
+**Need help?** Open an issue on [GitHub](https://github.com/inventory69/HazeBot/issues) or check the [documentation](../README.md)!
 
 ---
 

@@ -49,7 +49,7 @@
 
 ```bash
 # SSH to production server
-ssh root@116.202.188.39
+ssh root@YOUR_SERVER
 
 # Navigate to HazeBot directory
 cd /path/to/HazeBot
@@ -68,7 +68,7 @@ systemctl restart hazebot-api
 
 ```bash
 # Edit NGINX config
-nano /etc/nginx/sites-available/api.haze.pro
+nano /etc/nginx/sites-available/your-domain
 
 # Add the contents of nginx_analytics_jwt.conf inside the server block
 # (See ANALYTICS_JWT_SETUP.md for full config)
@@ -97,19 +97,19 @@ python3 view_analytics.py --port 8089 --host 0.0.0.0 &
 
 1. **Test Login Page:**
    ```
-   https://api.haze.pro/login
+   https://your-domain.com/login
    ```
    Expected: Login form loads
 
 2. **Test Protected Route (no auth):**
    ```bash
-   curl -I https://api.haze.pro/analytics/
+   curl -I https://your-domain.com/analytics/
    ```
    Expected: `302` redirect to login page
 
 3. **Test Login:**
    ```bash
-   curl -X POST https://api.haze.pro/api/auth/login \
+   curl -X POST https://your-domain.com/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"username":"admin","password":"your-password"}'
    ```
@@ -118,7 +118,7 @@ python3 view_analytics.py --port 8089 --host 0.0.0.0 &
 4. **Test Authenticated Access:**
    ```bash
    TOKEN="<token-from-step-3>"
-   curl https://api.haze.pro/analytics/ \
+   curl https://your-domain.com/analytics/ \
      -H "Authorization: Bearer $TOKEN" \
      -L
    ```
@@ -128,7 +128,7 @@ python3 view_analytics.py --port 8089 --host 0.0.0.0 &
 
 ### User Experience Flow:
 
-1. **User visits:** `https://api.haze.pro/analytics/`
+1. **User visits:** `https://your-domain.com/analytics/`
 2. **NGINX checks:** Authorization header via `/api/auth/verify-token`
 3. **No token?** → Redirect to `/login?redirect=/analytics/`
 4. **User enters credentials** on login page
@@ -176,10 +176,10 @@ API_EXTRA_USERS=user1:pass1,user2:pass2
    - **Name:** HazeBot Analytics
    - **Username:** `admin` (or your username)
    - **Password:** `<your-password>`
-   - **URI:** `https://api.haze.pro/login`
+   - **URI:** `https://your-domain.com/login`
    - **Match Detection:** Default
 
-3. Visit `https://api.haze.pro/login`
+3. Visit `https://your-domain.com/login`
 4. Bitwarden will auto-fill credentials ✅
 5. Click "Anmelden" (Login)
 6. Auto-redirect to Analytics dashboard
@@ -204,7 +204,7 @@ console.log(localStorage.getItem('hazebot_jwt_token'));
 **Solution:** User doesn't have admin/mod role
 ```bash
 # Check user role in API response
-curl -X POST https://api.haze.pro/api/auth/login \
+curl -X POST https://your-domain.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"user","password":"pass"}' | jq .role
 ```
@@ -295,3 +295,12 @@ All code changes are complete. Just need to:
 3. Test the flow
 
 See `ANALYTICS_JWT_SETUP.md` for detailed deployment instructions.
+
+---
+
+## 📚 Related Documentation
+
+- **Analytics Overview**: `README.md` - Complete analytics system documentation
+- **JWT Setup Guide**: `ANALYTICS_JWT_SETUP.md` - Detailed authentication setup
+- **API Documentation**: `../api/README.md` - REST API and WebSocket documentation
+- **Main README**: `../README.md` - HazeBot overview and general setup

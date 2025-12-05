@@ -10,7 +10,7 @@ The Analytics Dashboard is now protected with JWT authentication, using the same
 ## Architecture
 
 ```
-User Request → NGINX (api.haze.pro:443)
+User Request → NGINX (your-domain.com:443)
               ↓
               auth_request → Flask Backend (/api/auth/verify-token)
               ↓                ↓
@@ -45,12 +45,12 @@ User Request → NGINX (api.haze.pro:443)
 
 1. SSH into production server:
    ```bash
-   ssh root@116.202.188.39
+   ssh root@YOUR_SERVER
    ```
 
-2. Edit the NGINX config for api.haze.pro:
+2. Edit the NGINX config for your domain:
    ```bash
-   nano /etc/nginx/sites-available/api.haze.pro
+   nano /etc/nginx/sites-available/your-domain
    ```
 
 3. Add the contents of `nginx_analytics_jwt.conf` inside the `server` block (after existing location blocks).
@@ -102,13 +102,13 @@ User Request → NGINX (api.haze.pro:443)
 
 ### Test 1: Verify NGINX Config
 ```bash
-curl -I https://api.haze.pro/analytics/
+curl -I https://your-domain.com/analytics/
 ```
 Expected: `401` (Unauthorized)
 
 ### Test 2: Get JWT Token
 ```bash
-curl -X POST https://api.haze.pro/api/auth/login \
+curl -X POST https://your-domain.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your-username","password":"your-password"}'
 ```
@@ -117,7 +117,7 @@ Expected: `{"token":"eyJ...", "user":"...", "role":"admin", ...}`
 ### Test 3: Access Analytics with Token
 ```bash
 TOKEN="<token-from-step-2>"
-curl -I https://api.haze.pro/analytics/ \
+curl -I https://your-domain.com/analytics/ \
   -H "Authorization: Bearer $TOKEN"
 ```
 Expected: `200 OK` (then redirects to `/analytics/analytics_dashboard.html`)
@@ -129,7 +129,7 @@ Expected: `200 OK` (then redirects to `/analytics/analytics_dashboard.html`)
 3. Execute:
    ```javascript
    // Get token (replace with actual username/password)
-   fetch('https://api.haze.pro/api/auth/login', {
+   fetch('https://your-domain.com/api/auth/login', {
      method: 'POST',
      headers: { 'Content-Type': 'application/json' },
      body: JSON.stringify({ username: 'your-username', password: 'your-password' })
@@ -143,7 +143,7 @@ Expected: `200 OK` (then redirects to `/analytics/analytics_dashboard.html`)
 
 4. Install a browser extension to add Authorization headers (e.g., "ModHeader")
 5. Add header: `Authorization: Bearer <token>`
-6. Navigate to `https://api.haze.pro/analytics/`
+6. Navigate to `https://your-domain.com/analytics/`
 
 ### Test 5: Bitwarden Integration
 
@@ -151,7 +151,7 @@ Expected: `200 OK` (then redirects to `/analytics/analytics_dashboard.html`)
    - Name: "HazeBot Analytics"
    - Username: `<your-username>`
    - Password: `<your-password>`
-   - URI: `https://api.haze.pro/analytics`
+   - URI: `https://your-domain.com/analytics`
 
 2. Create a login page (optional) or use the API directly with a tool that supports Bitwarden.
 
@@ -197,7 +197,7 @@ Lootlings (regular Discord members) are denied with 403 Forbidden.
 
 ### Issue: NGINX 502 Bad Gateway
 - Analytics server (8089) not running
-- Flask backend (172.18.0.2:5070) not responding
+- Flask backend not responding
 - Check Docker container status
 
 ### Issue: Token Verification Takes Too Long
@@ -224,7 +224,7 @@ If you want to use Discord login instead of username/password:
 
 1. Initiate OAuth2 flow:
    ```bash
-   curl https://api.haze.pro/api/discord/auth
+   curl https://your-domain.com/api/discord/auth
    ```
 
 2. Visit the returned `auth_url` in browser
@@ -247,3 +247,10 @@ This requires Discord app setup (see `FIREBASE_SETUP.md` for details).
 4. Update Analytics dashboard UI to show logged-in user
 5. Add logout functionality
 6. Consider implementing token refresh mechanism
+
+## 📚 Related Documentation
+
+- **Analytics Overview**: `README.md` - Complete analytics system documentation
+- **Deployment Summary**: `DEPLOYMENT_SUMMARY.md` - Quick deployment reference
+- **API Documentation**: `../api/README.md` - REST API endpoints and authentication
+- **Main README**: `../README.md` - HazeBot overview and setup
