@@ -230,7 +230,11 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             params["state"] = frontend_source
 
         auth_url = f"{DISCORD_API_ENDPOINT}/oauth2/authorize?{urlencode(params)}"
-        logger.info(f"🔐 Generated OAuth URL for source='{frontend_source}'")
+        
+        # Only log when there's an actual source (real user request)
+        # Monitoring health checks have empty source and should be silent
+        if frontend_source:
+            logger.info(f"🔐 Generated OAuth URL for source='{frontend_source}'")
         
         return jsonify({"auth_url": auth_url})
 
