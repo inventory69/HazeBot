@@ -5,6 +5,7 @@ pyjwt
 gunicorn
 gevent
 gevent-websocket
+psutil  # System monitoring for health checks
 
 # Firebase Cloud Messaging for push notifications
 firebase-admin

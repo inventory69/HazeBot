@@ -35,10 +35,132 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
 
     @auth_routes.route("/api/health", methods=["GET"])
     def health():
-        """Health check endpoint"""
+        """
+        Enhanced health check endpoint with detailed system status
+        
+        Query Parameters:
+            detailed (str): Set to 'true' for detailed health checks
+            
+        Returns:
+            200: System is healthy
+            503: System is degraded or unhealthy
+        """
         from datetime import datetime
-
-        return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+        import psutil
+        import os
+        
+        health_status = {
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "service": "HazeBot API",
+            "version": os.getenv("API_VERSION", "1.0.0"),
+            "environment": os.getenv("ENVIRONMENT", "production")
+        }
+        
+        # Detailed checks (optional - nur bei ?detailed=true)
+        if request.args.get("detailed") == "true":
+            checks = {}
+            
+            # Memory Check
+            try:
+                memory = psutil.virtual_memory()
+                memory_percent = memory.percent
+                checks["memory"] = {
+                    "status": "ok" if memory_percent < 90 else "warning",
+                    "usage_percent": round(memory_percent, 2),
+                    "available_gb": round(memory.available / (1024**3), 2)
+                }
+                if memory_percent >= 95:
+                    health_status["status"] = "degraded"
+            except Exception as e:
+                checks["memory"] = {"status": "error", "message": str(e)}
+                health_status["status"] = "degraded"
+            
+            # CPU Check
+            try:
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+                checks["cpu"] = {
+                    "status": "ok" if cpu_percent < 80 else "warning",
+                    "usage_percent": round(cpu_percent, 2)
+                }
+            except Exception as e:
+                checks["cpu"] = {"status": "error", "message": str(e)}
+            
+            # Disk Check
+            try:
+                disk = psutil.disk_usage('/')
+                disk_percent = disk.percent
+                checks["disk"] = {
+                    "status": "ok" if disk_percent < 85 else "warning",
+                    "usage_percent": round(disk_percent, 2),
+                    "free_gb": round(disk.free / (1024**3), 2)
+                }
+                if disk_percent >= 95:
+                    health_status["status"] = "degraded"
+            except Exception as e:
+                checks["disk"] = {"status": "error", "message": str(e)}
+            
+            # Cache Check
+            try:
+                from api.cache import cache
+                # Prüfe ob Cache erreichbar ist
+                test_key = "_health_check_test"
+                cache.set(test_key, "ok", timeout=5)
+                cache_test = cache.get(test_key)
+                checks["cache"] = {
+                    "status": "ok" if cache_test == "ok" else "warning",
+                    "type": "redis" if hasattr(cache, 'cache') else "simple"
+                }
+                cache.delete(test_key)
+            except Exception as e:
+                checks["cache"] = {"status": "error", "message": str(e)}
+                health_status["status"] = "degraded"
+            
+            # Active Sessions Check
+            try:
+                session_count = len(active_sessions) if active_sessions else 0
+                checks["sessions"] = {
+                    "status": "ok",
+                    "active_count": session_count
+                }
+            except Exception as e:
+                checks["sessions"] = {"status": "error", "message": str(e)}
+            
+            # Database/Analytics Check (wenn verfügbar)
+            try:
+                from api.app import analytics
+                if analytics:
+                    checks["analytics"] = {"status": "ok", "enabled": True}
+                else:
+                    checks["analytics"] = {"status": "warning", "enabled": False}
+            except Exception as e:
+                checks["analytics"] = {"status": "info", "message": "not_initialized"}
+            
+            # Error Tracker Check
+            try:
+                from api.app import error_tracker
+                if error_tracker:
+                    checks["error_tracker"] = {"status": "ok", "enabled": True}
+                else:
+                    checks["error_tracker"] = {"status": "warning", "enabled": False}
+            except Exception as e:
+                checks["error_tracker"] = {"status": "info", "message": "not_initialized"}
+            
+            health_status["checks"] = checks
+            
+            # Gesamtstatus berechnen
+            error_count = sum(1 for check in checks.values() if isinstance(check, dict) and check.get("status") == "error")
+            if error_count > 2:
+                health_status["status"] = "unhealthy"
+        
+        # HTTP Status Code basierend auf Status
+        status_code = 200
+        if health_status["status"] == "degraded":
+            status_code = 503
+        elif health_status["status"] == "unhealthy":
+            status_code = 503
+        
+        return jsonify(health_status), status_code
 
     @auth_routes.route("/api/auth/login", methods=["POST"])
     def login():
@@ -398,6 +520,63 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                 "timestamp": datetime.now().isoformat(),
             }
         )
+
+    @auth_routes.route("/api/auth/monitoring-token", methods=["POST"])
+    def generate_monitoring_token():
+        """
+        Generate a long-lived JWT token for monitoring services (Uptime Kuma)
+        
+        Security: Requires admin credentials via Basic Auth or API_MONITORING_SECRET
+        
+        Request Body (JSON):
+            secret (str): Monitoring secret from API_MONITORING_SECRET env var
+        
+        Returns:
+            token (str): Long-lived JWT token (90 days) with monitoring permissions
+            expires (str): Expiration timestamp
+        """
+        # Check for monitoring secret
+        monitoring_secret = os.getenv("API_MONITORING_SECRET")
+        
+        if not monitoring_secret:
+            logger.error("❌ API_MONITORING_SECRET not configured")
+            return jsonify({"error": "Monitoring token generation not configured"}), 500
+        
+        # Verify secret from request
+        data = request.get_json() or {}
+        provided_secret = data.get("secret")
+        
+        if not provided_secret or provided_secret != monitoring_secret:
+            logger.warning(f"❌ Invalid monitoring secret attempt from {request.remote_addr}")
+            return jsonify({"error": "Invalid monitoring secret"}), 401
+        
+        # Generate long-lived token for monitoring
+        from datetime import datetime
+        expiry_date = Config.get_utc_now().replace(tzinfo=None) + timedelta(days=90)  # 90 days
+        
+        monitoring_token = jwt.encode(
+            {
+                "user": "uptime_kuma_monitor",
+                "discord_id": "monitoring_service",
+                "exp": expiry_date,
+                "role": "monitoring",
+                "permissions": ["health_check", "ping", "analytics_read"],
+                "auth_type": "monitoring",
+                "session_id": "monitoring_" + secrets.token_hex(8),
+            },
+            app.config["SECRET_KEY"],
+            algorithm="HS256",
+        )
+        
+        logger.info(f"✅ Generated monitoring token (expires: {expiry_date.isoformat()})")
+        
+        return jsonify({
+            "token": monitoring_token,
+            "expires": expiry_date.isoformat(),
+            "expires_in_days": 90,
+            "permissions": ["health_check", "ping", "analytics_read"],
+            "note": "Store this token securely. Use it in Authorization header as 'Bearer <token>'"
+        }), 200
 
     @auth_routes.route("/api/auth/verify-token", methods=["GET"])
     def verify_token():

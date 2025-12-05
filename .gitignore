@@ -194,3 +194,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# ============================================================================
+# MONITORING
+# ============================================================================
+
+# Monitoring token (sensitive - never commit!)
+monitoring_token.txt
+**/monitoring_token.txt
+
+# Uptime Kuma configs (if accidentally copied)
+uptime_kuma_*.json
+
+# Monitoring scripts output
+monitoring_output.log
