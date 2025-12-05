@@ -73,13 +73,10 @@ class HazeWorldBot(commands.Bot):
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
 
-        # Load AnalyticsManager first (needed by some cogs)
-        try:
-            await self.load_extension("Cogs.AnalyticsManager")
-            loaded_cogs.append("AnalyticsManager")
-            Logger.info("   └─ ✅ Loaded: AnalyticsManager")
-        except Exception as e:
-            Logger.error(f"   └─ ❌ Failed to load AnalyticsManager: {e}")
+        # Skip AnalyticsManager and APIServer when running without API
+        # (Both require API modules and are only useful when API is running)
+        Logger.info("   └─ ⏭️ Skipped: AnalyticsManager (requires API - use start_with_api.py)")
+        Logger.info("   └─ ⏭️ Skipped: APIServer (requires API - use start_with_api.py)")
 
         # Load CogManager second (to manage cogs)
         try:

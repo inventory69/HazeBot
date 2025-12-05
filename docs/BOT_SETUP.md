@@ -200,19 +200,19 @@ python Main.py
 You should see:
 ```
 🚀 Starting Cog loading sequence...
-   └─ ✅ Loaded: AnalyticsManager
+   └─ ⏭️ Skipped: AnalyticsManager (requires API - use start_with_api.py)
    └─ ✅ Loaded: CogManager
    └─ ✅ Loaded: DiscordLogging
    └─ ✅ Loaded: General
    └─ ✅ Loaded: Moderation
    ... (more cogs)
-🧩 All Cogs loaded: AnalyticsManager, CogManager, DiscordLogging, General, ...
+🧩 All Cogs loaded: CogManager, DiscordLogging, General, ...
 🔗 Synced 15 guild slash commands.
 🤖 HazeWorldBot starting in PRODUCTION mode
 HazeBot is online as HazeBot#1234!
 ```
 
-**Note:** APIServer cog is automatically skipped in bot-only mode.
+**Note:** AnalyticsManager and APIServer are automatically skipped in bot-only mode (use `start_with_api.py` for full features).
 
 ### Step 8: Test Basic Commands
 
