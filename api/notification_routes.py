@@ -307,7 +307,7 @@ def register_socketio_handlers(socketio_instance):
             logger.debug(f"🎫 JOIN | Client: {request.sid} | Room: {room} | No user_id provided")
 
         # ✅ FIX: Check cache first before fetching from Discord
-        from Utils.CacheUtils import cache
+        from Utils.CacheUtils import cache_instance as cache
         
         cache_key = f"ticket:messages:{ticket_id}"
         cached_messages = cache.get(cache_key)
@@ -423,7 +423,7 @@ def register_socketio_handlers(socketio_instance):
                 messages = future.result(timeout=10)
 
                 # ✅ FIX: Cache messages after fetching from Discord
-                from Utils.CacheUtils import cache
+                from Utils.CacheUtils import cache_instance as cache
                 cache_key = f"ticket:messages:{ticket_id}"
                 cache.set(cache_key, messages, ttl_seconds=300)  # 5 minutes
                 logger.info(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (300s TTL)")

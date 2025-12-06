@@ -928,7 +928,7 @@ def get_ticket_messages_endpoint(ticket_id):
     """Get messages from a ticket channel"""
     try:
         from flask import current_app
-        from Utils.CacheUtils import cache
+        from Utils.CacheUtils import cache_instance as cache
 
         # ✅ FIX: Check cache first before fetching from Discord
         cache_key = f"ticket:messages:{ticket_id}"
@@ -1216,9 +1216,9 @@ def send_ticket_message_endpoint(ticket_id):
         message_data = future.result(timeout=10)
 
         # ✅ FIX: Invalidate message cache after sending new message
-        from Utils.CacheUtils import cache
+        from Utils.CacheUtils import cache_instance as cache
         cache_key = f"ticket:messages:{ticket_id}"
-        cache.delete(cache_key)
+        cache.clear(cache_key)  # ✅ FIX: clear() statt delete()
         logger.info(f"🗑️ Invalidated message cache for ticket {ticket_id}")
 
         # Notify WebSocket clients about new message
