@@ -494,17 +494,17 @@ async def update_embed_and_disable_buttons(interaction: discord.Interaction) -> 
         # Disable buttons based on permission and status
         for item in view.children:
             if isinstance(item, discord.ui.Button):
-                if ticket["status"] == "Closed" and item.label != "Reopen":
+                if ticket["status"] == "Closed" and item.custom_id != "ticket:reopen":
                     item.disabled = True
                 elif not is_allowed_for_ticket_actions(interaction.user, ticket, item.label):
                     item.disabled = True
-                elif item.label == "Claim" and ticket.get("claimed_by"):
+                elif item.custom_id == "ticket:claim" and ticket.get("claimed_by"):
                     item.disabled = True
-                elif item.label == "Assign" and ticket.get("assigned_to"):
+                elif item.custom_id == "ticket:assign" and ticket.get("assigned_to"):
                     item.disabled = True
-                elif item.label == "Delete" and not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+                elif item.custom_id == "ticket:delete" and not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
                     item.disabled = True  # Only admins can see/use Delete
-                elif item.label == "Reopen" and ticket["status"] == "Open":
+                elif item.custom_id == "ticket:reopen" and ticket["status"] == "Open":
                     item.disabled = True  # Reopen only visible/clickable when closed
         try:
             msg = await interaction.channel.fetch_message(ticket["embed_message_id"])
@@ -522,7 +522,7 @@ async def disable_buttons_for_closed_ticket(channel: discord.TextChannel, ticket
     view = TicketControlView()
     for item in view.children:
         if isinstance(item, discord.ui.Button):
-            if item.label != "Reopen":
+            if item.custom_id != "ticket:reopen":
                 item.disabled = True
 
     # Update embed ONCE after all buttons configured (moved outside loop to prevent 4x API calls)
@@ -859,7 +859,7 @@ class TicketControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="Claim", style=discord.ButtonStyle.blurple, emoji="👋")
+    @discord.ui.button(label="Claim", style=discord.ButtonStyle.blurple, emoji="👋", custom_id="ticket:claim")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         tickets = await load_tickets()
         ticket = next((t for t in tickets if t["channel_id"] == interaction.channel.id), None)
@@ -871,7 +871,7 @@ class TicketControlView(discord.ui.View):
         await interaction.response.send_message(f"{interaction.user.mention} has claimed the ticket.", ephemeral=False)
         logger.info(f"Ticket in {interaction.channel} claimed by {interaction.user}.")
 
-    @discord.ui.button(label="Assign", style=discord.ButtonStyle.gray, emoji="📋")
+    @discord.ui.button(label="Assign", style=discord.ButtonStyle.gray, emoji="📋", custom_id="ticket:assign")
     async def assign(self, interaction: discord.Interaction, button: discord.ui.Button):
         tickets = await load_tickets()
         ticket = next((t for t in tickets if t["channel_id"] == interaction.channel.id), None)
@@ -892,7 +892,7 @@ class TicketControlView(discord.ui.View):
         view = AssignView(available_users)
         await interaction.response.send_message("Select a moderator to assign:", view=view, ephemeral=True)
 
-    @discord.ui.button(label="Status", style=discord.ButtonStyle.green, emoji="📊")
+    @discord.ui.button(label="Status", style=discord.ButtonStyle.green, emoji="📊", custom_id="ticket:status")
     async def status(self, interaction: discord.Interaction, button: discord.ui.Button):
         tickets = await load_tickets()
         ticket = next((t for t in tickets if t["channel_id"] == interaction.channel.id), None)
@@ -902,7 +902,7 @@ class TicketControlView(discord.ui.View):
         else:
             await interaction.response.send_message("Ticket not found.", ephemeral=True)
 
-    @discord.ui.button(label="Close", style=discord.ButtonStyle.red, emoji="🔒")
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.red, emoji="🔒", custom_id="ticket:close")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
         tickets = await load_tickets()
         ticket = next((t for t in tickets if t["channel_id"] == interaction.channel.id), None)
@@ -912,7 +912,7 @@ class TicketControlView(discord.ui.View):
         # Open modal for optional close message
         await interaction.response.send_modal(CloseMessageModal(ticket))
 
-    @discord.ui.button(label="Reopen", style=discord.ButtonStyle.secondary, emoji="🔓")
+    @discord.ui.button(label="Reopen", style=discord.ButtonStyle.secondary, emoji="🔓", custom_id="ticket:reopen")
     async def reopen(self, interaction: discord.Interaction, button: discord.ui.Button):
         tickets = await load_tickets()
         ticket = next((t for t in tickets if t["channel_id"] == interaction.channel.id), None)
@@ -960,7 +960,7 @@ class TicketControlView(discord.ui.View):
         await interaction.response.send_message(f"{interaction.user.mention} has reopened the ticket.", ephemeral=False)
         logger.info(f"Ticket #{ticket['ticket_num']} reopened by {interaction.user}.")
 
-    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️")
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket:delete")
     async def delete(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Check if user is admin
         if not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
