@@ -210,6 +210,7 @@ PROD_IDS = {
     "RL_CHANNEL_ID": 1425472657293443236,
     "MEME_CHANNEL_ID": 1433414228840284252,
     "SERVER_GUIDE_CHANNEL_ID": 1428693601268928582,
+    "STATUS_CHANNEL_ID": 1446501233476243536,
     "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
     "GAMING_CHANNEL_ID": 1425472657293443236,  # TODO: Replace with actual gaming channel ID
     # Categories
@@ -253,6 +254,7 @@ TEST_IDS = {
     "RL_CHANNEL_ID": 1429804818481938463,
     "MEME_CHANNEL_ID": 1433416191204003960,
     "SERVER_GUIDE_CHANNEL_ID": 1429723224320770078,
+    "STATUS_CHANNEL_ID": 1446935976193818635,
     "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
     "GAMING_CHANNEL_ID": 1429804818481938463,  # TODO: Replace with actual gaming channel ID
     # Categories
@@ -291,6 +293,7 @@ RL_CHANNEL_ID = CURRENT_IDS["RL_CHANNEL_ID"]
 MEME_CHANNEL_ID = CURRENT_IDS.get("MEME_CHANNEL_ID")
 MEME_ROLE_ID = CURRENT_IDS.get("MEME_ROLE_ID")
 SERVER_GUIDE_CHANNEL_ID = CURRENT_IDS.get("SERVER_GUIDE_CHANNEL_ID")
+STATUS_CHANNEL_ID = CURRENT_IDS.get("STATUS_CHANNEL_ID")
 GAMING_CHANNEL_ID = CURRENT_IDS.get("GAMING_CHANNEL_ID")
 
 # Welcome System
@@ -433,6 +436,17 @@ SERVER_GUIDE_CONFIG = {
         },
     ],
     "footer_template": "Powered by {guild_name} 💖",
+}
+
+
+# ============================================================================
+# STATUS DASHBOARD CONFIGURATION
+# ============================================================================
+
+STATUS_DASHBOARD_CONFIG = {
+    "enabled": True,
+    "update_interval_minutes": 5,  # How often to update the status embed
+    "show_monitoring": True,  # Show Uptime Kuma data if available
 }
 
 

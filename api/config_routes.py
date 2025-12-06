@@ -177,6 +177,7 @@ def get_config():
             "rl_channel_id": str(Config.RL_CHANNEL_ID) if Config.RL_CHANNEL_ID else None,
             "meme_channel_id": str(Config.MEME_CHANNEL_ID) if Config.MEME_CHANNEL_ID else None,
             "server_guide_channel_id": str(Config.SERVER_GUIDE_CHANNEL_ID) if Config.SERVER_GUIDE_CHANNEL_ID else None,
+            "status_channel_id": str(Config.STATUS_CHANNEL_ID) if Config.STATUS_CHANNEL_ID else None,
             "welcome_rules_channel_id": str(Config.WELCOME_RULES_CHANNEL_ID)
             if Config.WELCOME_RULES_CHANNEL_ID
             else None,
@@ -194,6 +195,12 @@ def get_config():
         "rocket_league_texts": {
             "promotion_config": Config.RL_RANK_PROMOTION_CONFIG,
             "congrats_replies": Config.RL_CONGRATS_REPLIES,
+        },
+        # Status Dashboard Configuration
+        "status_dashboard": {
+            "enabled": Config.STATUS_DASHBOARD_CONFIG.get('enabled', True),
+            "update_interval_minutes": Config.STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5),
+            "show_monitoring": Config.STATUS_DASHBOARD_CONFIG.get('show_monitoring', True),
         },
         # Meme Configuration
         "meme": {
