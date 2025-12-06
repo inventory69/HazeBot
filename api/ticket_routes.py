@@ -928,6 +928,15 @@ def get_ticket_messages_endpoint(ticket_id):
     """Get messages from a ticket channel"""
     try:
         from flask import current_app
+        from Utils.CacheUtils import cache
+
+        # ✅ FIX: Check cache first before fetching from Discord
+        cache_key = f"ticket:messages:{ticket_id}"
+        cached_messages = cache.get(cache_key)
+        
+        if cached_messages is not None:
+            logger.info(f"✅ Serving {len(cached_messages)} message(s) from cache (REST API)")
+            return jsonify({"messages": cached_messages, "from_cache": True})
 
         from Cogs.TicketSystem import load_tickets
 
@@ -948,7 +957,7 @@ def get_ticket_messages_endpoint(ticket_id):
         if not channel:
             return jsonify({"error": "Ticket channel not found"}), 404
 
-        # Fetch messages from channel
+        # Fetch messages from channel (only on cache miss)
         async def fetch_messages():
             from Cogs.TicketSystem import ADMIN_ROLE_ID, MODERATOR_ROLE_ID
 
@@ -1094,7 +1103,11 @@ def get_ticket_messages_endpoint(ticket_id):
         future = asyncio.run_coroutine_threadsafe(fetch_messages(), loop)
         messages = future.result(timeout=10)
 
-        return jsonify({"messages": messages})
+        # ✅ FIX: Cache messages after fetching from Discord
+        cache.set(cache_key, messages, ttl_seconds=300)  # 5 minutes
+        logger.info(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (REST API, 300s TTL)")
+
+        return jsonify({"messages": messages, "from_cache": False})
 
     except Exception as e:
         logger.error(f"Error fetching messages for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
@@ -1201,6 +1214,12 @@ def send_ticket_message_endpoint(ticket_id):
 
         future = asyncio.run_coroutine_threadsafe(send_message(), loop)
         message_data = future.result(timeout=10)
+
+        # ✅ FIX: Invalidate message cache after sending new message
+        from Utils.CacheUtils import cache
+        cache_key = f"ticket:messages:{ticket_id}"
+        cache.delete(cache_key)
+        logger.info(f"🗑️ Invalidated message cache for ticket {ticket_id}")
 
         # Notify WebSocket clients about new message
         logger.debug(f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}...")

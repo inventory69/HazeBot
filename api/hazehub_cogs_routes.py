@@ -72,7 +72,7 @@ def get_latest_memes():
         limit = request.args.get("limit", 10, type=int)
         limit = min(limit, 50)  # Max 50 memes
 
-        # Check cache first (60 second TTL)
+        # Check cache first (300 second TTL - memes change infrequently)
         cache_key = f"hazehub:latest_memes:{limit}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
@@ -269,8 +269,8 @@ def get_latest_memes():
 
         result = {"success": True, "memes": memes, "count": len(memes)}
 
-        # Cache result for 60 seconds
-        cache.set(cache_key, result, ttl=60)
+        # Cache result for 300 seconds (5 minutes - memes change infrequently)
+        cache.set(cache_key, result, ttl=300)
 
         return jsonify(result)
 
@@ -288,7 +288,7 @@ def get_latest_rankups():
         limit = request.args.get("limit", 10, type=int)
         limit = min(limit, 50)  # Max 50 rank-ups
 
-        # Check cache first (60 second TTL)
+        # Check cache first (300 second TTL - rankups change infrequently)
         cache_key = f"hazehub:latest_rankups:{limit}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
@@ -425,8 +425,8 @@ def get_latest_rankups():
 
         result = {"success": True, "rankups": rankups, "count": len(rankups)}
 
-        # Cache result for 60 seconds
-        cache.set(cache_key, result, ttl=60)
+        # Cache result for 300 seconds (5 minutes - rankups change infrequently)
+        cache.set(cache_key, result, ttl=300)
 
         return jsonify(result)
 

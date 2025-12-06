@@ -306,7 +306,18 @@ def register_socketio_handlers(socketio_instance):
         else:
             logger.debug(f"🎫 JOIN | Client: {request.sid} | Room: {room} | No user_id provided")
 
-        # Send recent message history to newly joined client
+        # ✅ FIX: Check cache first before fetching from Discord
+        from Utils.CacheUtils import cache
+        
+        cache_key = f"ticket:messages:{ticket_id}"
+        cached_messages = cache.get(cache_key)
+        
+        if cached_messages is not None:
+            logger.info(f"✅ Serving {len(cached_messages)} message(s) from cache (WebSocket join_ticket)")
+            emit("message_history", {"ticket_id": ticket_id, "messages": cached_messages})
+            return
+
+        # Send recent message history to newly joined client (only on cache miss)
         try:
             from flask import current_app
             from Cogs.TicketSystem import load_tickets, ADMIN_ROLE_ID, MODERATOR_ROLE_ID
@@ -410,6 +421,12 @@ def register_socketio_handlers(socketio_instance):
                 loop = bot.loop
                 future = asyncio.run_coroutine_threadsafe(fetch_recent_messages(), loop)
                 messages = future.result(timeout=10)
+
+                # ✅ FIX: Cache messages after fetching from Discord
+                from Utils.CacheUtils import cache
+                cache_key = f"ticket:messages:{ticket_id}"
+                cache.set(cache_key, messages, ttl_seconds=300)  # 5 minutes
+                logger.info(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (300s TTL)")
 
                 emit("message_history", {"ticket_id": ticket_id, "messages": messages})
                 logger.debug(f"📨 Sent {len(messages)} message(s) history to client {request.sid}")
