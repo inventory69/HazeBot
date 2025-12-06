@@ -782,12 +782,17 @@ def assign_ticket_endpoint(ticket_id):
 def close_ticket_endpoint(ticket_id):
     """Close a ticket with optional message using Discord bot functions for consistency"""
     try:
+        logger.info(f"[CLOSE TICKET] Received request for ticket_id: {ticket_id}")
+        logger.info(f"[CLOSE TICKET] Request headers: {dict(request.headers)}")
+        logger.info(f"[CLOSE TICKET] Request data: {request.get_json()}")
+        
         from flask import current_app
 
         from Cogs.TicketSystem import close_ticket_from_api, load_tickets
 
         bot = current_app.config.get("bot_instance")
         if not bot:
+            logger.error("[CLOSE TICKET] Bot not initialized!")
             return jsonify({"error": "Bot not initialized"}), 503
 
         data = request.get_json() or {}
@@ -798,23 +803,31 @@ def close_ticket_endpoint(ticket_id):
         # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
+        logger.info(f"[CLOSE TICKET] Loaded {len(tickets)} tickets")
 
         ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
         if not ticket:
+            logger.error(f"[CLOSE TICKET] Ticket {ticket_id} not found!")
             return jsonify({"error": "Ticket not found"}), 404
 
+        logger.info(f"[CLOSE TICKET] Found ticket: {ticket.get('ticket_num')}, status: {ticket.get('status')}")
+
         if ticket.get("status") == "Closed":
+            logger.warning(f"[CLOSE TICKET] Ticket {ticket_id} already closed!")
             return jsonify({"error": "Ticket is already closed"}), 400
 
         channel_id = ticket.get("channel_id")
 
         # Use Discord bot function to close (ensures transcript, email, button updates, etc.)
+        logger.info(f"[CLOSE TICKET] Calling close_ticket_from_api for channel {channel_id}")
         future = asyncio.run_coroutine_threadsafe(
             close_ticket_from_api(bot, channel_id, ticket, close_message if close_message.strip() else None), loop
         )
         result = future.result(timeout=10)
+        logger.info(f"[CLOSE TICKET] Result: {result}")
 
         if not result.get("success"):
+            logger.error(f"[CLOSE TICKET] Failed: {result.get('error')}")
             return jsonify({"error": result.get("error", "Unknown error")}), 400
 
         # WebSocket notification for real-time updates
@@ -832,10 +845,11 @@ def close_ticket_endpoint(ticket_id):
             },
         )
 
+        logger.info(f"[CLOSE TICKET] Success! Returning 200 OK")
         return jsonify({"success": True, "message": result.get("message", "Ticket closed successfully")})
 
     except Exception as e:
-        logger.error(f"Error closing ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+        logger.error(f"[CLOSE TICKET] EXCEPTION: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to close ticket: {str(e)}"}), 500
 
 
