@@ -89,6 +89,73 @@ def get_active_app_users(app_usage_file, app_usage_expiry_days, Config):
     return active_users
 
 
+# Meme activity tracking helpers
+def load_meme_requests():
+    """Load meme requests from file"""
+    from Config import get_data_dir
+    file_path = Path(get_data_dir()) / "meme_requests.json"
+    try:
+        if file_path.exists():
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading meme requests: {e}")
+    return {}
+
+
+def save_meme_requests(meme_requests):
+    """Save meme requests to file"""
+    from Config import get_data_dir
+    file_path = Path(get_data_dir()) / "meme_requests.json"
+    try:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(meme_requests, f, indent=4)
+    except Exception as e:
+        logger.error(f"Error saving meme requests: {e}")
+
+
+def increment_meme_request(discord_id: str):
+    """Increment meme request counter for user"""
+    meme_requests = load_meme_requests()
+    meme_requests[str(discord_id)] = meme_requests.get(str(discord_id), 0) + 1
+    save_meme_requests(meme_requests)
+    logger.info(f"📊 Meme request tracked for user {discord_id} (Total: {meme_requests[str(discord_id)]})")
+
+
+def load_memes_generated():
+    """Load memes generated from file"""
+    from Config import get_data_dir
+    file_path = Path(get_data_dir()) / "memes_generated.json"
+    try:
+        if file_path.exists():
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading memes generated: {e}")
+    return {}
+
+
+def save_memes_generated(memes_generated):
+    """Save memes generated to file"""
+    from Config import get_data_dir
+    file_path = Path(get_data_dir()) / "memes_generated.json"
+    try:
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(memes_generated, f, indent=4)
+    except Exception as e:
+        logger.error(f"Error saving memes generated: {e}")
+
+
+def increment_meme_generated(discord_id: str):
+    """Increment meme generated counter for user"""
+    memes_generated = load_memes_generated()
+    memes_generated[str(discord_id)] = memes_generated.get(str(discord_id), 0) + 1
+    save_memes_generated(memes_generated)
+    logger.info(f"📊 Meme generation tracked for user {discord_id} (Total: {memes_generated[str(discord_id)]})")
+
+
 # Audit logging
 def log_action(username, action, details=None):
     """Log user actions to file and console"""

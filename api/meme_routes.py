@@ -9,6 +9,8 @@ import traceback
 import requests
 from flask import Blueprint, jsonify, request
 
+from api.helpers import increment_meme_generated, increment_meme_request
+
 # Will be initialized by init_meme_routes()
 Config = None
 logger = None
@@ -217,6 +219,11 @@ def generate_meme():
         if not meme_url:
             return jsonify({"error": "Failed to generate meme"}), 500
 
+        # Track meme generation activity
+        discord_id = request.discord_id
+        if discord_id:
+            increment_meme_generated(discord_id)
+
         return jsonify({"success": True, "url": meme_url})
 
     except Exception as e:
@@ -296,6 +303,11 @@ def post_generated_meme_to_discord():
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
+
+        # Track meme generation activity (posting also counts as generation)
+        discord_id = request.discord_id
+        if discord_id:
+            increment_meme_generated(discord_id)
 
         return jsonify(
             {
@@ -579,6 +591,11 @@ def test_meme_from_source():
         # Pick random meme
         meme = random.choice(memes)
 
+        # Track meme request activity
+        discord_id = request.discord_id
+        if discord_id:
+            increment_meme_request(discord_id)
+
         return jsonify(
             {
                 "success": True,
@@ -634,6 +651,11 @@ def test_random_meme():
         meme = future.result(timeout=30)
 
         if meme:
+            # Track meme request activity
+            discord_id = request.discord_id
+            if discord_id:
+                increment_meme_request(discord_id)
+
             return jsonify(
                 {
                     "success": True,
@@ -679,6 +701,11 @@ def test_daily_meme():
 
         # Wait for result with timeout
         future.result(timeout=30)
+
+        # Track meme request activity
+        discord_id = request.discord_id
+        if discord_id:
+            increment_meme_request(discord_id)
 
         return jsonify(
             {
@@ -776,6 +803,11 @@ def send_meme_to_discord():
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
+
+        # Track meme request activity (sending a meme counts as a request)
+        discord_id = request.discord_id
+        if discord_id:
+            increment_meme_request(discord_id)
 
         return jsonify({"success": True, "message": "Meme sent to Discord successfully", "channel_id": meme_channel_id})
 
