@@ -445,37 +445,21 @@ class Utility(commands.Cog):
                 uptime = m["uptime"]
                 priority = m.get("priority", "low")
                 
-                # Build status line with clear formatting
-                # Format: ✅ Name ━ 99.93% ━ 34ms [CRITICAL]
-                line_parts = [f"{status} {name}"]
-                
-                # Add uptime with visual bar
-                if uptime >= 99.5:
-                    uptime_indicator = "�"
-                elif uptime >= 95:
-                    uptime_indicator = "🟡"
-                else:
-                    uptime_indicator = "�"
-                line_parts.append(f"{uptime_indicator} {uptime:.2f}%")
+                # Build clean status line: ✅ Name • 99.93% • 34ms • CRITICAL
+                line_parts = [f"{status} **{name}**", f"{uptime:.2f}%"]
                 
                 # Add ping if available
                 if m.get("avg_ping") is not None:
                     ping = int(m['avg_ping'])
-                    if ping < 100:
-                        ping_indicator = "⚡"
-                    elif ping < 300:
-                        ping_indicator = "📶"
-                    else:
-                        ping_indicator = "🐌"
-                    line_parts.append(f"{ping_indicator} {ping}ms")
+                    line_parts.append(f"⚡ {ping}ms")
                 
-                # Add priority badge for critical/high
+                # Add priority badge only for critical/high
                 if priority == "critical":
-                    line_parts.append("⚠️ CRITICAL")
+                    line_parts.append("🔴 CRITICAL")
                 elif priority == "high":
-                    line_parts.append("⚠️ HIGH")
+                    line_parts.append("🟡 HIGH")
                 
-                return " ━ ".join(line_parts)
+                return " • ".join(line_parts)
             
             # Count up/down monitors per category
             def get_category_summary(category_monitors: list) -> str:
