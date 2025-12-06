@@ -1105,7 +1105,7 @@ def get_ticket_messages_endpoint(ticket_id):
 
         # ✅ FIX: Cache messages after fetching from Discord
         cache.set(cache_key, messages, ttl_seconds=300)  # 5 minutes
-        logger.info(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (REST API, 300s TTL)")
+        logger.debug(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (REST API, 300s TTL)")
 
         return jsonify({"messages": messages, "from_cache": False})
 
@@ -1219,7 +1219,7 @@ def send_ticket_message_endpoint(ticket_id):
         from Utils.CacheUtils import cache_instance as cache
         cache_key = f"ticket:messages:{ticket_id}"
         cache.clear(cache_key)  # ✅ FIX: clear() statt delete()
-        logger.info(f"🗑️ Invalidated message cache for ticket {ticket_id}")
+        logger.debug(f"🗑️ Invalidated message cache for ticket {ticket_id}")
 
         # Notify WebSocket clients about new message
         logger.debug(f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}...")

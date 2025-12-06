@@ -126,7 +126,7 @@ async def load_notification_tokens() -> Dict[str, List[str]]:
         try:
             with open(token_file, "r") as f:
                 tokens = json.load(f)
-                logger.info(f"📱 Loaded {len(tokens)} user(s) with FCM tokens from {token_file}")
+                logger.debug(f"📱 Loaded {len(tokens)} user(s) with FCM tokens from {token_file}")
                 logger.debug(f"📱 User IDs in tokens: {list(tokens.keys())}")
                 return tokens
         except json.JSONDecodeError as e:
@@ -286,12 +286,25 @@ async def check_user_notification_enabled(user_id: str, notification_type: str) 
 
 
 async def send_notification(
-    user_id: str, title: str, body: str, data: Optional[Dict[str, Any]] = None, notification_type: Optional[str] = None
+    user_id: str, 
+    title: str, 
+    body: str, 
+    data: Optional[Dict[str, Any]] = None, 
+    notification_type: Optional[str] = None,
+    username: Optional[str] = None
 ) -> bool:
     """Send push notification to a user's registered devices.
 
     Uses asyncio.to_thread for the firebase-admin send so the event loop is
     not blocked by network/IO.
+    
+    Args:
+        user_id: Discord user ID
+        title: Notification title
+        body: Notification body
+        data: Optional data payload
+        notification_type: Type of notification for user preferences
+        username: Optional username for logging (e.g., '.inventory')
     """
     if not _fcm_enabled:
         logger.debug(f"FCM disabled, skipping notification for user {user_id}")
@@ -313,12 +326,12 @@ async def send_notification(
         logger.debug(f"🔍 Token dict has {len(tokens)} users total")
 
         if user_id_str not in tokens or not tokens[user_id_str]:
-            logger.info(f"📱 No FCM tokens registered for user {user_id}")
+            logger.debug(f"📱 No FCM tokens registered for user {user_id}")
             logger.debug(f"📱 Checked for user_id_str='{user_id_str}' in tokens keys: {list(tokens.keys())}")
             return False
 
         user_tokens = tokens[user_id_str]
-        logger.info(f"📱 Found {len(user_tokens)} FCM token(s) for user {user_id}")
+        logger.debug(f"📱 Found {len(user_tokens)} FCM token(s) for user {user_id}")
 
         # Strip formatting from title and body for clean notifications
         clean_title = strip_formatting(title) if title else title
@@ -373,7 +386,7 @@ async def send_notification(
                     return messaging.send(msg)
 
                 message_id = await asyncio.to_thread(_send_message, message)
-                logger.info(f"📱 Sent to token: {message_id}")
+                logger.debug(f"📱 Sent to token: {message_id}")
                 success_count += 1
 
             except Exception as token_error:
@@ -390,9 +403,12 @@ async def send_notification(
 
         success = success_count > 0
         if success:
-            logger.info(f"✅ Sent notification to user {user_id} ({success_count}/{len(user_tokens)} devices)")
+            # Display username if available, otherwise just user_id
+            user_display = f"{username} (ID: {user_id})" if username else user_id
+            logger.info(f"✅ Sent notification to {user_display} ({success_count}/{len(user_tokens)} devices)")
         else:
-            logger.warning(f"⚠️ Failed to send notification to user {user_id}")
+            user_display = f"{username} (ID: {user_id})" if username else user_id
+            logger.warning(f"⚠️ Failed to send notification to {user_display}")
 
         return success
 

@@ -426,7 +426,7 @@ def register_socketio_handlers(socketio_instance):
                 from Utils.CacheUtils import cache_instance as cache
                 cache_key = f"ticket:messages:{ticket_id}"
                 cache.set(cache_key, messages, ttl_seconds=300)  # 5 minutes
-                logger.info(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (300s TTL)")
+                logger.debug(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (300s TTL)")
 
                 emit("message_history", {"ticket_id": ticket_id, "messages": messages})
                 logger.debug(f"📨 Sent {len(messages)} message(s) history to client {request.sid}")
@@ -660,6 +660,16 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
         # Send notification to each recipient
         for user_id in recipients:
             try:
+                # Fetch username from Discord for better logging
+                username = None
+                try:
+                    discord_user = bot.get_user(int(user_id))
+                    if not discord_user:
+                        discord_user = await bot.fetch_user(int(user_id))
+                    username = discord_user.name if discord_user else None
+                except Exception as e:
+                    logger.debug(f"Could not fetch username for {user_id}: {e}")
+                
                 await send_notification(
                     user_id,
                     title,
@@ -671,6 +681,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                         "click_action": "FLUTTER_NOTIFICATION_CLICK",
                         "route": f"/tickets/{ticket_id}",
                     },
+                    username=username,
                 )
                 logger.debug(f"📱 Sent push notification to user {user_id} for {event_type}")
             except Exception as e:
