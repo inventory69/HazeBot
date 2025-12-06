@@ -52,10 +52,11 @@ async def get_monitoring_status():
         }), 503
     
     try:
-        # Fetch from Uptime Kuma Status Page
+        # Fetch from Uptime Kuma Status Page (base + heartbeat endpoints)
         async with aiohttp.ClientSession() as session:
             logger.debug(f"Fetching monitoring data from: {UPTIME_KUMA_URL}")
             
+            # Fetch base data (monitor list, groups, tags)
             async with session.get(UPTIME_KUMA_URL, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
                     logger.warning(f"Uptime Kuma returned status {resp.status}")
@@ -65,14 +66,28 @@ async def get_monitoring_status():
                     }), 502
                 
                 # Get JSON data (API endpoint returns JSON directly)
-                data = await resp.json()
-                logger.debug(f"Received data from Uptime Kuma: {list(data.keys())}")
-                
-                # Parse monitors from response
-                monitors = parse_uptime_kuma_data(data)
-                
-                if not monitors:
-                    logger.warning("No monitors found in Uptime Kuma response")
+                base_data = await resp.json()
+                logger.debug(f"Received base data from Uptime Kuma: {list(base_data.keys())}")
+            
+            # Fetch heartbeat data (real uptime, ping, status)
+            heartbeat_url = UPTIME_KUMA_URL.replace("/status-page/", "/status-page/heartbeat/")
+            heartbeat_data = {}
+            
+            try:
+                async with session.get(heartbeat_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        heartbeat_data = await resp.json()
+                        logger.debug(f"Received heartbeat data: heartbeatList={len(heartbeat_data.get('heartbeatList', {}))}, uptimeList={len(heartbeat_data.get('uptimeList', {}))}")
+                    else:
+                        logger.warning(f"Heartbeat endpoint returned status {resp.status}, continuing without heartbeat data")
+            except Exception as e:
+                logger.warning(f"Failed to fetch heartbeat data: {e}, continuing without heartbeat data")
+            
+            # Parse monitors from response (merge base + heartbeat data)
+            monitors = parse_uptime_kuma_data(base_data, heartbeat_data)
+            
+            if not monitors:
+                logger.warning("No monitors found in Uptime Kuma response")
         
         return jsonify({
             "monitors": monitors,
@@ -95,12 +110,13 @@ async def get_monitoring_status():
         }), 500
 
 
-def parse_uptime_kuma_data(data: dict) -> list:
+def parse_uptime_kuma_data(base_data: dict, heartbeat_data: dict = None) -> list:
     """
     Parse Uptime Kuma status page data into standardized monitor format
     
     Args:
-        data: Raw JSON response from Uptime Kuma status page
+        base_data: Raw JSON response from Uptime Kuma status page
+        heartbeat_data: Optional heartbeat data with real uptime/ping
         
     Returns:
         List of monitor dictionaries
@@ -110,33 +126,86 @@ def parse_uptime_kuma_data(data: dict) -> list:
     try:
         # Uptime Kuma status page structure
         # Expected format: {"publicGroupList": [...]}
-        public_groups = data.get("publicGroupList", [])
+        public_groups = base_data.get("publicGroupList", [])
+        
+        # Extract heartbeat and uptime maps if available
+        heartbeat_list = heartbeat_data.get("heartbeatList", {}) if heartbeat_data else {}
+        uptime_list = heartbeat_data.get("uptimeList", {}) if heartbeat_data else {}
         
         for group in public_groups:
             monitor_list = group.get("monitorList", [])
             
             for monitor in monitor_list:
                 # Extract monitor data
+                monitor_id = str(monitor.get("id"))
                 name = monitor.get("name", "Unknown")
                 monitor_type = monitor.get("type", "http")
                 
-                # Get uptime (24h, 30d, etc.)
-                uptime_24h = monitor.get("uptime24h", monitor.get("uptime", 100))
+                # Get real uptime from heartbeat data (24h)
+                uptime_key = f"{monitor_id}_24"
+                uptime_24h = uptime_list.get(uptime_key)
                 
-                # Status: up (1), down (0), pending (2)
-                status_code = monitor.get("status", 1)
+                # Convert decimal to percentage (0.9993 -> 99.93)
+                if uptime_24h is not None:
+                    uptime_24h = round(uptime_24h * 100, 2)
+                else:
+                    # Fallback to old method (usually 100)
+                    uptime_24h = monitor.get("uptime24h", monitor.get("uptime", 100))
+                
+                # Get heartbeat data for this monitor
+                heartbeats = heartbeat_list.get(monitor_id, [])
+                
+                # Get status from latest heartbeat (status: 1=up, 0=down)
+                if heartbeats:
+                    latest_heartbeat = heartbeats[-1]  # Last heartbeat = most recent
+                    status_code = latest_heartbeat.get("status", 1)
+                    last_ping = latest_heartbeat.get("ping")  # Response time in ms
+                    last_check = latest_heartbeat.get("time")  # Timestamp
+                else:
+                    # Fallback to monitor status
+                    status_code = monitor.get("status", 1)
+                    last_ping = None
+                    last_check = None
+                
+                # Convert status code to string
                 status = "up" if status_code == 1 else "down" if status_code == 0 else "pending"
+                
+                # Calculate average ping from heartbeats (if available)
+                avg_ping = None
+                if heartbeats:
+                    ping_values = [h.get("ping") for h in heartbeats if h.get("ping") is not None]
+                    if ping_values:
+                        avg_ping = round(sum(ping_values) / len(ping_values), 1)
                 
                 # Categorize monitor
                 category = categorize_monitor(name)
                 
+                # Get tags for priority
+                tags = monitor.get("tags", [])
+                tag_names = [tag.get("name", "").lower() for tag in tags if isinstance(tag, dict)]
+                
+                # Determine priority from tags
+                if "critical" in tag_names:
+                    priority = "critical"
+                elif "high" in tag_names:
+                    priority = "high"
+                elif "medium" in tag_names:
+                    priority = "medium"
+                else:
+                    priority = "low"
+                
                 monitors.append({
+                    "id": monitor_id,
                     "name": name,
                     "type": monitor_type,
                     "status": status,
                     "uptime": uptime_24h,
+                    "ping": last_ping,
+                    "avg_ping": avg_ping,
                     "category": category,
-                    "last_check": datetime.utcnow().isoformat() + 'Z'
+                    "priority": priority,
+                    "tags": tag_names,
+                    "last_check": last_check or datetime.utcnow().isoformat() + 'Z'
                 })
         
         logger.debug(f"Parsed {len(monitors)} monitors from Uptime Kuma")

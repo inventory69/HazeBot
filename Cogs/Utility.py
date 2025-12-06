@@ -349,6 +349,15 @@ class Utility(commands.Cog):
             "pending": "🟡"
         }.get(status.lower(), "⚪")
     
+    def get_priority_emoji(self, priority: str) -> str:
+        """Get emoji for monitor priority (from tags)"""
+        return {
+            "critical": "🔴",
+            "high": "🟡",
+            "medium": "🟢",
+            "low": "⚪"
+        }.get(priority.lower(), "⚪")
+    
     def format_monitor_name(self, name: str) -> str:
         """
         Format monitor name for display
@@ -377,6 +386,15 @@ class Utility(commands.Cog):
         except:
             return "Unknown"
     
+    def format_timestamp_discord(self, iso_timestamp: str) -> str:
+        """Format ISO timestamp as Discord timestamp (relative)"""
+        try:
+            dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
+            unix_timestamp = int(dt.timestamp())
+            return f"<t:{unix_timestamp}:R>"
+        except:
+            return "Unknown"
+    
     def create_status_embed(
         self, 
         bot_user: discord.User, 
@@ -396,7 +414,7 @@ class Utility(commands.Cog):
         # Determine title and description based on monitoring availability
         if monitoring_data:
             title = "💖 HazeBot Status Dashboard"
-            description = "Comprehensive bot & API monitoring"
+            description = "Real-time monitoring • Updates every 5min"
         else:
             title = f"{BotName} Status"
             description = "The bot is online and fabulous! 💖"
@@ -420,29 +438,52 @@ class Utility(commands.Cog):
             features = [m for m in monitors if m.get("category") == "features"]
             frontend = [m for m in monitors if m.get("category") == "frontend"]
             
+            # Helper function to format monitor line with priority, status, uptime, and ping
+            def format_monitor_line(m: dict) -> str:
+                priority = self.get_priority_emoji(m.get("priority", "low"))
+                status = self.get_status_emoji(m["status"])
+                name = self.format_monitor_name(m["name"])
+                uptime = m["uptime"]
+                
+                # Add ping if available
+                ping_text = ""
+                if m.get("avg_ping") is not None:
+                    ping_text = f" • {int(m['avg_ping'])}ms"
+                
+                return f"{priority} {status} **{name}** {uptime:.2f}%{ping_text}"
+            
+            # Count up/down monitors per category
+            def get_category_summary(category_monitors: list) -> str:
+                up_count = sum(1 for m in category_monitors if m["status"] == "up")
+                total = len(category_monitors)
+                return f"({up_count}/{total} UP)"
+            
             # Core Services
             if core_services:
-                core_text = "\n".join([
-                    f"{self.get_status_emoji(m['status'])} **{self.format_monitor_name(m['name'])}** | {m['uptime']:.2f}%"
-                    for m in core_services
-                ])
-                embed.add_field(name="🌐 Core Services", value=core_text, inline=False)
+                core_text = "\n".join([format_monitor_line(m) for m in core_services])
+                embed.add_field(
+                    name=f"� Core Services {get_category_summary(core_services)}", 
+                    value=core_text, 
+                    inline=False
+                )
             
             # Features
             if features:
-                features_text = "\n".join([
-                    f"{self.get_status_emoji(m['status'])} **{self.format_monitor_name(m['name'])}** | {m['uptime']:.2f}%"
-                    for m in features
-                ])
-                embed.add_field(name="🎯 Features", value=features_text, inline=False)
+                features_text = "\n".join([format_monitor_line(m) for m in features])
+                embed.add_field(
+                    name=f"🎯 Features {get_category_summary(features)}", 
+                    value=features_text, 
+                    inline=False
+                )
             
             # Frontend
             if frontend:
-                frontend_text = "\n".join([
-                    f"{self.get_status_emoji(m['status'])} **{self.format_monitor_name(m['name'])}** | {m['uptime']:.2f}%"
-                    for m in frontend
-                ])
-                embed.add_field(name="💻 Frontend", value=frontend_text, inline=False)
+                frontend_text = "\n".join([format_monitor_line(m) for m in frontend])
+                embed.add_field(
+                    name=f"💻 Frontend {get_category_summary(frontend)}", 
+                    value=frontend_text, 
+                    inline=False
+                )
             
             # Overall Status
             overall = monitoring_data.get("overall_status", "unknown")
@@ -453,10 +494,21 @@ class Utility(commands.Cog):
                 "unknown": "⚪"
             }.get(overall, "⚪")
             
+            # Format status text
+            status_text = {
+                "operational": "All Systems Operational",
+                "degraded": "Some Systems Degraded",
+                "down": "Service Disruption",
+                "unknown": "Status Unknown"
+            }.get(overall, "Unknown")
+            
+            # Use Discord timestamp for relative time
             last_update = monitoring_data.get("last_update", "Unknown")
+            timestamp_text = self.format_timestamp_discord(last_update)
+            
             embed.add_field(
-                name="📈 Overall Status",
-                value=f"{overall_emoji} **{overall.title()}**\nLast Check: {self.format_timestamp(last_update)}",
+                name="📈 System Status",
+                value=f"{overall_emoji} **{status_text}**\n🕐 Last Updated: {timestamp_text}",
                 inline=False
             )
         
