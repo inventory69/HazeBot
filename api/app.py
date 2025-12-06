@@ -28,6 +28,7 @@ from Utils.Logger import Logger as logger
 # Import all Blueprint modules
 import api.admin_routes as admin_routes_module
 import api.auth as auth_module
+import api.monitoring_routes as monitoring_routes_module
 import api.auth_routes as auth_routes_module
 import api.cog_routes as cog_routes_module
 import api.config_routes as config_routes_module
@@ -174,6 +175,16 @@ auth_routes_bp = auth_routes_module.init_auth_routes(
     app, Config, active_sessions, recent_activity, MAX_ACTIVITY_LOG, app_usage_file
 )
 app.register_blueprint(auth_routes_bp)
+
+# Initialize monitoring routes Blueprint (Uptime Kuma proxy)
+monitoring_bp = monitoring_routes_module.monitoring_bp
+app.register_blueprint(monitoring_bp)
+
+# Log monitoring status on startup
+if Config.UPTIME_KUMA_ENABLED:
+    logger.info(f"✅ Uptime Kuma monitoring enabled: {Config.UPTIME_KUMA_URL}")
+else:
+    logger.info("⚠️ Uptime Kuma monitoring disabled (UPTIME_KUMA_URL not set)")
 
 # Initialize config routes Blueprint
 config_routes_module.init_config_routes(app, Config, logger, helpers_module, decorator_module)

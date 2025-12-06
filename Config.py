@@ -45,6 +45,22 @@ USE_SQLITE_ANALYTICS = ANALYTICS_BACKEND == "sqlite"
 # Timezone configuration for consistent datetime display
 TIMEZONE = os.getenv("TIMEZONE", "Europe/Berlin")
 
+# API Server Port (used by APIServer cog and status monitoring)
+API_PORT = int(os.getenv("API_PORT", "5070"))
+
+# Uptime Kuma Monitoring (OPTIONAL)
+# If set, /status command will show detailed monitoring data from Uptime Kuma
+# If not set, /status will only show basic bot status (latency, guilds, uptime)
+UPTIME_KUMA_URL = os.getenv("UPTIME_KUMA_URL")  # None if not set
+UPTIME_KUMA_ENABLED = bool(UPTIME_KUMA_URL)
+
+# Monitor Categories for grouping in status embed
+UPTIME_KUMA_MONITORS = {
+    "core": ["Health Check", "Auth Ping", "WebSocket"],
+    "features": ["Tickets", "Discord OAuth", "Analytics"],
+    "frontend": ["Frontend", "Admin"]
+}
+
 
 # Helper functions
 def get_guild_id():

@@ -1,10 +1,12 @@
 import json
 import logging
-from typing import Any
+from typing import Any, Optional, Dict
+from datetime import datetime
 
 import discord
 from discord import app_commands
 from discord.ext import commands
+import aiohttp
 
 import Config
 from Config import (
@@ -298,14 +300,166 @@ class Utility(commands.Cog):
         )
         return embed
 
-    def create_status_embed(self, bot_user: discord.User, latency: float, guild_count: int) -> discord.Embed:
+    def is_api_cog_loaded(self) -> bool:
+        """Check if APIServer cog is loaded"""
+        return self.bot.get_cog("APIServer") is not None
+    
+    async def fetch_monitoring_data(self) -> Optional[Dict]:
+        """
+        Fetch monitoring data from Flask API
+        
+        Returns:
+            Monitoring data dict or None if unavailable
+        """
+        # Check if Uptime Kuma is configured
+        if not Config.UPTIME_KUMA_ENABLED:
+            logger.debug("Uptime Kuma not configured (UPTIME_KUMA_URL not set)")
+            return None
+        
+        # Check if API cog is loaded
+        if not self.is_api_cog_loaded():
+            logger.debug("APIServer cog not loaded, skipping monitoring data fetch")
+            return None
+        
+        try:
+            # Get API base URL from config (localhost since we're on the same machine)
+            api_url = f"http://localhost:{Config.API_PORT}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{api_url}/api/monitoring/status", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    elif resp.status == 503:
+                        # Not configured (expected if UPTIME_KUMA_URL not set)
+                        logger.debug("Monitoring endpoint returned 503 (not configured)")
+                        return None
+                    else:
+                        logger.warning(f"Monitoring endpoint returned {resp.status}")
+                        return None
+        except Exception as e:
+            logger.debug(f"Could not fetch monitoring data: {e}")
+        return None
+    
+    def get_status_emoji(self, status: str) -> str:
+        """Get emoji for monitor status"""
+        return {
+            "up": "✅",
+            "down": "❌",
+            "degraded": "⚠️",
+            "pending": "🟡"
+        }.get(status.lower(), "⚪")
+    
+    def format_monitor_name(self, name: str) -> str:
+        """
+        Format monitor name for display
+        
+        Example: "HazeBot API - Health Check" → "Health Check"
+        """
+        if " - " in name:
+            return name.split(" - ", 1)[1]
+        return name
+    
+    def format_timestamp(self, iso_timestamp: str) -> str:
+        """Format ISO timestamp to relative time"""
+        try:
+            dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
+            now = datetime.now(dt.tzinfo)
+            delta = now - dt
+            
+            if delta.total_seconds() < 60:
+                return f"{int(delta.total_seconds())}s ago"
+            elif delta.total_seconds() < 3600:
+                return f"{int(delta.total_seconds() // 60)}m ago"
+            elif delta.total_seconds() < 86400:
+                return f"{int(delta.total_seconds() // 3600)}h ago"
+            else:
+                return f"{int(delta.total_seconds() // 86400)}d ago"
+        except:
+            return "Unknown"
+    
+    def create_status_embed(
+        self, 
+        bot_user: discord.User, 
+        latency: float, 
+        guild_count: int,
+        monitoring_data: Optional[Dict] = None
+    ) -> discord.Embed:
+        """
+        Create status embed with optional monitoring data
+        
+        Args:
+            bot_user: Bot user object
+            latency: Bot latency in seconds
+            guild_count: Number of guilds
+            monitoring_data: Optional monitoring data from Uptime Kuma
+        """
+        # Determine title and description based on monitoring availability
+        if monitoring_data:
+            title = "💖 HazeBot Status Dashboard"
+            description = "Comprehensive bot & API monitoring"
+        else:
+            title = f"{BotName} Status"
+            description = "The bot is online and fabulous! 💖"
+        
         embed = discord.Embed(
-            title=f"{BotName} Status",
-            description="The bot is online and fabulous! 💖",
+            title=title,
+            description=description,
             color=Config.PINK,
         )
-        embed.add_field(name="Latency", value=f"{round(latency * 1000)} ms")
-        embed.add_field(name="Guilds", value=f"{guild_count}")
+        
+        # Bot Status
+        bot_status = f"• **Latency:** {round(latency * 1000)}ms\n• **Guilds:** {guild_count}"
+        embed.add_field(name="📊 Bot Status", value=bot_status, inline=False)
+        
+        # Monitoring Data (if available)
+        if monitoring_data:
+            monitors = monitoring_data.get("monitors", [])
+            
+            # Group monitors by category
+            core_services = [m for m in monitors if m.get("category") == "core"]
+            features = [m for m in monitors if m.get("category") == "features"]
+            frontend = [m for m in monitors if m.get("category") == "frontend"]
+            
+            # Core Services
+            if core_services:
+                core_text = "\n".join([
+                    f"{self.get_status_emoji(m['status'])} **{self.format_monitor_name(m['name'])}** | {m['uptime']:.2f}%"
+                    for m in core_services
+                ])
+                embed.add_field(name="🌐 Core Services", value=core_text, inline=False)
+            
+            # Features
+            if features:
+                features_text = "\n".join([
+                    f"{self.get_status_emoji(m['status'])} **{self.format_monitor_name(m['name'])}** | {m['uptime']:.2f}%"
+                    for m in features
+                ])
+                embed.add_field(name="🎯 Features", value=features_text, inline=False)
+            
+            # Frontend
+            if frontend:
+                frontend_text = "\n".join([
+                    f"{self.get_status_emoji(m['status'])} **{self.format_monitor_name(m['name'])}** | {m['uptime']:.2f}%"
+                    for m in frontend
+                ])
+                embed.add_field(name="💻 Frontend", value=frontend_text, inline=False)
+            
+            # Overall Status
+            overall = monitoring_data.get("overall_status", "unknown")
+            overall_emoji = {
+                "operational": "🟢",
+                "degraded": "🟡",
+                "down": "🔴",
+                "unknown": "⚪"
+            }.get(overall, "⚪")
+            
+            last_update = monitoring_data.get("last_update", "Unknown")
+            embed.add_field(
+                name="📈 Overall Status",
+                value=f"{overall_emoji} **{overall.title()}**\nLast Check: {self.format_timestamp(last_update)}",
+                inline=False
+            )
+        
         set_pink_footer(embed, bot=bot_user)
         return embed
 
@@ -368,19 +522,35 @@ class Utility(commands.Cog):
         💖 Shows bot status and basic info in pink.
         """
         logger.info(f"Prefix command !status used by {ctx.author} in {ctx.guild}")
-        embed = self.create_status_embed(self.bot.user, self.bot.latency, len(self.bot.guilds))
+        
+        # Fetch monitoring data (silently fails if unavailable)
+        monitoring_data = await self.fetch_monitoring_data()
+        
+        embed = self.create_status_embed(
+            self.bot.user, 
+            self.bot.latency, 
+            len(self.bot.guilds),
+            monitoring_data
+        )
         await ctx.send(embed=embed)
 
     # /status (Slash)
     @app_commands.command(name="status", description="💖 Shows bot status and basic info in pink.")
     @app_commands.guilds(discord.Object(id=get_guild_id()))
     async def status_slash(self, interaction: discord.Interaction) -> None:
+        # Defer response since we might need to wait for API
+        await interaction.response.defer()
+        
+        # Fetch monitoring data (silently fails if unavailable)
+        monitoring_data = await self.fetch_monitoring_data()
+        
         embed = self.create_status_embed(
             interaction.client.user,
             interaction.client.latency,
             len(interaction.client.guilds),
+            monitoring_data
         )
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        await interaction.followup.send(embed=embed)
         logger.info(f"Slash command /status used by {interaction.user} in {interaction.guild}")
 
     # !clear (Prefix) - Only prefix, no slash
