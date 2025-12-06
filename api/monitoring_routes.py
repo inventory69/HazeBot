@@ -139,7 +139,7 @@ def parse_uptime_kuma_data(data: dict) -> list:
                     "last_check": datetime.utcnow().isoformat() + 'Z'
                 })
         
-        logger.info(f"Parsed {len(monitors)} monitors from Uptime Kuma")
+        logger.debug(f"Parsed {len(monitors)} monitors from Uptime Kuma")
         
     except Exception as e:
         logger.error(f"Error parsing Uptime Kuma data: {e}", exc_info=True)

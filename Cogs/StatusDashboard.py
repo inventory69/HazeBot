@@ -29,6 +29,7 @@ class StatusDashboard(commands.Cog):
         self.bot = bot
         self.status_message_id: Optional[int] = None
         self.status_channel_id: Optional[int] = STATUS_CHANNEL_ID
+        self._setup_complete = False  # Flag to prevent duplicate posts
         
         # Load saved data
         self._load_dashboard_data()
@@ -36,7 +37,6 @@ class StatusDashboard(commands.Cog):
         # Start background task
         if STATUS_DASHBOARD_CONFIG.get('enabled', True):
             self.update_status_dashboard.start()
-            logger.info("📊 [StatusDashboard] Background update task started")
         else:
             logger.info("📊 [StatusDashboard] Status dashboard is disabled")
 
@@ -50,6 +50,10 @@ class StatusDashboard(commands.Cog):
         """Background task to update status embed"""
         try:
             if not STATUS_DASHBOARD_CONFIG.get('enabled', True):
+                return
+            
+            # Skip first run if setup not complete yet (prevents duplicate post)
+            if not self._setup_complete:
                 return
             
             await self.post_or_update_status()
@@ -176,7 +180,12 @@ class StatusDashboard(commands.Cog):
         
         # Post or update status
         await self.post_or_update_status()
+        
+        # Mark setup as complete (allows background task to run)
+        self._setup_complete = True
+        
         logger.info("📊 [StatusDashboard] Status dashboard setup complete")
+        logger.info(f"📊 [StatusDashboard] Background update task running (interval: {STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5)} minutes)")
 
     def _load_dashboard_data(self):
         """Load status dashboard data from file"""
