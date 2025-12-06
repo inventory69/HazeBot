@@ -438,31 +438,59 @@ class Utility(commands.Cog):
             features = [m for m in monitors if m.get("category") == "features"]
             frontend = [m for m in monitors if m.get("category") == "frontend"]
             
-            # Helper function to format monitor line with priority, status, uptime, and ping
+            # Helper function to format monitor line
             def format_monitor_line(m: dict) -> str:
-                priority = self.get_priority_emoji(m.get("priority", "low"))
                 status = self.get_status_emoji(m["status"])
                 name = self.format_monitor_name(m["name"])
                 uptime = m["uptime"]
+                priority = m.get("priority", "low")
+                
+                # Build status line with clear formatting
+                # Format: ✅ Name ━ 99.93% ━ 34ms [CRITICAL]
+                line_parts = [f"{status} {name}"]
+                
+                # Add uptime with visual bar
+                if uptime >= 99.5:
+                    uptime_indicator = "�"
+                elif uptime >= 95:
+                    uptime_indicator = "🟡"
+                else:
+                    uptime_indicator = "�"
+                line_parts.append(f"{uptime_indicator} {uptime:.2f}%")
                 
                 # Add ping if available
-                ping_text = ""
                 if m.get("avg_ping") is not None:
-                    ping_text = f" • {int(m['avg_ping'])}ms"
+                    ping = int(m['avg_ping'])
+                    if ping < 100:
+                        ping_indicator = "⚡"
+                    elif ping < 300:
+                        ping_indicator = "📶"
+                    else:
+                        ping_indicator = "🐌"
+                    line_parts.append(f"{ping_indicator} {ping}ms")
                 
-                return f"{priority} {status} **{name}** {uptime:.2f}%{ping_text}"
+                # Add priority badge for critical/high
+                if priority == "critical":
+                    line_parts.append("⚠️ CRITICAL")
+                elif priority == "high":
+                    line_parts.append("⚠️ HIGH")
+                
+                return " ━ ".join(line_parts)
             
             # Count up/down monitors per category
             def get_category_summary(category_monitors: list) -> str:
                 up_count = sum(1 for m in category_monitors if m["status"] == "up")
                 total = len(category_monitors)
-                return f"({up_count}/{total} UP)"
+                if up_count == total:
+                    return f"✅ All Operational ({total}/{total})"
+                else:
+                    return f"⚠️ {up_count}/{total} Operational"
             
             # Core Services
             if core_services:
                 core_text = "\n".join([format_monitor_line(m) for m in core_services])
                 embed.add_field(
-                    name=f"� Core Services {get_category_summary(core_services)}", 
+                    name=f"🌐 Core Services - {get_category_summary(core_services)}", 
                     value=core_text, 
                     inline=False
                 )
@@ -471,7 +499,7 @@ class Utility(commands.Cog):
             if features:
                 features_text = "\n".join([format_monitor_line(m) for m in features])
                 embed.add_field(
-                    name=f"🎯 Features {get_category_summary(features)}", 
+                    name=f"🎯 Features - {get_category_summary(features)}", 
                     value=features_text, 
                     inline=False
                 )
@@ -480,7 +508,7 @@ class Utility(commands.Cog):
             if frontend:
                 frontend_text = "\n".join([format_monitor_line(m) for m in frontend])
                 embed.add_field(
-                    name=f"💻 Frontend {get_category_summary(frontend)}", 
+                    name=f"💻 Frontend - {get_category_summary(frontend)}", 
                     value=frontend_text, 
                     inline=False
                 )
