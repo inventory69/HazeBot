@@ -313,7 +313,7 @@ def register_socketio_handlers(socketio_instance):
         cached_messages = cache.get(cache_key)
         
         if cached_messages is not None:
-            logger.info(f"✅ Serving {len(cached_messages)} message(s) from cache (WebSocket join_ticket)")
+            logger.debug(f"✅ Serving {len(cached_messages)} message(s) from cache (WebSocket join_ticket)")
             emit("message_history", {"ticket_id": ticket_id, "messages": cached_messages})
             return
 

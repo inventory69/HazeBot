@@ -935,7 +935,7 @@ def get_ticket_messages_endpoint(ticket_id):
         cached_messages = cache.get(cache_key)
         
         if cached_messages is not None:
-            logger.info(f"✅ Serving {len(cached_messages)} message(s) from cache (REST API)")
+            logger.debug(f"✅ Serving {len(cached_messages)} message(s) from cache (REST API)")
             return jsonify({"messages": cached_messages, "from_cache": True})
 
         from Cogs.TicketSystem import load_tickets
