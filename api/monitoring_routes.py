@@ -64,15 +64,7 @@ async def get_monitoring_status():
                         "status_code": resp.status
                     }), 502
                 
-                # Get JSON data
-                content_type = resp.headers.get('Content-Type', '')
-                if 'application/json' not in content_type:
-                    logger.warning(f"Uptime Kuma returned unexpected content type: {content_type}")
-                    return jsonify({
-                        "error": "Uptime Kuma did not return JSON",
-                        "content_type": content_type
-                    }), 502
-                
+                # Get JSON data (API endpoint returns JSON directly)
                 data = await resp.json()
                 logger.debug(f"Received data from Uptime Kuma: {list(data.keys())}")
                 
