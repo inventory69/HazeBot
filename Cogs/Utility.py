@@ -344,9 +344,10 @@ class Utility(commands.Cog):
         """Get emoji for monitor status"""
         return {
             "up": "✅",
+            "up-pending": "✅",  # Show as UP (monitoring issue, not service issue)
             "down": "❌",
             "degraded": "⚠️",
-            "pending": "🟡"
+            "pending": "�"  # Real pending (low uptime)
         }.get(status.lower(), "⚪")
     
     def get_priority_emoji(self, priority: str) -> str:
@@ -444,14 +445,18 @@ class Utility(commands.Cog):
                 name = self.format_monitor_name(m["name"])
                 uptime = m["uptime"]
                 priority = m.get("priority", "low")
+                monitor_status = m["status"]
                 
                 # Build clean status line: ✅ Name • 99.93% • 34ms • CRITICAL
                 line_parts = [f"{status} **{name}**", f"{uptime:.2f}%"]
                 
-                # Add ping if available
+                # Add ping if available, or monitoring note for up-pending
                 if m.get("avg_ping") is not None:
                     ping = int(m['avg_ping'])
                     line_parts.append(f"⚡ {ping}ms")
+                elif monitor_status == "up-pending":
+                    # No ping data but service is working - monitoring issue
+                    line_parts.append("ℹ️ Monitoring")
                 
                 # Add priority badge only for critical/high
                 if priority == "critical":
@@ -463,12 +468,14 @@ class Utility(commands.Cog):
             
             # Count up/down monitors per category
             def get_category_summary(category_monitors: list) -> str:
-                up_count = sum(1 for m in category_monitors if m["status"] == "up")
+                # Count as operational: "up" or "up-pending" (monitoring issue, not service issue)
+                operational_count = sum(1 for m in category_monitors 
+                                       if m["status"] in ["up", "up-pending"])
                 total = len(category_monitors)
-                if up_count == total:
+                if operational_count == total:
                     return f"✅ All Operational ({total}/{total})"
                 else:
-                    return f"⚠️ {up_count}/{total} Operational"
+                    return f"⚠️ {operational_count}/{total} Operational"
             
             # Core Services
             if core_services:

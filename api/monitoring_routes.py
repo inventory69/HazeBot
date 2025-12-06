@@ -167,8 +167,18 @@ def parse_uptime_kuma_data(base_data: dict, heartbeat_data: dict = None) -> list
                     last_ping = None
                     last_check = None
                 
-                # Convert status code to string
-                status = "up" if status_code == 1 else "down" if status_code == 0 else "pending"
+                # Convert status code to string with smart pending logic
+                # Status codes: 1=up, 0=down, 2=pending
+                if status_code == 1:
+                    status = "up"
+                elif status_code == 0:
+                    status = "down"
+                else:  # status_code == 2 (pending)
+                    # Smart logic: if uptime is good (>98%), treat as operational with monitoring note
+                    if uptime_24h >= 98:
+                        status = "up-pending"  # Working but monitoring unclear
+                    else:
+                        status = "pending"  # Real issue - low uptime
                 
                 # Calculate average ping from heartbeats (if available)
                 avg_ping = None
@@ -252,12 +262,16 @@ def calculate_overall_status(monitors: list) -> str:
     
     # Count monitors by status
     down_count = sum(1 for m in monitors if m.get("status") == "down")
-    pending_count = sum(1 for m in monitors if m.get("status") == "pending")
+    # Only count pending with low uptime as degraded
+    pending_with_low_uptime = sum(1 for m in monitors 
+                                   if m.get("status") == "pending" 
+                                   and m.get("uptime", 100) < 98)
     
     # Determine overall status
+    # Note: "up-pending" is treated as operational (monitoring issue, not service issue)
     if down_count > 0:
         return "down"
-    elif pending_count > 0:
+    elif pending_with_low_uptime > 0:
         return "degraded"
     else:
         return "operational"
