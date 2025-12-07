@@ -71,10 +71,10 @@ def init_ticket_routes(
     vf["tickets.assign_ticket_endpoint"] = token_required(
         require_permission("all")(vf["tickets.assign_ticket_endpoint"])
     )
-    vf["tickets.close_ticket_endpoint"] = token_required(require_permission("all")(vf["tickets.close_ticket_endpoint"]))
-    vf["tickets.reopen_ticket_endpoint"] = token_required(
-        require_permission("all")(vf["tickets.reopen_ticket_endpoint"])
-    )
+    # FIX: Remove require_permission("all") - Permission check is done in function with is_allowed_for_ticket_actions()
+    # This allows ticket creators to close/reopen their own tickets
+    vf["tickets.close_ticket_endpoint"] = token_required(vf["tickets.close_ticket_endpoint"])
+    vf["tickets.reopen_ticket_endpoint"] = token_required(vf["tickets.reopen_ticket_endpoint"])
     vf["tickets.get_ticket_messages_endpoint"] = token_required(vf["tickets.get_ticket_messages_endpoint"])
     vf["tickets.send_ticket_message_endpoint"] = token_required(vf["tickets.send_ticket_message_endpoint"])
 
