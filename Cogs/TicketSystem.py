@@ -95,25 +95,41 @@ async def save_counter(num: int) -> None:
 # === Permission helper function ===
 # Checks if a user is allowed to perform a specific action on a ticket
 def is_allowed_for_ticket_actions(user: discord.User, ticket_data: Dict[str, Any], action: str) -> bool:
+    logger.info(f"[PERMISSION CHECK] Action: {action}")
+    logger.info(f"[PERMISSION CHECK] User ID: {user.id} (type: {type(user.id)})")
+    logger.info(f"[PERMISSION CHECK] Ticket user_id: {ticket_data.get('user_id')} (type: {type(ticket_data.get('user_id'))})")
+    logger.info(f"[PERMISSION CHECK] User roles: {[role.id for role in user.roles]}")
+    logger.info(f"[PERMISSION CHECK] User ID == Ticket user_id: {user.id == ticket_data['user_id']}")
+    
     # If ticket is closed, only allow Reopen for creator, admins, or moderators
     if ticket_data["status"] == "Closed":
         if action == "Reopen":
-            return user.id == ticket_data["user_id"] or any(
+            result = user.id == ticket_data["user_id"] or any(
                 role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles
             )
+            logger.info(f"[PERMISSION CHECK] Reopen closed ticket result: {result}")
+            return result
+        logger.info("[PERMISSION CHECK] Ticket closed - action not allowed")
         return False
     # Claim only for Admins or Moderators
     if action == "Claim":
-        return any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
+        result = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
+        logger.info(f"[PERMISSION CHECK] Claim result: {result}")
+        return result
     # Assign only for Admins
     if action == "Assign":
-        return any(role.id == ADMIN_ROLE_ID for role in user.roles)
+        result = any(role.id == ADMIN_ROLE_ID for role in user.roles)
+        logger.info(f"[PERMISSION CHECK] Assign result: {result}")
+        return result
     # Close for creator, Admins, or Moderators
     elif action == "Close":
-        return user.id == ticket_data["user_id"] or any(
-            role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles
-        )
+        is_creator = user.id == ticket_data["user_id"]
+        is_staff = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in user.roles)
+        result = is_creator or is_staff
+        logger.info(f"[PERMISSION CHECK] Close - is_creator: {is_creator}, is_staff: {is_staff}, result: {result}")
+        return result
     # Status for everyone
+    logger.info("[PERMISSION CHECK] Default allow (Status)")
     return True
 
 
