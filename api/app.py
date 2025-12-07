@@ -39,6 +39,7 @@ import api.notification_routes as notification_routes_module
 import api.rocket_league_routes as rocket_league_routes_module
 import api.ticket_routes as ticket_routes_module
 import api.user_routes as user_routes_module
+import api.debug_routes as debug_routes_module
 
 # Import error tracking module for error handling
 import api.error_tracking as error_tracking_module
@@ -179,6 +180,10 @@ app.register_blueprint(auth_routes_bp)
 # Initialize monitoring routes Blueprint (Uptime Kuma proxy)
 monitoring_bp = monitoring_routes_module.monitoring_bp
 app.register_blueprint(monitoring_bp)
+
+# Initialize debug routes Blueprint (error reporting)
+debug_bp = debug_routes_module.debug_bp
+app.register_blueprint(debug_bp)
 
 # Log monitoring status on startup
 if Config.UPTIME_KUMA_ENABLED:
