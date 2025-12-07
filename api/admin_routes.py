@@ -132,8 +132,17 @@ def get_active_sessions_endpoint():
                 "device_info": session_data.get("device_info", "Unknown"),
             }
             
+            # Add special indicator for uptime_kuma_monitor
+            if session_data.get("username") == "uptime_kuma_monitor":
+                session_entry["is_monitor"] = True
+                session_entry["monitor_type"] = "Uptime Kuma"
+                session_entry["monitor_status"] = "active" if seconds_ago < 60 else "stale"
+            
             # Keep only the most recent session per user
-            if discord_id not in user_sessions or last_seen > datetime.fromisoformat(user_sessions[discord_id]["last_seen"]):
+            if (
+                discord_id not in user_sessions
+                or last_seen > datetime.fromisoformat(user_sessions[discord_id]["last_seen"])
+            ):
                 user_sessions[discord_id] = session_entry
                 
         except Exception:
@@ -162,6 +171,12 @@ def get_active_sessions_endpoint():
                         activity["avatar_url"] = str(member.display_avatar.url) if member.display_avatar else None
             except Exception:
                 pass  # Silently fail if user not found
+
+    # Filter out uptime_kuma_monitor from recent activity (keep only in active sessions)
+    recent_activity_list = [
+        activity for activity in recent_activity_list 
+        if activity.get("username") != "uptime_kuma_monitor"
+    ]
 
     return jsonify(
         {
