@@ -65,7 +65,10 @@ def receive_error_report():
         
         # Extract device info
         device = data.get("device", {})
-        device_str = f"{device.get('platform', 'Unknown')} {device.get('version', '')} | App: {device.get('app_version', 'Unknown')}"
+        platform = device.get('platform', 'Unknown')
+        version = device.get('version', '')
+        app_version = device.get('app_version', 'Unknown')
+        device_str = f"{platform} {version} | App: {app_version}"
         
         # Log error report header
         logger.error("=" * 80)

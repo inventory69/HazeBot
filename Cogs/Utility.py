@@ -384,7 +384,7 @@ class Utility(commands.Cog):
                 return f"{int(delta.total_seconds() // 3600)}h ago"
             else:
                 return f"{int(delta.total_seconds() // 86400)}d ago"
-        except:
+        except Exception:
             return "Unknown"
     
     def format_timestamp_discord(self, iso_timestamp: str) -> str:
@@ -393,7 +393,7 @@ class Utility(commands.Cog):
             dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
             unix_timestamp = int(dt.timestamp())
             return f"<t:{unix_timestamp}:R>"
-        except:
+        except Exception:
             return "Unknown"
     
     def create_status_embed(

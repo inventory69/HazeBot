@@ -966,7 +966,7 @@ def reopen_ticket_endpoint(ticket_id):
         # Log action
         log_action(request.username, "reopen_ticket", {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num")})
 
-        logger.info(f"[REOPEN TICKET] Success! Returning 200 OK")
+        logger.info("[REOPEN TICKET] Success! Returning 200 OK")
         return jsonify({"success": True, "message": result.get("message", "Ticket reopened successfully")})
 
     except Exception as e:

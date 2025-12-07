@@ -133,7 +133,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                     checks["analytics"] = {"status": "ok", "enabled": True}
                 else:
                     checks["analytics"] = {"status": "warning", "enabled": False}
-            except Exception as e:
+            except Exception:
                 checks["analytics"] = {"status": "info", "message": "not_initialized"}
             
             # Error Tracker Check
@@ -143,7 +143,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                     checks["error_tracker"] = {"status": "ok", "enabled": True}
                 else:
                     checks["error_tracker"] = {"status": "warning", "enabled": False}
-            except Exception as e:
+            except Exception:
                 checks["error_tracker"] = {"status": "info", "message": "not_initialized"}
             
             health_status["checks"] = checks
@@ -388,11 +388,11 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
 
         if frontend_source == "mobile":
             # Mobile Apps (Android/iOS) → Deep Link
-            logger.info(f"📱 Redirecting to Mobile Deep Link")
+            logger.info("📱 Redirecting to Mobile Deep Link")
             return redirect(f"hazebot://oauth?token={token}")
         elif frontend_source == "analytics":
             # Analytics Dashboard → Relative path on api.haze.pro
-            logger.info(f"📊 Redirecting to Analytics Dashboard")
+            logger.info("📊 Redirecting to Analytics Dashboard")
             return redirect(f"https://api.haze.pro/analytics/analytics_dashboard.html?token={token}")
         else:
             # Flutter Web App (default) → admin.haze.pro
@@ -555,7 +555,6 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             return jsonify({"error": "Invalid monitoring secret"}), 401
         
         # Generate long-lived token for monitoring
-        from datetime import datetime
         expiry_date = Config.get_utc_now().replace(tzinfo=None) + timedelta(days=90)  # 90 days
         
         monitoring_token = jwt.encode(
