@@ -786,9 +786,31 @@ def close_ticket_endpoint(ticket_id):
         logger.info(f"[CLOSE TICKET] Request headers: {dict(request.headers)}")
         logger.info(f"[CLOSE TICKET] Request data: {request.get_json()}")
         
+        # Manual token validation (since @token_required decorator was removed)
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            logger.error("[CLOSE TICKET] Missing or invalid Authorization header")
+            return jsonify({"error": "Unauthorized: Missing or invalid token"}), 401
+
+        import jwt
+        token = auth_header.split(" ")[1]
+        try:
+            data = jwt.decode(token, Config.JWT_SECRET, algorithms=["HS256"])
+            user_discord_id = data.get("discord_id")
+            if not user_discord_id:
+                logger.error("[CLOSE TICKET] Token missing discord_id")
+                return jsonify({"error": "Unauthorized: Invalid token"}), 401
+            logger.info(f"[CLOSE TICKET] Authenticated user: {data.get('user')} (Discord ID: {user_discord_id})")
+        except jwt.ExpiredSignatureError:
+            logger.error("[CLOSE TICKET] Token expired")
+            return jsonify({"error": "Unauthorized: Token expired"}), 401
+        except jwt.InvalidTokenError as e:
+            logger.error(f"[CLOSE TICKET] Invalid token: {e}")
+            return jsonify({"error": "Unauthorized: Invalid token"}), 401
+        
         from flask import current_app
 
-        from Cogs.TicketSystem import close_ticket_from_api, load_tickets
+        from Cogs.TicketSystem import close_ticket_from_api, load_tickets, is_allowed_for_ticket_actions
 
         bot = current_app.config.get("bot_instance")
         if not bot:
@@ -815,6 +837,23 @@ def close_ticket_endpoint(ticket_id):
         if ticket.get("status") == "Closed":
             logger.warning(f"[CLOSE TICKET] Ticket {ticket_id} already closed!")
             return jsonify({"error": "Ticket is already closed"}), 400
+
+        # Permission check: Only ticket creator, admin, or moderator can close
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            logger.error("[CLOSE TICKET] Guild not found!")
+            return jsonify({"error": "Server configuration error"}), 500
+
+        user = guild.get_member(int(user_discord_id))
+        if not user:
+            logger.error(f"[CLOSE TICKET] User {user_discord_id} not found in guild!")
+            return jsonify({"error": "User not found in server"}), 404
+
+        if not is_allowed_for_ticket_actions(user, ticket, "Close"):
+            logger.warning(f"[CLOSE TICKET] User {user.name} not authorized to close ticket {ticket_id}")
+            return jsonify({"error": "Insufficient permissions to close this ticket"}), 403
+
+        logger.info(f"[CLOSE TICKET] User {user.name} authorized to close ticket")
 
         channel_id = ticket.get("channel_id")
 
@@ -859,9 +898,31 @@ def reopen_ticket_endpoint(ticket_id):
     try:
         logger.info(f"[REOPEN TICKET] Received request for ticket_id: {ticket_id}")
         
+        # Manual token validation (since @token_required decorator was removed)
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            logger.error("[REOPEN TICKET] Missing or invalid Authorization header")
+            return jsonify({"error": "Unauthorized: Missing or invalid token"}), 401
+
+        import jwt
+        token = auth_header.split(" ")[1]
+        try:
+            data = jwt.decode(token, Config.JWT_SECRET, algorithms=["HS256"])
+            user_discord_id = data.get("discord_id")
+            if not user_discord_id:
+                logger.error("[REOPEN TICKET] Token missing discord_id")
+                return jsonify({"error": "Unauthorized: Invalid token"}), 401
+            logger.info(f"[REOPEN TICKET] Authenticated user: {data.get('user')} (Discord ID: {user_discord_id})")
+        except jwt.ExpiredSignatureError:
+            logger.error("[REOPEN TICKET] Token expired")
+            return jsonify({"error": "Unauthorized: Token expired"}), 401
+        except jwt.InvalidTokenError as e:
+            logger.error(f"[REOPEN TICKET] Invalid token: {e}")
+            return jsonify({"error": "Unauthorized: Invalid token"}), 401
+        
         from flask import current_app
 
-        from Cogs.TicketSystem import load_tickets, reopen_ticket_from_api
+        from Cogs.TicketSystem import load_tickets, reopen_ticket_from_api, is_allowed_for_ticket_actions
 
         bot = current_app.config.get("bot_instance")
         if not bot:
@@ -881,6 +942,23 @@ def reopen_ticket_endpoint(ticket_id):
             return jsonify({"error": "Ticket not found"}), 404
 
         logger.info(f"[REOPEN TICKET] Found ticket: {ticket.get('ticket_num')}, status: {ticket.get('status')}")
+
+        # Permission check: Only ticket creator, admin, or moderator can reopen
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            logger.error("[REOPEN TICKET] Guild not found!")
+            return jsonify({"error": "Server configuration error"}), 500
+
+        user = guild.get_member(int(user_discord_id))
+        if not user:
+            logger.error(f"[REOPEN TICKET] User {user_discord_id} not found in guild!")
+            return jsonify({"error": "User not found in server"}), 404
+
+        if not is_allowed_for_ticket_actions(user, ticket, "Reopen"):
+            logger.warning(f"[REOPEN TICKET] User {user.name} not authorized to reopen ticket {ticket_id}")
+            return jsonify({"error": "Insufficient permissions to reopen this ticket"}), 403
+
+        logger.info(f"[REOPEN TICKET] User {user.name} authorized to reopen ticket")
 
         channel_id = ticket.get("channel_id")
 
