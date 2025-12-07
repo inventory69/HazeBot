@@ -854,6 +854,87 @@ async def close_ticket_from_api(
         return {"success": False, "error": str(e)}
 
 
+async def reopen_ticket_from_api(bot: commands.Bot, channel_id: int, ticket: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Reopen a ticket via API (without Discord Interaction).
+    Mirrors the Discord button reopen logic for consistency.
+
+    Returns: Dict with success status and message
+    """
+    try:
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            return {"success": False, "error": "Channel not found"}
+
+        if ticket.get("status") != "Closed":
+            return {"success": False, "error": "Ticket is not closed"}
+
+        if ticket.get("reopen_count", 0) >= 3:
+            return {"success": False, "error": "This ticket cannot be reopened more than 3 times"}
+
+        # Restore send permissions for creator
+        creator = bot.get_user(ticket["user_id"])
+        if creator:
+            try:
+                await channel.set_permissions(
+                    creator,
+                    view_channel=True,
+                    send_messages=True,
+                    add_reactions=True,
+                    reason=f"Ticket #{ticket['ticket_num']} reopened via API",
+                )
+                logger.info(f"Restored send permissions for creator {creator.name} in reopened ticket.")
+            except Exception as e:
+                logger.error(f"Error restoring permissions for creator: {e}")
+                return {"success": False, "error": f"Failed to restore permissions: {str(e)}"}
+
+        # Update ticket status
+        await update_ticket(
+            channel_id,
+            {
+                "status": "Open",
+                "claimed_by": None,
+                "assigned_to": None,
+                "reopen_count": ticket.get("reopen_count", 0) + 1,
+            },
+        )
+
+        # Unarchive channel
+        await channel.edit(archived=False)
+
+        # Update embed and buttons (like the Discord button does)
+        if ticket.get("embed_message_id"):
+            try:
+                msg = await channel.fetch_message(ticket["embed_message_id"])
+                embed = create_ticket_embed(ticket, bot.user)
+                view = TicketControlView()
+                
+                # Enable all buttons for reopened ticket
+                for item in view.children:
+                    if isinstance(item, discord.ui.Button):
+                        if item.custom_id == "ticket:reopen":
+                            item.disabled = True  # Disable reopen button since ticket is now open
+                        else:
+                            item.disabled = False
+
+                await msg.edit(embed=embed, view=view)
+            except discord.NotFound:
+                logger.warning(f"Embed message for ticket {ticket['ticket_num']} not found during reopen.")
+
+        # Send reopen message
+        reopen_count = ticket.get("reopen_count", 0) + 1
+        await channel.send(
+            f"🔓 **Ticket has been reopened!**\nStatus changed to: **Open**\nReopen count: {reopen_count}/3"
+        )
+
+        logger.info(f"Ticket #{ticket.get('ticket_num')} reopened via API.")
+        return {"success": True, "message": "Ticket reopened successfully"}
+
+    except Exception as e:
+        logger.error(f"Error in reopen_ticket_from_api: {e}\n{traceback.format_exc()}")
+        return {"success": False, "error": str(e)}
+
+
 # === View with ticket buttons ===
 class TicketControlView(discord.ui.View):
     def __init__(self):

@@ -855,82 +855,56 @@ def close_ticket_endpoint(ticket_id):
 
 @ticket_bp.route("/api/tickets/<ticket_id>/reopen", methods=["POST"])
 def reopen_ticket_endpoint(ticket_id):
-    """Reopen a closed ticket"""
+    """Reopen a closed ticket using Discord bot functions for consistency"""
     try:
+        logger.info(f"[REOPEN TICKET] Received request for ticket_id: {ticket_id}")
+        
         from flask import current_app
 
-        from Cogs.TicketSystem import load_tickets
-        from Cogs.TicketSystem import update_ticket
+        from Cogs.TicketSystem import load_tickets, reopen_ticket_from_api
 
         bot = current_app.config.get("bot_instance")
         if not bot:
+            logger.error("[REOPEN TICKET] Bot not initialized!")
             return jsonify({"error": "Bot not initialized"}), 503
 
         loop = bot.loop
+
+        # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
+        logger.info(f"[REOPEN TICKET] Loaded {len(tickets)} tickets")
 
         ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
         if not ticket:
+            logger.error(f"[REOPEN TICKET] Ticket {ticket_id} not found!")
             return jsonify({"error": "Ticket not found"}), 404
 
-        if ticket.get("status") != "Closed":
-            return jsonify({"error": "Ticket is not closed"}), 400
-
-        reopen_count = ticket.get("reopen_count", 0)
-        if reopen_count >= 3:
-            return jsonify({"error": "Ticket cannot be reopened more than 3 times"}), 400
+        logger.info(f"[REOPEN TICKET] Found ticket: {ticket.get('ticket_num')}, status: {ticket.get('status')}")
 
         channel_id = ticket.get("channel_id")
-        channel = bot.get_channel(channel_id)
-        if not channel:
-            return jsonify({"error": "Ticket channel not found"}), 404
 
-        # Restore permissions for creator
-        async def restore_permissions():
-            creator = bot.get_user(ticket["user_id"])
-            if creator:
-                try:
-                    await channel.set_permissions(
-                        creator,
-                        view_channel=True,
-                        send_messages=True,
-                        add_reactions=True,
-                        reason=f"Ticket #{ticket['ticket_num']} reopened",
-                    )
-                except Exception as e:
-                    logger.error(f"Error restoring permissions: {e}")
-
-        future = asyncio.run_coroutine_threadsafe(restore_permissions(), loop)
-        future.result(timeout=10)
-
-        # Send reopen message to channel
-        async def send_reopen_message():
-            await channel.send(
-                f"🔓 **Ticket has been reopened!**\nStatus changed to: **Open**\nReopen count: {reopen_count + 1}/3"
-            )
-
-        future = asyncio.run_coroutine_threadsafe(send_reopen_message(), loop)
-        future.result(timeout=10)
-
-        # Update ticket
+        # Use Discord bot function to reopen (ensures button updates, embed refresh, etc.)
+        logger.info(f"[REOPEN TICKET] Calling reopen_ticket_from_api for channel {channel_id}")
         future = asyncio.run_coroutine_threadsafe(
-            update_ticket(
-                channel_id,
-                {
-                    "status": "Open",
-                    "closed_at": None,
-                    "reopen_count": reopen_count + 1,
-                    "reopened_at": datetime.now().isoformat(),
-                },
-            ),
-            loop,
+            reopen_ticket_from_api(bot, channel_id, ticket), loop
         )
-        future.result(timeout=10)
+        result = future.result(timeout=10)
+        logger.info(f"[REOPEN TICKET] Result: {result}")
 
+        if not result.get("success"):
+            logger.error(f"[REOPEN TICKET] Failed: {result.get('error')}")
+            return jsonify({"error": result.get("error", "Unknown error")}), 400
+
+        # WebSocket notification for real-time updates
+        if notify_ticket_update:
+            notify_ticket_update(ticket_id, "ticket_reopened", {})
+
+        # Log action
         log_action(request.username, "reopen_ticket", {"ticket_id": ticket_id, "ticket_num": ticket.get("ticket_num")})
 
-        return jsonify({"success": True, "message": "Ticket reopened successfully"})
+        logger.info(f"[REOPEN TICKET] Success! Returning 200 OK")
+        return jsonify({"success": True, "message": result.get("message", "Ticket reopened successfully")})
 
     except Exception as e:
         logger.error(f"Error reopening ticket {ticket_id}: {e}\n{traceback.format_exc()}")
