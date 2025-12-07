@@ -134,6 +134,7 @@ def get_active_sessions_endpoint():
             
             # Add special indicator for uptime_kuma_monitor
             if session_data.get("username") == "uptime_kuma_monitor":
+                session_entry["username"] = "Invy McPingFace"  # Friendly monitor name
                 session_entry["is_monitor"] = True
                 session_entry["monitor_type"] = "Uptime Kuma"
                 session_entry["monitor_status"] = "active" if seconds_ago < 60 else "stale"

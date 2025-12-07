@@ -369,6 +369,23 @@ COG_METADATA = {
             "Event Listeners",
         ],
     },
+    "StatusDashboard": {
+        "description": (
+            "Maintains a live-updating status embed in a dedicated channel "
+            "with real-time service monitoring"
+        ),
+        "icon": "📊",
+        "category": "monitoring",
+        "features": [
+            "Live Status Embed",
+            "Real-time Updates",
+            "Service Monitoring",
+            "Configurable Update Interval",
+            "Bot Statistics Display",
+            "Utility Cog Integration",
+            "Auto-Message Management",
+        ],
+    },
 }
 
 
