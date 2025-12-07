@@ -1109,13 +1109,13 @@ class TicketSystem(commands.Cog):
         await interaction.response.send_message(embed=embed, view=TicketView(), ephemeral=True)
 
     async def _restore_ticket_views(self) -> None:
-        """Restore views for open and closed tickets - called on ready and after reload"""
-        logger.info("TicketSystem Cog ready. Restoring views for open and closed tickets...")
+        """Restore views for all ticket statuses - called on ready and after reload"""
+        logger.info("TicketSystem Cog ready. Restoring views for all tickets...")
         tickets = await load_tickets()
         for ticket in tickets:
-            if ticket["status"] in ["Open", "Closed"]:
-                # Always restore open tickets as user decides when to close
-                # Always restore closed tickets as they are static
+            if ticket["status"] in ["Open", "Claimed", "Assigned", "Closed"]:
+                # Always restore active tickets (Open/Claimed/Assigned) - user decides when to close
+                # Always restore closed tickets as they are static (for reopen button)
                 try:
                     channel = self.bot.get_channel(ticket["channel_id"])
                     if channel and ticket.get("embed_message_id"):
