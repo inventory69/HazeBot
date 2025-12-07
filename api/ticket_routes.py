@@ -782,10 +782,6 @@ def assign_ticket_endpoint(ticket_id):
 def close_ticket_endpoint(ticket_id):
     """Close a ticket with optional message using Discord bot functions for consistency"""
     try:
-        logger.info(f"[CLOSE TICKET] Received request for ticket_id: {ticket_id}")
-        logger.info(f"[CLOSE TICKET] Request headers: {dict(request.headers)}")
-        logger.info(f"[CLOSE TICKET] Request data: {request.get_json()}")
-        
         # Manual token validation (since @token_required decorator was removed)
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -803,7 +799,6 @@ def close_ticket_endpoint(ticket_id):
             if not user_discord_id:
                 logger.error("[CLOSE TICKET] Token missing discord_id")
                 return jsonify({"error": "Unauthorized: Invalid token"}), 401
-            logger.info(f"[CLOSE TICKET] Authenticated user: {data.get('user')} (Discord ID: {user_discord_id})")
         except jwt.ExpiredSignatureError:
             logger.error("[CLOSE TICKET] Token expired")
             return jsonify({"error": "Unauthorized: Token expired"}), 401
@@ -824,14 +819,11 @@ def close_ticket_endpoint(ticket_id):
         # Load ticket data
         future = asyncio.run_coroutine_threadsafe(load_tickets(), loop)
         tickets = future.result(timeout=10)
-        logger.info(f"[CLOSE TICKET] Loaded {len(tickets)} tickets")
 
         ticket = next((t for t in tickets if t.get("ticket_id") == ticket_id), None)
         if not ticket:
             logger.error(f"[CLOSE TICKET] Ticket {ticket_id} not found!")
             return jsonify({"error": "Ticket not found"}), 404
-
-        logger.info(f"[CLOSE TICKET] Found ticket: {ticket.get('ticket_num')}, status: {ticket.get('status')}")
 
         if ticket.get("status") == "Closed":
             logger.warning(f"[CLOSE TICKET] Ticket {ticket_id} already closed!")
@@ -852,17 +844,13 @@ def close_ticket_endpoint(ticket_id):
             logger.warning(f"[CLOSE TICKET] User {user.name} not authorized to close ticket {ticket_id}")
             return jsonify({"error": "Insufficient permissions to close this ticket"}), 403
 
-        logger.info(f"[CLOSE TICKET] User {user.name} authorized to close ticket")
-
         channel_id = ticket.get("channel_id")
 
         # Use Discord bot function to close (ensures transcript, email, button updates, etc.)
-        logger.info(f"[CLOSE TICKET] Calling close_ticket_from_api for channel {channel_id}")
         future = asyncio.run_coroutine_threadsafe(
             close_ticket_from_api(bot, channel_id, ticket, close_message if close_message.strip() else None), loop
         )
         result = future.result(timeout=10)
-        logger.info(f"[CLOSE TICKET] Result: {result}")
 
         if not result.get("success"):
             logger.error(f"[CLOSE TICKET] Failed: {result.get('error')}")
@@ -883,7 +871,6 @@ def close_ticket_endpoint(ticket_id):
             },
         )
 
-        logger.info(f"[CLOSE TICKET] Success! Returning 200 OK")
         return jsonify({"success": True, "message": result.get("message", "Ticket closed successfully")})
 
     except Exception as e:
