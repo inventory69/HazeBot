@@ -793,9 +793,12 @@ def close_ticket_endpoint(ticket_id):
             return jsonify({"error": "Unauthorized: Missing or invalid token"}), 401
 
         import jwt
+        from flask import current_app
+        from Cogs.TicketSystem import close_ticket_from_api, load_tickets, is_allowed_for_ticket_actions
+        
         token = auth_header.split(" ")[1]
         try:
-            data = jwt.decode(token, Config.JWT_SECRET, algorithms=["HS256"])
+            data = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
             user_discord_id = data.get("discord_id")
             if not user_discord_id:
                 logger.error("[CLOSE TICKET] Token missing discord_id")
@@ -807,10 +810,6 @@ def close_ticket_endpoint(ticket_id):
         except jwt.InvalidTokenError as e:
             logger.error(f"[CLOSE TICKET] Invalid token: {e}")
             return jsonify({"error": "Unauthorized: Invalid token"}), 401
-        
-        from flask import current_app
-
-        from Cogs.TicketSystem import close_ticket_from_api, load_tickets, is_allowed_for_ticket_actions
 
         bot = current_app.config.get("bot_instance")
         if not bot:
@@ -905,9 +904,12 @@ def reopen_ticket_endpoint(ticket_id):
             return jsonify({"error": "Unauthorized: Missing or invalid token"}), 401
 
         import jwt
+        from flask import current_app
+        from Cogs.TicketSystem import load_tickets, reopen_ticket_from_api, is_allowed_for_ticket_actions
+        
         token = auth_header.split(" ")[1]
         try:
-            data = jwt.decode(token, Config.JWT_SECRET, algorithms=["HS256"])
+            data = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
             user_discord_id = data.get("discord_id")
             if not user_discord_id:
                 logger.error("[REOPEN TICKET] Token missing discord_id")
@@ -919,10 +921,6 @@ def reopen_ticket_endpoint(ticket_id):
         except jwt.InvalidTokenError as e:
             logger.error(f"[REOPEN TICKET] Invalid token: {e}")
             return jsonify({"error": "Unauthorized: Invalid token"}), 401
-        
-        from flask import current_app
-
-        from Cogs.TicketSystem import load_tickets, reopen_ticket_from_api, is_allowed_for_ticket_actions
 
         bot = current_app.config.get("bot_instance")
         if not bot:
