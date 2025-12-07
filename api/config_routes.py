@@ -198,7 +198,6 @@ def get_config():
         },
         # Status Dashboard Configuration
         "status_dashboard": {
-            "enabled": Config.STATUS_DASHBOARD_CONFIG.get('enabled', True),
             "update_interval_minutes": Config.STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5),
             "show_monitoring": Config.STATUS_DASHBOARD_CONFIG.get('show_monitoring', True),
         },
@@ -237,6 +236,9 @@ def get_config():
 def config_general():
     """Get or update general configuration"""
     if request.method == "GET":
+        # Get StatusDashboard config with defaults
+        status_dashboard_config = Config.STATUS_DASHBOARD_CONFIG if hasattr(Config, "STATUS_DASHBOARD_CONFIG") else {}
+        
         return jsonify(
             {
                 "bot_name": Config.BotName,
@@ -249,6 +251,10 @@ def config_general():
                 if hasattr(Config, "EMBED_FOOTER_TEXT")
                 else "Powered by Haze World 💖",
                 "role_names": Config.ROLE_NAMES if hasattr(Config, "ROLE_NAMES") else {},
+                "status_dashboard": {
+                    "update_interval_minutes": status_dashboard_config.get("update_interval_minutes", 5),
+                    "show_monitoring": status_dashboard_config.get("show_monitoring", True)
+                }
             }
         )
 
@@ -291,6 +297,32 @@ def config_general():
         if "role_names" in data:
             changes.append(f"role_names updated ({len(data['role_names'])} roles)")
             Config.ROLE_NAMES = data["role_names"]
+        if "status_dashboard" in data:
+            # Initialize if not exists
+            if not hasattr(Config, "STATUS_DASHBOARD_CONFIG"):
+                Config.STATUS_DASHBOARD_CONFIG = {}
+            
+            status_config = data["status_dashboard"]
+            
+            # Validate and update update_interval_minutes (1-60 range)
+            if "update_interval_minutes" in status_config:
+                interval = int(status_config["update_interval_minutes"])
+                if interval < 1 or interval > 60:
+                    return jsonify({"error": "update_interval_minutes must be between 1 and 60"}), 400
+                changes.append(
+                    f"status_dashboard.update_interval_minutes: "
+                    f"{Config.STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5)} -> {interval}"
+                )
+                Config.STATUS_DASHBOARD_CONFIG["update_interval_minutes"] = interval
+            
+            # Update show_monitoring
+            if "show_monitoring" in status_config:
+                show_monitoring = bool(status_config["show_monitoring"])
+                changes.append(
+                    f"status_dashboard.show_monitoring: "
+                    f"{Config.STATUS_DASHBOARD_CONFIG.get('show_monitoring', True)} -> {show_monitoring}"
+                )
+                Config.STATUS_DASHBOARD_CONFIG["show_monitoring"] = show_monitoring
 
         # Save to file
         save_config_to_file()
@@ -318,6 +350,10 @@ def reset_general_config():
         "user": "🎒 Lootling",
         "mod": "📦 Slot Keeper",
         "admin": "🧊 Inventory Master",
+    }
+    Config.STATUS_DASHBOARD_CONFIG = {
+        "update_interval_minutes": 5,
+        "show_monitoring": True
     }
 
     # Save to file
@@ -356,6 +392,7 @@ def config_channels():
                 else None,
                 "transcript_channel_id": str(Config.TRANSCRIPT_CHANNEL_ID) if Config.TRANSCRIPT_CHANNEL_ID else None,
                 "tickets_category_id": str(Config.TICKETS_CATEGORY_ID) if Config.TICKETS_CATEGORY_ID else None,
+                "status_channel_id": str(Config.STATUS_CHANNEL_ID) if Config.STATUS_CHANNEL_ID else None,
             }
         )
 
@@ -398,6 +435,7 @@ def reset_channels_config():
     Config.WELCOME_PUBLIC_CHANNEL_ID = Config.CURRENT_IDS["WELCOME_PUBLIC_CHANNEL_ID"]
     Config.TRANSCRIPT_CHANNEL_ID = Config.CURRENT_IDS["TRANSCRIPT_CHANNEL_ID"]
     Config.TICKETS_CATEGORY_ID = Config.CURRENT_IDS["TICKETS_CATEGORY_ID"]
+    Config.STATUS_CHANNEL_ID = Config.CURRENT_IDS.get("STATUS_CHANNEL_ID")
 
     # Save to file
     save_config_to_file()

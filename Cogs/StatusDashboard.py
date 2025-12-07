@@ -24,6 +24,27 @@ STATUS_DASHBOARD_FILE = f"{DATA_DIR}/status_dashboard.json"
 
 class StatusDashboard(commands.Cog):
     """Maintains a live status dashboard in a dedicated channel"""
+    
+    # Cog Metadata for Admin Panel
+    COG_METADATA = {
+        "category": "monitoring",
+        "display_name": "Status Dashboard",
+        "description": (
+            "Maintains a live-updating status embed in a dedicated channel "
+            "with real-time service monitoring"
+        ),
+        "icon": "📊",
+        "features": [
+            "Live status embed updates every N minutes",
+            "Service status monitoring (API, Bot, Database)",
+            "Uptime tracking and display",
+            "Automatic message persistence across restarts",
+            "Configurable update intervals",
+            "Optional Uptime Kuma integration",
+        ],
+        "dependencies": [],
+        "requires_config": ["STATUS_CHANNEL_ID"],
+    }
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -141,7 +162,14 @@ class StatusDashboard(commands.Cog):
                 description="The bot is online and fabulous!",
                 color=Config.PINK,
             )
-            embed.add_field(name="📊 Bot Status", value=f"• **Latency:** {round(self.bot.latency * 1000)}ms\n• **Guilds:** {len(self.bot.guilds)}", inline=False)
+            embed.add_field(
+                name="📊 Bot Status",
+                value=(
+                    f"• **Latency:** {round(self.bot.latency * 1000)}ms\n"
+                    f"• **Guilds:** {len(self.bot.guilds)}"
+                ),
+                inline=False,
+            )
             set_pink_footer(embed, bot=self.bot.user)
         
         # Add last updated timestamp
@@ -173,9 +201,15 @@ class StatusDashboard(commands.Cog):
         if self.status_message_id:
             try:
                 await channel.fetch_message(self.status_message_id)
-                logger.info(f"📊 [StatusDashboard] Found existing status message {self.status_message_id}")
+                logger.info(
+                    f"📊 [StatusDashboard] Found existing status message "
+                    f"{self.status_message_id}"
+                )
             except discord.NotFound:
-                logger.warning(f"📊 [StatusDashboard] Saved message {self.status_message_id} not found, will create new one")
+                logger.warning(
+                    f"📊 [StatusDashboard] Saved message {self.status_message_id} "
+                    f"not found, will create new one"
+                )
                 self.status_message_id = None
         
         # Post or update status
@@ -185,7 +219,11 @@ class StatusDashboard(commands.Cog):
         self._setup_complete = True
         
         logger.info("📊 [StatusDashboard] Status dashboard setup complete")
-        logger.info(f"📊 [StatusDashboard] Background update task running (interval: {STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5)} minutes)")
+        update_interval = STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5)
+        logger.info(
+            f"📊 [StatusDashboard] Background update task running "
+            f"(interval: {update_interval} minutes)"
+        )
 
     def _load_dashboard_data(self):
         """Load status dashboard data from file"""
