@@ -39,6 +39,38 @@ app_usage_file_path = None
 analytics_aggregator = None
 
 
+def _detect_emulator(device_info: str, user_agent: str) -> bool:
+    """
+    Detect if device is an Android emulator based on device info and user agent.
+    
+    Args:
+        device_info: Device information string (e.g., "Google sdk_gphone64_arm64")
+        user_agent: User agent string from request headers
+        
+    Returns:
+        True if device is detected as an emulator, False otherwise
+    """
+    if not device_info or not user_agent:
+        return False
+    
+    # Common Android emulator patterns
+    emulator_patterns = [
+        'sdk_gphone',      # Android Emulator (new versions)
+        'generic',         # Generic Android emulator
+        'emulator',        # Explicit emulator identifier
+        'vbox',           # VirtualBox Android
+        'goldfish',       # Android Goldfish emulator
+        'ranchu',         # Android Ranchu emulator
+        'simulator',      # iOS Simulator (if we ever support iOS)
+    ]
+    
+    device_lower = device_info.lower()
+    ua_lower = user_agent.lower()
+    
+    # Check if any emulator pattern is present in device info or user agent
+    return any(pattern in device_lower or pattern in ua_lower for pattern in emulator_patterns)
+
+
 def init_auth(
     config,
     app=None,
@@ -297,6 +329,9 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
 
             # 🐛 ANALYTICS FIX: Check if this is a debug session
             is_debug_session = "(Debug)" in platform or "(Debug)" in device_info
+            
+            # 📱 EMULATOR DETECTION: Check if device is an Android emulator
+            is_emulator = _detect_emulator(device_info, user_agent)
 
             session_info = {
                 "username": request.username,
@@ -311,6 +346,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "platform": platform,
                 "device_info": device_info,
                 "is_debug": is_debug_session,  # Flag for frontend display
+                "is_emulator": is_emulator,  # Flag for emulator detection
             }
 
             # Check if this is a new session (first time seeing this session_id)
