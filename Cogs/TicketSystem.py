@@ -1247,7 +1247,25 @@ class TicketSystem(commands.Cog):
             for ticket in tickets:
                 if ticket["status"] == "Closed":
                     closed_at_str = ticket.get("closed_at", ticket.get("created_at"))
-                    closed_at = datetime.fromisoformat(closed_at_str)
+                    
+                    # 🐛 BUG FIX: Skip tickets with invalid closed_at date
+                    if not closed_at_str:
+                        logger.warning(f"Ticket {ticket.get('ticket_id', 'unknown')} has no closed_at date, skipping cleanup")
+                        continue
+                    
+                    # Handle both string and datetime objects
+                    try:
+                        if isinstance(closed_at_str, str):
+                            closed_at = datetime.fromisoformat(closed_at_str)
+                        elif isinstance(closed_at_str, datetime):
+                            closed_at = closed_at_str
+                        else:
+                            logger.error(f"Ticket {ticket.get('ticket_id', 'unknown')} has invalid closed_at type: {type(closed_at_str)}")
+                            continue
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Failed to parse closed_at for ticket {ticket.get('ticket_id', 'unknown')}: {e}")
+                        continue
+                    
                     if now - closed_at > timedelta(days=7):
                         to_delete.append(ticket)
             for ticket in to_delete:
