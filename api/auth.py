@@ -274,7 +274,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
 
             # Extract platform and check for debug builds
             platform = request.headers.get("X-Platform", "Unknown")
-            
+
             # 🐛 ANALYTICS FIX: Infer platform from User-Agent if Unknown
             if platform == "Unknown" and user_agent:
                 original_platform = platform
@@ -290,14 +290,14 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     platform = "Linux"
                 elif any(browser in user_agent for browser in ["Chrome", "Firefox", "Safari", "Edge"]):
                     platform = "Web"
-                
+
                 # Only log if we successfully inferred something (not still Unknown)
                 if platform != original_platform and platform != "Unknown":
                     logger.debug(f"📱 Inferred platform: {platform} from User-Agent")
 
             # 🐛 ANALYTICS FIX: Check if this is a debug session
             is_debug_session = "(Debug)" in platform or "(Debug)" in device_info
-            
+
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
@@ -323,9 +323,18 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
 
             # 📊 ANALYTICS FIX: Check if device_info is meaningful (not just generic platform name)
             # Generic device names indicate first request before device_plugin loaded:
-            generic_device_names = ["Android", "iOS", "Windows", "Linux", "macOS", "Unknown", "Web Browser", "Flutter App"]
+            generic_device_names = [
+                "Android",
+                "iOS",
+                "Windows",
+                "Linux",
+                "macOS",
+                "Unknown",
+                "Web Browser",
+                "Flutter App",
+            ]
             has_meaningful_device_info = device_info not in generic_device_names
-            
+
             # Track if device info was upgraded from generic to specific
             device_info_upgraded = False
             if not is_new_session:
@@ -333,18 +342,18 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 if old_device_info in generic_device_names and has_meaningful_device_info:
                     device_info_upgraded = True
                     logger.debug(f"📱 Device info upgraded: {old_device_info} → {device_info}")
-            
+
             # Analytics: Start session tracking when we have meaningful device info
             # - New sessions with specific device info (e.g. "Google Pixel 9 Pro XL")
             # - Existing sessions that upgraded from generic to specific
             should_start_analytics = (
-                analytics_aggregator is not None 
-                and not is_analytics_request 
-                and not is_debug_session 
+                analytics_aggregator is not None
+                and not is_analytics_request
+                and not is_debug_session
                 and has_meaningful_device_info
                 and (is_new_session or device_info_upgraded)
             )
-            
+
             if should_start_analytics:
                 try:
                     analytics_aggregator.start_session(
@@ -360,7 +369,12 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     logger.error(f"Failed to start analytics session: {e}")
 
             # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard + debug + generic device info)
-            if analytics_aggregator is not None and not is_analytics_request and not is_debug_session and has_meaningful_device_info:
+            if (
+                analytics_aggregator is not None
+                and not is_analytics_request
+                and not is_debug_session
+                and has_meaningful_device_info
+            ):
                 # 📊 ANALYTICS FIX: Endpoints to exclude from analytics (reduce polling spam)
                 excluded_endpoints = [
                     "auth_routes.ping",  # Health checks

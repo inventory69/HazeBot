@@ -286,18 +286,18 @@ async def check_user_notification_enabled(user_id: str, notification_type: str) 
 
 
 async def send_notification(
-    user_id: str, 
-    title: str, 
-    body: str, 
-    data: Optional[Dict[str, Any]] = None, 
+    user_id: str,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, Any]] = None,
     notification_type: Optional[str] = None,
-    username: Optional[str] = None
+    username: Optional[str] = None,
 ) -> bool:
     """Send push notification to a user's registered devices.
 
     Uses asyncio.to_thread for the firebase-admin send so the event loop is
     not blocked by network/IO.
-    
+
     Args:
         user_id: Discord user ID
         title: Notification title

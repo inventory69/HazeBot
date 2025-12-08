@@ -37,10 +37,10 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
     def health():
         """
         Enhanced health check endpoint with detailed system status
-        
+
         Query Parameters:
             detailed (str): Set to 'true' for detailed health checks
-            
+
         Returns:
             200: System is healthy
             503: System is degraded or unhealthy
@@ -48,19 +48,19 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         from datetime import datetime
         import psutil
         import os
-        
+
         health_status = {
             "status": "ok",
             "timestamp": datetime.now().isoformat(),
             "service": "HazeBot API",
             "version": os.getenv("API_VERSION", "1.0.0"),
-            "environment": os.getenv("ENVIRONMENT", "production")
+            "environment": os.getenv("ENVIRONMENT", "production"),
         }
-        
+
         # Detailed checks (optional - nur bei ?detailed=true)
         if request.args.get("detailed") == "true":
             checks = {}
-            
+
             # Memory Check
             try:
                 memory = psutil.virtual_memory()
@@ -68,98 +68,100 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
                 checks["memory"] = {
                     "status": "ok" if memory_percent < 90 else "warning",
                     "usage_percent": round(memory_percent, 2),
-                    "available_gb": round(memory.available / (1024**3), 2)
+                    "available_gb": round(memory.available / (1024**3), 2),
                 }
                 if memory_percent >= 95:
                     health_status["status"] = "degraded"
             except Exception as e:
                 checks["memory"] = {"status": "error", "message": str(e)}
                 health_status["status"] = "degraded"
-            
+
             # CPU Check
             try:
                 cpu_percent = psutil.cpu_percent(interval=0.1)
                 checks["cpu"] = {
                     "status": "ok" if cpu_percent < 80 else "warning",
-                    "usage_percent": round(cpu_percent, 2)
+                    "usage_percent": round(cpu_percent, 2),
                 }
             except Exception as e:
                 checks["cpu"] = {"status": "error", "message": str(e)}
-            
+
             # Disk Check
             try:
-                disk = psutil.disk_usage('/')
+                disk = psutil.disk_usage("/")
                 disk_percent = disk.percent
                 checks["disk"] = {
                     "status": "ok" if disk_percent < 85 else "warning",
                     "usage_percent": round(disk_percent, 2),
-                    "free_gb": round(disk.free / (1024**3), 2)
+                    "free_gb": round(disk.free / (1024**3), 2),
                 }
                 if disk_percent >= 95:
                     health_status["status"] = "degraded"
             except Exception as e:
                 checks["disk"] = {"status": "error", "message": str(e)}
-            
+
             # Cache Check
             try:
                 from api.cache import cache
+
                 # Prüfe ob Cache erreichbar ist
                 test_key = "_health_check_test"
                 cache.set(test_key, "ok", ttl=5)
                 cache_test = cache.get(test_key)
                 checks["cache"] = {
                     "status": "ok" if cache_test == "ok" else "warning",
-                    "type": "redis" if hasattr(cache, 'cache') else "simple"
+                    "type": "redis" if hasattr(cache, "cache") else "simple",
                 }
                 cache.delete(test_key)
             except Exception as e:
                 checks["cache"] = {"status": "error", "message": str(e)}
                 health_status["status"] = "degraded"
-            
+
             # Active Sessions Check
             try:
                 session_count = len(active_sessions) if active_sessions else 0
-                checks["sessions"] = {
-                    "status": "ok",
-                    "active_count": session_count
-                }
+                checks["sessions"] = {"status": "ok", "active_count": session_count}
             except Exception as e:
                 checks["sessions"] = {"status": "error", "message": str(e)}
-            
+
             # Database/Analytics Check (wenn verfügbar)
             try:
                 from api.app import analytics
+
                 if analytics:
                     checks["analytics"] = {"status": "ok", "enabled": True}
                 else:
                     checks["analytics"] = {"status": "warning", "enabled": False}
             except Exception:
                 checks["analytics"] = {"status": "info", "message": "not_initialized"}
-            
+
             # Error Tracker Check
             try:
                 from api.app import error_tracker
+
                 if error_tracker:
                     checks["error_tracker"] = {"status": "ok", "enabled": True}
                 else:
                     checks["error_tracker"] = {"status": "warning", "enabled": False}
             except Exception:
                 checks["error_tracker"] = {"status": "info", "message": "not_initialized"}
-            
+
             health_status["checks"] = checks
-            
+
             # Gesamtstatus berechnen
-            error_count = sum(1 for check in checks.values() if isinstance(check, dict) and check.get("status") == "error")
+            error_count = sum(
+                1 for check in checks.values() if isinstance(check, dict) and check.get("status") == "error"
+            )
             if error_count > 2:
                 health_status["status"] = "unhealthy"
-        
+
         # HTTP Status Code basierend auf Status
         status_code = 200
         if health_status["status"] == "degraded":
             status_code = 503
         elif health_status["status"] == "unhealthy":
             status_code = 503
-        
+
         return jsonify(health_status), status_code
 
     @auth_routes.route("/api/auth/login", methods=["POST"])
@@ -207,7 +209,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         """Initiate Discord OAuth2 flow"""
         # Get state parameter from query (to track which frontend initiated OAuth)
         frontend_source = request.args.get("state", "")
-        
+
         # Fallback: Detect from Referer header if state is empty
         if not frontend_source:
             referer = request.headers.get("Referer", "")
@@ -217,25 +219,25 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             elif "admin.haze.pro" in referer:
                 frontend_source = "web"
                 logger.info(f"🔍 Detected Flutter Web from Referer: {referer}")
-        
+
         params = {
             "client_id": DISCORD_CLIENT_ID,
             "redirect_uri": DISCORD_REDIRECT_URI,
             "response_type": "code",
             "scope": "identify guilds.members.read",
         }
-        
+
         # Pass state parameter through Discord OAuth flow
         if frontend_source:
             params["state"] = frontend_source
 
         auth_url = f"{DISCORD_API_ENDPOINT}/oauth2/authorize?{urlencode(params)}"
-        
+
         # Only log when there's an actual source (real user request)
         # Monitoring health checks have empty source and should be silent
         if frontend_source:
             logger.info(f"🔐 Generated OAuth URL for source='{frontend_source}'")
-        
+
         return jsonify({"auth_url": auth_url})
 
     @auth_routes.route("/api/discord/callback", methods=["GET"])
@@ -243,7 +245,7 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         """Handle Discord OAuth2 callback with multi-layer source detection"""
         # Layer 1: State parameter from Discord (most reliable when present)
         state = request.args.get("state", "")
-        
+
         # Layer 2: Referer header detection (robust fallback)
         referer = request.headers.get("Referer", "")
         referer_hint = ""
@@ -255,13 +257,15 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             referer_hint = "analytics"
         elif "admin.haze.pro" in referer:
             referer_hint = "web"
-        
+
         # Determine frontend source with fallback chain
         frontend_source = state or referer_hint or "web"
-        
+
         # Debug logging
-        logger.info(f"🔍 OAuth callback - state: '{state}' | referer: '{referer}' | hint: '{referer_hint}' | using: '{frontend_source}'")
-        
+        logger.info(
+            f"🔍 OAuth callback - state: '{state}' | referer: '{referer}' | hint: '{referer_hint}' | using: '{frontend_source}'"
+        )
+
         code = request.args.get("code")
         if not code:
             return jsonify({"error": "No authorization code provided"}), 400
@@ -529,34 +533,34 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
     def generate_monitoring_token():
         """
         Generate a long-lived JWT token for monitoring services (Uptime Kuma)
-        
+
         Security: Requires admin credentials via Basic Auth or API_MONITORING_SECRET
-        
+
         Request Body (JSON):
             secret (str): Monitoring secret from API_MONITORING_SECRET env var
-        
+
         Returns:
             token (str): Long-lived JWT token (90 days) with monitoring permissions
             expires (str): Expiration timestamp
         """
         # Check for monitoring secret
         monitoring_secret = os.getenv("API_MONITORING_SECRET")
-        
+
         if not monitoring_secret:
             logger.error("❌ API_MONITORING_SECRET not configured")
             return jsonify({"error": "Monitoring token generation not configured"}), 500
-        
+
         # Verify secret from request
         data = request.get_json() or {}
         provided_secret = data.get("secret")
-        
+
         if not provided_secret or provided_secret != monitoring_secret:
             logger.warning(f"❌ Invalid monitoring secret attempt from {request.remote_addr}")
             return jsonify({"error": "Invalid monitoring secret"}), 401
-        
+
         # Generate long-lived token for monitoring
         expiry_date = Config.get_utc_now().replace(tzinfo=None) + timedelta(days=90)  # 90 days
-        
+
         monitoring_token = jwt.encode(
             {
                 "user": "uptime_kuma_monitor",
@@ -570,16 +574,18 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             app.config["SECRET_KEY"],
             algorithm="HS256",
         )
-        
+
         logger.info(f"✅ Generated monitoring token (expires: {expiry_date.isoformat()})")
-        
-        return jsonify({
-            "token": monitoring_token,
-            "expires": expiry_date.isoformat(),
-            "expires_in_days": 90,
-            "permissions": ["health_check", "ping", "analytics_read", "tickets_read"],
-            "note": "Store this token securely. Use it in Authorization header as 'Bearer <token>'"
-        }), 200
+
+        return jsonify(
+            {
+                "token": monitoring_token,
+                "expires": expiry_date.isoformat(),
+                "expires_in_days": 90,
+                "permissions": ["health_check", "ping", "analytics_read", "tickets_read"],
+                "note": "Store this token securely. Use it in Authorization header as 'Bearer <token>'",
+            }
+        ), 200
 
     @auth_routes.route("/api/auth/verify-token", methods=["GET"])
     def verify_token():

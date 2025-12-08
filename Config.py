@@ -58,7 +58,7 @@ UPTIME_KUMA_ENABLED = bool(UPTIME_KUMA_URL)
 UPTIME_KUMA_MONITORS = {
     "core": ["Health Check", "Auth Ping", "WebSocket"],
     "features": ["Tickets", "Discord OAuth", "Analytics"],
-    "frontend": ["Frontend", "Admin"]
+    "frontend": ["Frontend", "Admin"],
 }
 
 

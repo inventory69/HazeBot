@@ -4,6 +4,8 @@ Handles all /api/meme* and /api/daily-meme* endpoints for meme generation and ma
 """
 
 import asyncio
+import json
+import os
 import traceback
 
 import requests
@@ -59,6 +61,44 @@ def init_meme_routes(app, config, log, auth_module):
     vf["meme.reset_daily_meme_config"] = token_required(
         require_permission("all")(log_config_action("daily_meme")(vf["meme.reset_daily_meme_config"]))
     )
+
+
+# ===== ACTIVITY TRACKING HELPER =====
+
+
+def increment_activity_counter(file_name: str, user_id: str) -> None:
+    """
+    Thread-safe increment counter in JSON file for user activity tracking
+
+    Args:
+        file_name: Name of JSON file (e.g., 'memes_generated.json')
+        user_id: Discord user ID as string
+    """
+    try:
+        # Get data directory from Config
+        data_dir = Config.get_data_dir()
+        file_path = os.path.join(data_dir, file_name)
+
+        # Load existing data
+        data = {}
+        if os.path.exists(file_path):
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+        # Increment counter for user
+        data[user_id] = data.get(user_id, 0) + 1
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        # Save updated data
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+
+        logger.info(f"✅ Activity tracked for user {user_id} in {file_name}: {data[user_id]} total")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to track activity in {file_name} for user {user_id}: {e}")
 
 
 # ===== MEME SOURCES =====
@@ -296,6 +336,11 @@ def post_generated_meme_to_discord():
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
+
+        # Track meme generation activity
+        discord_id = request.discord_id
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            increment_activity_counter("memes_generated.json", str(discord_id))
 
         return jsonify(
             {
@@ -776,6 +821,11 @@ def send_meme_to_discord():
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
+
+        # Track meme request activity
+        discord_id = request.discord_id
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            increment_activity_counter("meme_requests.json", str(discord_id))
 
         return jsonify({"success": True, "message": "Meme sent to Discord successfully", "channel_id": meme_channel_id})
 

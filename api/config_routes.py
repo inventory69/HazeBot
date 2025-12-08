@@ -198,8 +198,8 @@ def get_config():
         },
         # Status Dashboard Configuration
         "status_dashboard": {
-            "update_interval_minutes": Config.STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5),
-            "show_monitoring": Config.STATUS_DASHBOARD_CONFIG.get('show_monitoring', True),
+            "update_interval_minutes": Config.STATUS_DASHBOARD_CONFIG.get("update_interval_minutes", 5),
+            "show_monitoring": Config.STATUS_DASHBOARD_CONFIG.get("show_monitoring", True),
         },
         # Meme Configuration
         "meme": {
@@ -238,7 +238,7 @@ def config_general():
     if request.method == "GET":
         # Get StatusDashboard config with defaults
         status_dashboard_config = Config.STATUS_DASHBOARD_CONFIG if hasattr(Config, "STATUS_DASHBOARD_CONFIG") else {}
-        
+
         return jsonify(
             {
                 "bot_name": Config.BotName,
@@ -253,8 +253,8 @@ def config_general():
                 "role_names": Config.ROLE_NAMES if hasattr(Config, "ROLE_NAMES") else {},
                 "status_dashboard": {
                     "update_interval_minutes": status_dashboard_config.get("update_interval_minutes", 5),
-                    "show_monitoring": status_dashboard_config.get("show_monitoring", True)
-                }
+                    "show_monitoring": status_dashboard_config.get("show_monitoring", True),
+                },
             }
         )
 
@@ -301,9 +301,9 @@ def config_general():
             # Initialize if not exists
             if not hasattr(Config, "STATUS_DASHBOARD_CONFIG"):
                 Config.STATUS_DASHBOARD_CONFIG = {}
-            
+
             status_config = data["status_dashboard"]
-            
+
             # Validate and update update_interval_minutes (1-60 range)
             if "update_interval_minutes" in status_config:
                 interval = int(status_config["update_interval_minutes"])
@@ -314,7 +314,7 @@ def config_general():
                     f"{Config.STATUS_DASHBOARD_CONFIG.get('update_interval_minutes', 5)} -> {interval}"
                 )
                 Config.STATUS_DASHBOARD_CONFIG["update_interval_minutes"] = interval
-            
+
             # Update show_monitoring
             if "show_monitoring" in status_config:
                 show_monitoring = bool(status_config["show_monitoring"])
@@ -351,10 +351,7 @@ def reset_general_config():
         "mod": "📦 Slot Keeper",
         "admin": "🧊 Inventory Master",
     }
-    Config.STATUS_DASHBOARD_CONFIG = {
-        "update_interval_minutes": 5,
-        "show_monitoring": True
-    }
+    Config.STATUS_DASHBOARD_CONFIG = {"update_interval_minutes": 5, "show_monitoring": True}
 
     # Save to file
     save_config_to_file()

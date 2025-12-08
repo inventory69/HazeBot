@@ -791,7 +791,7 @@ def close_ticket_endpoint(ticket_id):
         import jwt
         from flask import current_app
         from Cogs.TicketSystem import close_ticket_from_api, load_tickets, is_allowed_for_ticket_actions
-        
+
         token = auth_header.split(" ")[1]
         try:
             data = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
@@ -848,7 +848,14 @@ def close_ticket_endpoint(ticket_id):
 
         # Use Discord bot function to close (ensures transcript, email, button updates, etc.)
         future = asyncio.run_coroutine_threadsafe(
-            close_ticket_from_api(bot, channel_id, ticket, close_message if close_message.strip() else None), loop
+            close_ticket_from_api(
+                bot,
+                channel_id,
+                ticket,
+                close_message if close_message.strip() else None,
+                closed_by=int(user_discord_id),
+            ),
+            loop,
         )
         result = future.result(timeout=10)
 
@@ -883,7 +890,7 @@ def reopen_ticket_endpoint(ticket_id):
     """Reopen a closed ticket using Discord bot functions for consistency"""
     try:
         logger.info(f"[REOPEN TICKET] Received request for ticket_id: {ticket_id}")
-        
+
         # Manual token validation (since @token_required decorator was removed)
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -893,7 +900,7 @@ def reopen_ticket_endpoint(ticket_id):
         import jwt
         from flask import current_app
         from Cogs.TicketSystem import load_tickets, reopen_ticket_from_api, is_allowed_for_ticket_actions
-        
+
         token = auth_header.split(" ")[1]
         try:
             data = jwt.decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
@@ -949,9 +956,7 @@ def reopen_ticket_endpoint(ticket_id):
 
         # Use Discord bot function to reopen (ensures button updates, embed refresh, etc.)
         logger.info(f"[REOPEN TICKET] Calling reopen_ticket_from_api for channel {channel_id}")
-        future = asyncio.run_coroutine_threadsafe(
-            reopen_ticket_from_api(bot, channel_id, ticket), loop
-        )
+        future = asyncio.run_coroutine_threadsafe(reopen_ticket_from_api(bot, channel_id, ticket), loop)
         result = future.result(timeout=10)
         logger.info(f"[REOPEN TICKET] Result: {result}")
 
@@ -984,7 +989,7 @@ def get_ticket_messages_endpoint(ticket_id):
         # ✅ FIX: Check cache first before fetching from Discord
         cache_key = f"ticket:messages:{ticket_id}"
         cached_messages = cache.get(cache_key)
-        
+
         if cached_messages is not None:
             logger.debug(f"✅ Serving {len(cached_messages)} message(s) from cache (REST API)")
             return jsonify({"messages": cached_messages, "from_cache": True})
@@ -1268,12 +1273,15 @@ def send_ticket_message_endpoint(ticket_id):
 
         # ✅ FIX: Invalidate message cache after sending new message
         from Utils.CacheUtils import cache_instance as cache
+
         cache_key = f"ticket:messages:{ticket_id}"
         cache.clear(cache_key)  # ✅ FIX: clear() statt delete()
         logger.debug(f"🗑️ Invalidated message cache for ticket {ticket_id}")
 
         # Notify WebSocket clients about new message
-        logger.debug(f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}...")
+        logger.debug(
+            f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}..."
+        )
         notify_ticket_update(ticket_id, "new_message", message_data)
 
         # Send push notification for new message

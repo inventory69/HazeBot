@@ -15,6 +15,7 @@ def get_error_tracker():
     """Get error_tracker instance (lazy import to avoid circular dependency)"""
     try:
         from api.app import error_tracker
+
         return error_tracker
     except (ImportError, AttributeError):
         return None
@@ -24,7 +25,7 @@ def get_error_tracker():
 def receive_error_report():
     """
     Receive error report from Flutter frontend (user-consented only)
-    
+
     Expected JSON:
     {
         "user_consented": true,
@@ -53,32 +54,32 @@ def receive_error_report():
     """
     try:
         data = request.get_json()
-        
+
         if not data or "error" not in data:
             return jsonify({"error": "Missing error field"}), 400
-        
+
         # Verify user consent
         if not data.get("user_consented", False):
             return jsonify({"error": "User consent required"}), 400
-        
+
         # Extract error details
         error_info = data.get("error", {})
         error_message = error_info.get("message", "Unknown error")
         error_type = error_info.get("type", "Unknown")
         error_trace = error_info.get("stackTrace", "")
         error_timestamp = error_info.get("timestamp", "")
-        
+
         # Extract context
         context = data.get("context", {})
         context_str = " | ".join([f"{k}={v}" for k, v in context.items()]) if context else "No context"
-        
+
         # Extract device info
         device = data.get("device", {})
-        platform = device.get('platform', 'Unknown')
-        version = device.get('version', '')
-        app_version = device.get('app_version', 'Unknown')
+        platform = device.get("platform", "Unknown")
+        version = device.get("version", "")
+        app_version = device.get("app_version", "Unknown")
         device_str = f"{platform} {version} | App: {app_version}"
-        
+
         # Log error report header
         logger.error("=" * 80)
         logger.error("[FLUTTER ERROR REPORT] User-consented error report received")
@@ -86,7 +87,7 @@ def receive_error_report():
         logger.error(f"[FLUTTER ERROR REPORT] Context: {context_str}")
         logger.error(f"[FLUTTER ERROR REPORT] Device: {device_str}")
         logger.error(f"[FLUTTER ERROR REPORT] Time: {error_timestamp}")
-        
+
         # Log the trace leading to error
         logs = data.get("logs", [])
         if logs:
@@ -96,46 +97,48 @@ def receive_error_report():
                 message = log_entry.get("message", "")
                 timestamp = log_entry.get("timestamp", "")
                 logger.error(f"[FLUTTER ERROR REPORT]   [{idx}] [{level}] {message} | {timestamp}")
-        
+
         # Log stack trace if available
         if error_trace:
             logger.error("[FLUTTER ERROR REPORT] Stack trace:")
-            for line in error_trace.split('\n'):
+            for line in error_trace.split("\n"):
                 if line.strip():
                     logger.error(f"[FLUTTER ERROR REPORT]   {line}")
-        
+
         # ✅ Track error in error_tracker for analytics dashboard
         error_tracker = get_error_tracker()  # Lazy import to avoid circular dependency
         if error_tracker:
             try:
                 # Use screen name from context as endpoint if available
-                endpoint = context.get('screen', '/flutter-app')
-                
+                endpoint = context.get("screen", "/flutter-app")
+
                 error_tracker.track_error(
                     error_type=error_type,
                     message=error_message,
                     endpoint=endpoint,
-                    user_id=context.get('user_id'),
-                    username=context.get('username'),
+                    user_id=context.get("user_id"),
+                    username=context.get("username"),
                     stacktrace=error_trace,
                     request_data={
-                        'context': context,
-                        'device': device,
-                        'logs': logs,
-                        'timestamp': error_timestamp,
-                        'user_consented': True,
-                    }
+                        "context": context,
+                        "device": device,
+                        "logs": logs,
+                        "timestamp": error_timestamp,
+                        "user_consented": True,
+                    },
                 )
-                logger.info(f"[FLUTTER ERROR REPORT] ✅ Error tracked in analytics for dashboard visibility")
+                logger.info("[FLUTTER ERROR REPORT] ✅ Error tracked in analytics for dashboard visibility")
             except Exception as e:
                 logger.error(f"[FLUTTER ERROR REPORT] ⚠️ Failed to track error in analytics: {e}")
         else:
-            logger.warning("[FLUTTER ERROR REPORT] ⚠️ error_tracker not initialized - error not saved to analytics dashboard")
-        
+            logger.warning(
+                "[FLUTTER ERROR REPORT] ⚠️ error_tracker not initialized - error not saved to analytics dashboard"
+            )
+
         logger.error("=" * 80)
-        
+
         return jsonify({"status": "report_received", "thank_you": True}), 200
-        
+
     except Exception as e:
         logger.error(f"[FLUTTER ERROR REPORT] Error processing error report: {e}")
         return jsonify({"error": "Internal error"}), 500

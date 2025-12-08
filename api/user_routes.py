@@ -180,7 +180,9 @@ def get_user_profile():
 
                 for ticket in tickets:
                     if ticket["status"] == "Closed" and (
-                        ticket.get("claimed_by") == int(discord_id) or ticket.get("assigned_to") == int(discord_id)
+                        ticket.get("claimed_by") == int(discord_id)
+                        or ticket.get("assigned_to") == int(discord_id)
+                        or ticket.get("closed_by") == int(discord_id)
                     ):
                         resolved_tickets += 1
             except Exception:

@@ -40,7 +40,9 @@ async def get_resolved_ticket_count(user_id: int) -> int:
     resolved_count = 0
     for ticket in tickets:
         if ticket["status"] == "Closed" and (
-            ticket.get("claimed_by") == user_id or ticket.get("assigned_to") == user_id
+            ticket.get("claimed_by") == user_id
+            or ticket.get("assigned_to") == user_id
+            or ticket.get("closed_by") == user_id
         ):
             resolved_count += 1
     return resolved_count

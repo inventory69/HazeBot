@@ -97,10 +97,12 @@ async def save_counter(num: int) -> None:
 def is_allowed_for_ticket_actions(user: discord.User, ticket_data: Dict[str, Any], action: str) -> bool:
     logger.info(f"[PERMISSION CHECK] Action: {action}")
     logger.info(f"[PERMISSION CHECK] User ID: {user.id} (type: {type(user.id)})")
-    logger.info(f"[PERMISSION CHECK] Ticket user_id: {ticket_data.get('user_id')} (type: {type(ticket_data.get('user_id'))})")
+    logger.info(
+        f"[PERMISSION CHECK] Ticket user_id: {ticket_data.get('user_id')} (type: {type(ticket_data.get('user_id'))})"
+    )
     logger.info(f"[PERMISSION CHECK] User roles: {[role.id for role in user.roles]}")
     logger.info(f"[PERMISSION CHECK] User ID == Ticket user_id: {user.id == ticket_data['user_id']}")
-    
+
     # If ticket is closed, only allow Reopen for creator, admins, or moderators
     if ticket_data["status"] == "Closed":
         if action == "Reopen":
@@ -518,7 +520,9 @@ async def update_embed_and_disable_buttons(interaction: discord.Interaction) -> 
                     item.disabled = True
                 elif item.custom_id == "ticket:assign" and ticket.get("assigned_to"):
                     item.disabled = True
-                elif item.custom_id == "ticket:delete" and not any(role.id == ADMIN_ROLE_ID for role in interaction.user.roles):
+                elif item.custom_id == "ticket:delete" and not any(
+                    role.id == ADMIN_ROLE_ID for role in interaction.user.roles
+                ):
                     item.disabled = True  # Only admins can see/use Delete
                 elif item.custom_id == "ticket:reopen" and ticket["status"] == "Open":
                     item.disabled = True  # Reopen only visible/clickable when closed
@@ -705,8 +709,9 @@ async def close_ticket_with_message(
     msg = await interaction.channel.send("🔒 Closing ticket...")
     followup = interaction.followup
 
-    # Update status
-    await update_ticket(interaction.channel.id, {"status": "Closed"})
+    # Update status and track who closed the ticket
+    update_dict = {"status": "Closed", "closed_by": interaction.user.id}
+    await update_ticket(interaction.channel.id, update_dict)
 
     # Close asynchronously, pass the message to delete it later
     asyncio.create_task(
@@ -836,11 +841,22 @@ async def assign_ticket_from_api(
 
 
 async def close_ticket_from_api(
-    bot: commands.Bot, channel_id: int, ticket: Dict[str, Any], close_message: Optional[str] = None
+    bot: commands.Bot,
+    channel_id: int,
+    ticket: Dict[str, Any],
+    close_message: Optional[str] = None,
+    closed_by: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Close a ticket via API (without Discord Interaction).
     Uses same close_ticket_async logic to ensure consistency (transcript, email, etc.).
+
+    Args:
+        bot: Bot instance
+        channel_id: Discord channel ID
+        ticket: Ticket data dict
+        close_message: Optional closing message
+        closed_by: Optional Discord user ID who closed the ticket (for activity tracking)
 
     Returns: Dict with success status and message
     """
@@ -856,10 +872,12 @@ async def close_ticket_from_api(
         closing_msg = await channel.send("🔒 Closing ticket...")
 
         # 🐛 BUG FIX: Set both status AND closed_at immediately to prevent race condition
-        await update_ticket(channel_id, {
-            "status": "Closed",
-            "closed_at": datetime.now().isoformat()
-        })
+        # Also track who closed the ticket for activity stats
+        update_dict = {"status": "Closed", "closed_at": datetime.now().isoformat()}
+        if closed_by:
+            update_dict["closed_by"] = closed_by
+
+        await update_ticket(channel_id, update_dict)
 
         # Use existing close_ticket_async function (handles transcript, email, archive, etc.)
         # Pass None for followup since we don't have an interaction
@@ -927,7 +945,7 @@ async def reopen_ticket_from_api(bot: commands.Bot, channel_id: int, ticket: Dic
                 msg = await channel.fetch_message(ticket["embed_message_id"])
                 embed = create_ticket_embed(ticket, bot.user)
                 view = TicketControlView()
-                
+
                 # Enable all buttons for reopened ticket
                 for item in view.children:
                     if isinstance(item, discord.ui.Button):
@@ -1250,19 +1268,23 @@ class TicketSystem(commands.Cog):
             for ticket in tickets:
                 if ticket["status"] == "Closed":
                     closed_at_str = ticket.get("closed_at", ticket.get("created_at"))
-                    
+
                     # 🐛 BUG FIX: Auto-fix tickets that are Closed but missing closed_at
-                    ticket_identifier = f"#{ticket.get('ticket_num', 'unknown')} ({ticket.get('ticket_id', 'unknown')[:8]}...)"
-                    
+                    ticket_identifier = (
+                        f"#{ticket.get('ticket_num', 'unknown')} ({ticket.get('ticket_id', 'unknown')[:8]}...)"
+                    )
+
                     if not closed_at_str:
                         # Auto-fix: Set closed_at to created_at (legacy tickets)
                         ticket["closed_at"] = ticket.get("created_at", datetime.now().isoformat())
-                        logger.warning(f"Ticket {ticket_identifier} missing closed_at, auto-fixed to: {ticket['closed_at']}")
+                        logger.warning(
+                            f"Ticket {ticket_identifier} missing closed_at, auto-fixed to: {ticket['closed_at']}"
+                        )
                         closed_at_str = ticket["closed_at"]
                         # Save the fix back to file
                         with open(TICKET_FILE, "w") as f:
                             json.dump(tickets, f, indent=2)
-                    
+
                     # Handle both string and datetime objects
                     try:
                         if isinstance(closed_at_str, str):
@@ -1270,12 +1292,14 @@ class TicketSystem(commands.Cog):
                         elif isinstance(closed_at_str, datetime):
                             closed_at = closed_at_str
                         else:
-                            logger.error(f"Ticket {ticket_identifier} has invalid closed_at type: {type(closed_at_str)}")
+                            logger.error(
+                                f"Ticket {ticket_identifier} has invalid closed_at type: {type(closed_at_str)}"
+                            )
                             continue
                     except (ValueError, TypeError) as e:
                         logger.error(f"Failed to parse closed_at for ticket {ticket_identifier}: {e}")
                         continue
-                    
+
                     if now - closed_at > timedelta(days=7):
                         to_delete.append(ticket)
             for ticket in to_delete:

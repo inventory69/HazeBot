@@ -371,8 +371,7 @@ COG_METADATA = {
     },
     "StatusDashboard": {
         "description": (
-            "Maintains a live-updating status embed in a dedicated channel "
-            "with real-time service monitoring"
+            "Maintains a live-updating status embed in a dedicated channel with real-time service monitoring"
         ),
         "icon": "📊",
         "category": "monitoring",

@@ -303,11 +303,11 @@ class Utility(commands.Cog):
     def is_api_cog_loaded(self) -> bool:
         """Check if APIServer cog is loaded"""
         return self.bot.get_cog("APIServer") is not None
-    
+
     async def fetch_monitoring_data(self) -> Optional[Dict]:
         """
         Fetch monitoring data from Flask API
-        
+
         Returns:
             Monitoring data dict or None if unavailable
         """
@@ -315,18 +315,20 @@ class Utility(commands.Cog):
         if not Config.UPTIME_KUMA_ENABLED:
             logger.debug("Uptime Kuma not configured (UPTIME_KUMA_URL not set)")
             return None
-        
+
         # Check if API cog is loaded
         if not self.is_api_cog_loaded():
             logger.debug("APIServer cog not loaded, skipping monitoring data fetch")
             return None
-        
+
         try:
             # Get API base URL from config (localhost since we're on the same machine)
             api_url = f"http://localhost:{Config.API_PORT}"
-            
+
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{api_url}/api/monitoring/status", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                async with session.get(
+                    f"{api_url}/api/monitoring/status", timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
                     if resp.status == 200:
                         return await resp.json()
                     elif resp.status == 503:
@@ -339,7 +341,7 @@ class Utility(commands.Cog):
         except Exception as e:
             logger.debug(f"Could not fetch monitoring data: {e}")
         return None
-    
+
     def get_status_emoji(self, status: str) -> str:
         """Get emoji for monitor status"""
         return {
@@ -347,35 +349,30 @@ class Utility(commands.Cog):
             "up-pending": "✅",  # Show as UP (monitoring issue, not service issue)
             "down": "❌",
             "degraded": "⚠️",
-            "pending": "�"  # Real pending (low uptime)
+            "pending": "�",  # Real pending (low uptime)
         }.get(status.lower(), "⚪")
-    
+
     def get_priority_emoji(self, priority: str) -> str:
         """Get emoji for monitor priority (from tags)"""
-        return {
-            "critical": "🔴",
-            "high": "🟡",
-            "medium": "🟢",
-            "low": "⚪"
-        }.get(priority.lower(), "⚪")
-    
+        return {"critical": "🔴", "high": "🟡", "medium": "🟢", "low": "⚪"}.get(priority.lower(), "⚪")
+
     def format_monitor_name(self, name: str) -> str:
         """
         Format monitor name for display
-        
+
         Example: "HazeBot API - Health Check" → "Health Check"
         """
         if " - " in name:
             return name.split(" - ", 1)[1]
         return name
-    
+
     def format_timestamp(self, iso_timestamp: str) -> str:
         """Format ISO timestamp to relative time"""
         try:
-            dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
             now = datetime.now(dt.tzinfo)
             delta = now - dt
-            
+
             if delta.total_seconds() < 60:
                 return f"{int(delta.total_seconds())}s ago"
             elif delta.total_seconds() < 3600:
@@ -386,26 +383,22 @@ class Utility(commands.Cog):
                 return f"{int(delta.total_seconds() // 86400)}d ago"
         except Exception:
             return "Unknown"
-    
+
     def format_timestamp_discord(self, iso_timestamp: str) -> str:
         """Format ISO timestamp as Discord timestamp (relative)"""
         try:
-            dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
             unix_timestamp = int(dt.timestamp())
             return f"<t:{unix_timestamp}:R>"
         except Exception:
             return "Unknown"
-    
+
     def create_status_embed(
-        self, 
-        bot_user: discord.User, 
-        latency: float, 
-        guild_count: int,
-        monitoring_data: Optional[Dict] = None
+        self, bot_user: discord.User, latency: float, guild_count: int, monitoring_data: Optional[Dict] = None
     ) -> discord.Embed:
         """
         Create status embed with optional monitoring data
-        
+
         Args:
             bot_user: Bot user object
             latency: Bot latency in seconds
@@ -419,26 +412,26 @@ class Utility(commands.Cog):
         else:
             title = f"{BotName} Status"
             description = "The bot is online and fabulous! 💖"
-        
+
         embed = discord.Embed(
             title=title,
             description=description,
             color=Config.PINK,
         )
-        
+
         # Bot Status
         bot_status = f"• **Latency:** {round(latency * 1000)}ms\n• **Guilds:** {guild_count}"
         embed.add_field(name="📊 Bot Status", value=bot_status, inline=False)
-        
+
         # Monitoring Data (if available)
         if monitoring_data:
             monitors = monitoring_data.get("monitors", [])
-            
+
             # Group monitors by category
             core_services = [m for m in monitors if m.get("category") == "core"]
             features = [m for m in monitors if m.get("category") == "features"]
             frontend = [m for m in monitors if m.get("category") == "frontend"]
-            
+
             # Helper function to format monitor line
             def format_monitor_line(m: dict) -> str:
                 status = self.get_status_emoji(m["status"])
@@ -446,91 +439,79 @@ class Utility(commands.Cog):
                 uptime = m["uptime"]
                 priority = m.get("priority", "low")
                 monitor_status = m["status"]
-                
+
                 # Build clean status line: ✅ Name • 99.93% • 34ms • CRITICAL
                 line_parts = [f"{status} **{name}**", f"{uptime:.2f}%"]
-                
+
                 # Add ping if available, or monitoring note for up-pending
                 if m.get("avg_ping") is not None:
-                    ping = int(m['avg_ping'])
+                    ping = int(m["avg_ping"])
                     line_parts.append(f"⚡ {ping}ms")
                 elif monitor_status == "up-pending":
                     # No ping data but service is working - monitoring issue
                     line_parts.append("ℹ️ Monitoring")
-                
+
                 # Add priority badge only for critical/high
                 if priority == "critical":
                     line_parts.append("🔴 CRITICAL")
                 elif priority == "high":
                     line_parts.append("🟡 HIGH")
-                
+
                 return " • ".join(line_parts)
-            
+
             # Count up/down monitors per category
             def get_category_summary(category_monitors: list) -> str:
                 # Count as operational: "up" or "up-pending" (monitoring issue, not service issue)
-                operational_count = sum(1 for m in category_monitors 
-                                       if m["status"] in ["up", "up-pending"])
+                operational_count = sum(1 for m in category_monitors if m["status"] in ["up", "up-pending"])
                 total = len(category_monitors)
                 if operational_count == total:
                     return f"✅ All Operational ({total}/{total})"
                 else:
                     return f"⚠️ {operational_count}/{total} Operational"
-            
+
             # Core Services
             if core_services:
                 core_text = "\n".join([format_monitor_line(m) for m in core_services])
                 embed.add_field(
-                    name=f"🌐 Core Services - {get_category_summary(core_services)}", 
-                    value=core_text, 
-                    inline=False
+                    name=f"🌐 Core Services - {get_category_summary(core_services)}", value=core_text, inline=False
                 )
-            
+
             # Features
             if features:
                 features_text = "\n".join([format_monitor_line(m) for m in features])
                 embed.add_field(
-                    name=f"🎯 Features - {get_category_summary(features)}", 
-                    value=features_text, 
-                    inline=False
+                    name=f"🎯 Features - {get_category_summary(features)}", value=features_text, inline=False
                 )
-            
+
             # Frontend
             if frontend:
                 frontend_text = "\n".join([format_monitor_line(m) for m in frontend])
                 embed.add_field(
-                    name=f"💻 Frontend - {get_category_summary(frontend)}", 
-                    value=frontend_text, 
-                    inline=False
+                    name=f"💻 Frontend - {get_category_summary(frontend)}", value=frontend_text, inline=False
                 )
-            
+
             # Overall Status
             overall = monitoring_data.get("overall_status", "unknown")
-            overall_emoji = {
-                "operational": "🟢",
-                "degraded": "🟡",
-                "down": "🔴",
-                "unknown": "⚪"
-            }.get(overall, "⚪")
-            
+            overall_emoji = {"operational": "🟢", "degraded": "🟡", "down": "🔴", "unknown": "⚪"}.get(overall, "⚪")
+
             # Format status text
             status_text = {
                 "operational": "All Systems Operational",
                 "degraded": "Some Systems Degraded",
                 "down": "Service Disruption",
-                "unknown": "Status Unknown"
+                "unknown": "Status Unknown",
             }.get(overall, "Unknown")
-            
+
             # Use Discord timestamp for relative time
             last_update = monitoring_data.get("last_update", "Unknown")
             timestamp_text = self.format_timestamp_discord(last_update)
-            
+
             embed.add_field(
                 name="📈 System Status",
                 value=f"{overall_emoji} **{status_text}**\n🕐 Last Updated: {timestamp_text}",
-                inline=False
+                inline=False,
             )
-        
+
         set_pink_footer(embed, bot=bot_user)
         return embed
 
@@ -593,16 +574,11 @@ class Utility(commands.Cog):
         💖 Shows bot status and basic info in pink.
         """
         logger.info(f"Prefix command !status used by {ctx.author} in {ctx.guild}")
-        
+
         # Fetch monitoring data (silently fails if unavailable)
         monitoring_data = await self.fetch_monitoring_data()
-        
-        embed = self.create_status_embed(
-            self.bot.user, 
-            self.bot.latency, 
-            len(self.bot.guilds),
-            monitoring_data
-        )
+
+        embed = self.create_status_embed(self.bot.user, self.bot.latency, len(self.bot.guilds), monitoring_data)
         await ctx.send(embed=embed)
 
     # /status (Slash)
@@ -611,15 +587,12 @@ class Utility(commands.Cog):
     async def status_slash(self, interaction: discord.Interaction) -> None:
         # Defer response since we might need to wait for API
         await interaction.response.defer()
-        
+
         # Fetch monitoring data (silently fails if unavailable)
         monitoring_data = await self.fetch_monitoring_data()
-        
+
         embed = self.create_status_embed(
-            interaction.client.user,
-            interaction.client.latency,
-            len(interaction.client.guilds),
-            monitoring_data
+            interaction.client.user, interaction.client.latency, len(interaction.client.guilds), monitoring_data
         )
         await interaction.followup.send(embed=embed)
         logger.info(f"Slash command /status used by {interaction.user} in {interaction.guild}")

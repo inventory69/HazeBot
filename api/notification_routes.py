@@ -302,16 +302,18 @@ def register_socketio_handlers(socketio_instance):
             # ✅ Track client-to-user mapping for auto-cleanup on disconnect
             client_to_user[request.sid] = str(user_id)
 
-            logger.debug(f"🎫 JOIN | Client: {request.sid} | User: {user_id} | Room: {room} | Active viewers: {len(active_ticket_viewers[ticket_id])}")
+            logger.debug(
+                f"🎫 JOIN | Client: {request.sid} | User: {user_id} | Room: {room} | Active viewers: {len(active_ticket_viewers[ticket_id])}"
+            )
         else:
             logger.debug(f"🎫 JOIN | Client: {request.sid} | Room: {room} | No user_id provided")
 
         # ✅ FIX: Check cache first before fetching from Discord
         from Utils.CacheUtils import cache_instance as cache
-        
+
         cache_key = f"ticket:messages:{ticket_id}"
         cached_messages = cache.get(cache_key)
-        
+
         if cached_messages is not None:
             logger.debug(f"✅ Serving {len(cached_messages)} message(s) from cache (WebSocket join_ticket)")
             emit("message_history", {"ticket_id": ticket_id, "messages": cached_messages})
@@ -424,6 +426,7 @@ def register_socketio_handlers(socketio_instance):
 
                 # ✅ FIX: Cache messages after fetching from Discord
                 from Utils.CacheUtils import cache_instance as cache
+
                 cache_key = f"ticket:messages:{ticket_id}"
                 cache.set(cache_key, messages, ttl_seconds=300)  # 5 minutes
                 logger.debug(f"💾 Cached {len(messages)} message(s) for ticket {ticket_id} (300s TTL)")
@@ -453,7 +456,9 @@ def register_socketio_handlers(socketio_instance):
             # Clean up empty sets
             if not active_ticket_viewers[ticket_id]:
                 del active_ticket_viewers[ticket_id]
-            logger.debug(f"🚪 LEAVE | Client: {request.sid} | User: {user_id} | Room: {room} | Remaining viewers: {len(active_ticket_viewers.get(ticket_id, set()))}")
+            logger.debug(
+                f"🚪 LEAVE | Client: {request.sid} | User: {user_id} | Room: {room} | Remaining viewers: {len(active_ticket_viewers.get(ticket_id, set()))}"
+            )
         else:
             logger.debug(f"🚪 LEAVE | Client: {request.sid} | Room: {room}")
 
@@ -470,16 +475,21 @@ def notify_ticket_update(ticket_id, event_type, data):
         data: Event data
     """
     room = f"ticket_{ticket_id}"
-    
-    payload = {"ticket_id": ticket_id, "event_type": event_type, "data": data, "timestamp": datetime.utcnow().isoformat()}
+
+    payload = {
+        "ticket_id": ticket_id,
+        "event_type": event_type,
+        "data": data,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
     logger.debug(f"🔌 WebSocket EMIT | Room: {room} | Event: {event_type}")
-    
+
     socketio.emit(
         "ticket_update",
         payload,
         room=room,
     )
-    
+
     logger.debug(f"✅ WebSocket EMITTED | Room: {room} | Event: {event_type}")
 
 
@@ -669,7 +679,7 @@ async def send_push_notification_for_ticket_event(ticket_id, event_type, ticket_
                     username = discord_user.name if discord_user else None
                 except Exception as e:
                     logger.debug(f"Could not fetch username for {user_id}: {e}")
-                
+
                 await send_notification(
                     user_id,
                     title,
