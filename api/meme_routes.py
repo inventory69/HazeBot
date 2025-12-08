@@ -328,7 +328,7 @@ def post_generated_meme_to_discord():
 
             set_pink_footer(embed, bot=bot.user)
 
-            # Send with mention if we have member
+            # Send with mention if we have member TEST
             if member:
                 await channel.send(f"🎨 Custom meme created by {member.mention}!", embed=embed)
             else:
