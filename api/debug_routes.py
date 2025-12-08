@@ -8,6 +8,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Import error_tracker for analytics storage
+try:
+    from api.app import error_tracker
+except ImportError:
+    error_tracker = None
+    logger.warning("error_tracker not available in debug_routes")
+
 debug_bp = Blueprint("debug", __name__)
 
 
@@ -94,6 +101,33 @@ def receive_error_report():
             for line in error_trace.split('\n'):
                 if line.strip():
                     logger.error(f"[FLUTTER ERROR REPORT]   {line}")
+        
+        # ✅ Track error in error_tracker for analytics dashboard
+        if error_tracker:
+            try:
+                # Use screen name from context as endpoint if available
+                endpoint = context.get('screen', '/flutter-app')
+                
+                error_tracker.track_error(
+                    error_type=error_type,
+                    message=error_message,
+                    endpoint=endpoint,
+                    user_id=context.get('user_id'),
+                    username=context.get('username'),
+                    stacktrace=error_trace,
+                    request_data={
+                        'context': context,
+                        'device': device,
+                        'logs': logs,
+                        'timestamp': error_timestamp,
+                        'user_consented': True,
+                    }
+                )
+                logger.info(f"[FLUTTER ERROR REPORT] ✅ Error tracked in analytics for dashboard visibility")
+            except Exception as e:
+                logger.error(f"[FLUTTER ERROR REPORT] ⚠️ Failed to track error in analytics: {e}")
+        else:
+            logger.warning("[FLUTTER ERROR REPORT] ⚠️ error_tracker not initialized - error not saved to analytics dashboard")
         
         logger.error("=" * 80)
         
