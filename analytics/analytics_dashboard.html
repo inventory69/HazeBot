@@ -1651,11 +1651,11 @@
 
         function updateErrorAnalytics(data) {
             // Update error stats
-            const totalErrors = data.errors?.length || 0;
-            const uniqueErrors = Object.keys(data.error_groups || {}).length;
+            const totalErrors = data.total_errors || 0;
+            const uniqueErrors = data.unique_error_types || 0;
             
             // Calculate error rate (errors per day)
-            const dailyCounts = Object.values(data.daily_error_counts || {});
+            const dailyCounts = Object.values(data.daily_trend || {});
             const avgErrorsPerDay = dailyCounts.length > 0 
                 ? (dailyCounts.reduce((a, b) => a + b, 0) / dailyCounts.length).toFixed(1)
                 : 0;
@@ -1664,20 +1664,18 @@
             document.getElementById('uniqueErrors').textContent = uniqueErrors;
             document.getElementById('errorRate').textContent = `${avgErrorsPerDay}/day`;
 
-            // Update errors table
-            updateErrorsTable(data.error_groups || {});
+            // Update errors table with top_errors from API
+            updateErrorsTable(data.top_errors || []);
         }
 
-        function updateErrorsTable(errorGroups) {
+        function updateErrorsTable(topErrors) {
             const tbody = document.getElementById('errorsTableBody');
             tbody.innerHTML = '';
 
-            // Sort by count descending and take top 10
-            const sortedErrors = Object.entries(errorGroups)
-                .sort((a, b) => b[1].count - a[1].count)
-                .slice(0, 10);
+            // topErrors is already sorted array from API
+            const errorsToShow = topErrors.slice(0, 10);
 
-            sortedErrors.forEach(([signature, errorGroup]) => {
+            errorsToShow.forEach((errorGroup) => {
                 const row = tbody.insertRow();
                 
                 // Error Type
@@ -1695,7 +1693,7 @@
                 row.insertCell().textContent = endpoint.split('.').pop() || endpoint;
 
                 // Count
-                row.insertCell().textContent = errorGroup.count;
+                row.insertCell().textContent = errorGroup.count || 0;
 
                 // Affected Users
                 const affectedUsers = errorGroup.affected_users?.length || 0;
@@ -1709,7 +1707,7 @@
             });
 
             // Show section if we have errors
-            if (sortedErrors.length > 0) {
+            if (errorsToShow.length > 0) {
                 document.getElementById('errorAnalyticsSection').style.display = 'block';
             }
         }
