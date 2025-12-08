@@ -130,6 +130,8 @@ def get_active_sessions_endpoint():
                 "app_version": session_data.get("app_version", "Unknown"),
                 "platform": session_data.get("platform", "Unknown"),
                 "device_info": session_data.get("device_info", "Unknown"),
+                "is_debug": session_data.get("is_debug", False),
+                "is_emulator": session_data.get("is_emulator", False),
             }
 
             # Add special indicator for uptime_kuma_monitor
