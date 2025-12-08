@@ -51,6 +51,42 @@
             transition: background-color 0.3s ease, color 0.3s ease;
         }
 
+        /* 🔒 SECURITY: Hide content until authenticated */
+        body.auth-pending #main-content {
+            display: none;
+        }
+
+        body.auth-pending::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        body.auth-pending::after {
+            content: "🔒 Checking authentication...";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--text-primary);
+            font-size: 1.2em;
+            z-index: 10000;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .container {
             max-width: 1800px;
             margin: 0 auto;
@@ -376,14 +412,15 @@
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📊 HazeBot Admin Analytics</h1>
-            <p class="last-update">Last updated: <span id="lastUpdate">Loading...</span></p>
-        </header>
+<body class="auth-pending">
+    <div id="main-content">
+        <div class="container">
+            <header>
+                <h1>📊 HazeBot Admin Analytics</h1>
+                <p class="last-update">Last updated: <span id="lastUpdate">Loading...</span></p>
+            </header>
 
-        <div class="controls">
+            <div class="controls">
             <button onclick="loadData()">🔄 Refresh Data</button>
             <div class="theme-toggle" onclick="toggleTheme()">
                 <span id="themeIcon">🌙</span>
@@ -578,7 +615,8 @@
                 </tbody>
             </table>
         </div>
-    </div>
+        </div> <!-- end .container -->
+    </div> <!-- end #main-content -->
 
     <script>
         let autoRefreshInterval = null;
@@ -790,8 +828,11 @@
         // Initialize after auth check
         checkAuth().then(isAuthenticated => {
             if (isAuthenticated) {
+                // 🔒 SECURITY: Remove auth-pending class to show content
+                document.body.classList.remove('auth-pending');
                 loadData();
             }
+            // If not authenticated, redirect happens in checkAuth() and auth-pending stays
         });
 
         async function loadData() {

@@ -272,6 +272,28 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 is_discord_oauth
             )
 
+            # Extract platform and check for debug builds
+            platform = request.headers.get("X-Platform", "Unknown")
+            
+            # 🐛 ANALYTICS FIX: Infer platform from User-Agent if Unknown
+            if platform == "Unknown" and user_agent:
+                if "Android" in user_agent:
+                    platform = "Android"
+                elif "iPhone" in user_agent or "iPad" in user_agent:
+                    platform = "iOS"
+                elif "Windows" in user_agent:
+                    platform = "Windows"
+                elif "Macintosh" in user_agent:
+                    platform = "macOS"
+                elif "Linux" in user_agent:
+                    platform = "Linux"
+                elif any(browser in user_agent for browser in ["Chrome", "Firefox", "Safari", "Edge"]):
+                    platform = "Web"
+                logger.info(f"📱 Inferred platform from UA: {platform} (was Unknown)")
+
+            # 🐛 ANALYTICS FIX: Check if this is a debug session
+            is_debug_session = "(Debug)" in platform or "(Debug)" in device_info
+            
             session_info = {
                 "username": request.username,
                 "discord_id": request.discord_id,
@@ -282,16 +304,21 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 "user_agent": user_agent,
                 "endpoint": endpoint_name,
                 "app_version": request.headers.get("X-App-Version", "Unknown"),
-                "platform": request.headers.get("X-Platform", "Unknown"),
+                "platform": platform,
                 "device_info": device_info,
+                "is_debug": is_debug_session,  # Flag for frontend display
             }
 
             # Check if this is a new session (first time seeing this session_id)
             is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
 
-            # Analytics: Start session tracking for new sessions (skip analytics dashboard)
-            if is_new_session and analytics_aggregator is not None and not is_analytics_request:
+            # 🐛 ANALYTICS FIX: Skip analytics tracking for debug sessions
+            if is_debug_session:
+                logger.info(f"🐛 Skipping analytics for debug session: {platform} / {device_info}")
+
+            # Analytics: Start session tracking for new sessions (skip analytics dashboard + debug)
+            if is_new_session and analytics_aggregator is not None and not is_analytics_request and not is_debug_session:
                 try:
                     analytics_aggregator.start_session(
                         session_id=request.session_id,
@@ -305,14 +332,17 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 except Exception as e:
                     logger.error(f"Failed to start analytics session: {e}")
 
-            # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard)
-            if analytics_aggregator is not None and not is_analytics_request:
-                # Endpoints to exclude from analytics (reduce noise)
+            # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard + debug)
+            if analytics_aggregator is not None and not is_analytics_request and not is_debug_session:
+                # 📊 ANALYTICS FIX: Endpoints to exclude from analytics (reduce polling spam)
                 excluded_endpoints = [
                     "auth_routes.ping",  # Health checks
                     "auth_routes.verify_token",  # Token verification
                     "auth_routes.refresh_token",  # Token refresh
-                    "admin_routes.active_sessions",  # Live monitoring
+                    "admin_routes.active_sessions",  # Live monitoring (old name)
+                    "admin.get_active_sessions_endpoint",  # Live monitoring (actual endpoint)
+                    "admin.get_recent_activity_endpoint",  # Live activity monitoring
+                    "analytics.get_live_stats",  # Analytics auto-refresh
                 ]
 
                 if endpoint_name not in excluded_endpoints:
