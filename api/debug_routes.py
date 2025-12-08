@@ -8,14 +8,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Import error_tracker for analytics storage
-try:
-    from api.app import error_tracker
-except ImportError:
-    error_tracker = None
-    logger.warning("error_tracker not available in debug_routes")
-
 debug_bp = Blueprint("debug", __name__)
+
+
+def get_error_tracker():
+    """Get error_tracker instance (lazy import to avoid circular dependency)"""
+    try:
+        from api.app import error_tracker
+        return error_tracker
+    except (ImportError, AttributeError):
+        return None
 
 
 @debug_bp.route("/api/debug/error-report", methods=["POST"])
@@ -103,6 +105,7 @@ def receive_error_report():
                     logger.error(f"[FLUTTER ERROR REPORT]   {line}")
         
         # ✅ Track error in error_tracker for analytics dashboard
+        error_tracker = get_error_tracker()  # Lazy import to avoid circular dependency
         if error_tracker:
             try:
                 # Use screen name from context as endpoint if available
