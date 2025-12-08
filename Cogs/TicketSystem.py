@@ -855,8 +855,11 @@ async def close_ticket_from_api(
         # Send closing message placeholder
         closing_msg = await channel.send("🔒 Closing ticket...")
 
-        # Update ticket status immediately
-        await update_ticket(channel_id, {"status": "Closed"})
+        # 🐛 BUG FIX: Set both status AND closed_at immediately to prevent race condition
+        await update_ticket(channel_id, {
+            "status": "Closed",
+            "closed_at": datetime.now().isoformat()
+        })
 
         # Use existing close_ticket_async function (handles transcript, email, archive, etc.)
         # Pass None for followup since we don't have an interaction
@@ -1248,10 +1251,17 @@ class TicketSystem(commands.Cog):
                 if ticket["status"] == "Closed":
                     closed_at_str = ticket.get("closed_at", ticket.get("created_at"))
                     
-                    # 🐛 BUG FIX: Skip tickets with invalid closed_at date
+                    # 🐛 BUG FIX: Auto-fix tickets that are Closed but missing closed_at
+                    ticket_identifier = f"#{ticket.get('ticket_num', 'unknown')} ({ticket.get('ticket_id', 'unknown')[:8]}...)"
+                    
                     if not closed_at_str:
-                        logger.warning(f"Ticket {ticket.get('ticket_id', 'unknown')} has no closed_at date, skipping cleanup")
-                        continue
+                        # Auto-fix: Set closed_at to created_at (legacy tickets)
+                        ticket["closed_at"] = ticket.get("created_at", datetime.now().isoformat())
+                        logger.warning(f"Ticket {ticket_identifier} missing closed_at, auto-fixed to: {ticket['closed_at']}")
+                        closed_at_str = ticket["closed_at"]
+                        # Save the fix back to file
+                        with open(TICKET_FILE, "w") as f:
+                            json.dump(tickets, f, indent=2)
                     
                     # Handle both string and datetime objects
                     try:
@@ -1260,10 +1270,10 @@ class TicketSystem(commands.Cog):
                         elif isinstance(closed_at_str, datetime):
                             closed_at = closed_at_str
                         else:
-                            logger.error(f"Ticket {ticket.get('ticket_id', 'unknown')} has invalid closed_at type: {type(closed_at_str)}")
+                            logger.error(f"Ticket {ticket_identifier} has invalid closed_at type: {type(closed_at_str)}")
                             continue
                     except (ValueError, TypeError) as e:
-                        logger.error(f"Failed to parse closed_at for ticket {ticket.get('ticket_id', 'unknown')}: {e}")
+                        logger.error(f"Failed to parse closed_at for ticket {ticket_identifier}: {e}")
                         continue
                     
                     if now - closed_at > timedelta(days=7):
