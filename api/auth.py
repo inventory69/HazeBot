@@ -277,6 +277,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             
             # 🐛 ANALYTICS FIX: Infer platform from User-Agent if Unknown
             if platform == "Unknown" and user_agent:
+                original_platform = platform
                 if "Android" in user_agent:
                     platform = "Android"
                 elif "iPhone" in user_agent or "iPad" in user_agent:
@@ -289,7 +290,10 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                     platform = "Linux"
                 elif any(browser in user_agent for browser in ["Chrome", "Firefox", "Safari", "Edge"]):
                     platform = "Web"
-                logger.info(f"📱 Inferred platform from UA: {platform} (was Unknown)")
+                
+                # Only log if we successfully inferred something (not still Unknown)
+                if platform != original_platform and platform != "Unknown":
+                    logger.debug(f"📱 Inferred platform: {platform} from User-Agent")
 
             # 🐛 ANALYTICS FIX: Check if this is a debug session
             is_debug_session = "(Debug)" in platform or "(Debug)" in device_info
@@ -313,12 +317,35 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
             is_new_session = request.session_id not in active_sessions
             active_sessions[request.session_id] = session_info
 
-            # 🐛 ANALYTICS FIX: Skip analytics tracking for debug sessions
-            if is_debug_session:
-                logger.info(f"🐛 Skipping analytics for debug session: {platform} / {device_info}")
+            # 🐛 ANALYTICS FIX: Skip analytics tracking for debug sessions (log only for new sessions)
+            if is_debug_session and is_new_session:
+                logger.info(f"🐛 Debug session detected (analytics disabled): {platform} / {device_info}")
 
-            # Analytics: Start session tracking for new sessions (skip analytics dashboard + debug)
-            if is_new_session and analytics_aggregator is not None and not is_analytics_request and not is_debug_session:
+            # 📊 ANALYTICS FIX: Check if device_info is meaningful (not just generic platform name)
+            # Generic device names indicate first request before device_plugin loaded:
+            generic_device_names = ["Android", "iOS", "Windows", "Linux", "macOS", "Unknown", "Web Browser", "Flutter App"]
+            has_meaningful_device_info = device_info not in generic_device_names
+            
+            # Track if device info was upgraded from generic to specific
+            device_info_upgraded = False
+            if not is_new_session:
+                old_device_info = active_sessions.get(request.session_id, {}).get("device_info", "Unknown")
+                if old_device_info in generic_device_names and has_meaningful_device_info:
+                    device_info_upgraded = True
+                    logger.debug(f"📱 Device info upgraded: {old_device_info} → {device_info}")
+            
+            # Analytics: Start session tracking when we have meaningful device info
+            # - New sessions with specific device info (e.g. "Google Pixel 9 Pro XL")
+            # - Existing sessions that upgraded from generic to specific
+            should_start_analytics = (
+                analytics_aggregator is not None 
+                and not is_analytics_request 
+                and not is_debug_session 
+                and has_meaningful_device_info
+                and (is_new_session or device_info_upgraded)
+            )
+            
+            if should_start_analytics:
                 try:
                     analytics_aggregator.start_session(
                         session_id=request.session_id,
@@ -332,8 +359,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 except Exception as e:
                     logger.error(f"Failed to start analytics session: {e}")
 
-            # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard + debug)
-            if analytics_aggregator is not None and not is_analytics_request and not is_debug_session:
+            # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard + debug + generic device info)
+            if analytics_aggregator is not None and not is_analytics_request and not is_debug_session and has_meaningful_device_info:
                 # 📊 ANALYTICS FIX: Endpoints to exclude from analytics (reduce polling spam)
                 excluded_endpoints = [
                     "auth_routes.ping",  # Health checks
