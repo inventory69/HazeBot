@@ -1262,6 +1262,15 @@ class DailyMeme(commands.Cog):
 
             await self.post_meme(meme_data, interaction.channel, requested_by=interaction.user)
 
+            # Award XP for meme fetch
+            level_cog = self.bot.get_cog("LevelSystem")
+            if level_cog:
+                await level_cog.add_xp(
+                    user_id=str(interaction.user.id),
+                    username=interaction.user.name,
+                    xp_type="meme_fetched"
+                )
+
             # Send confirmation to user
             await interaction.followup.send("✅ Meme posted!", ephemeral=True)
 

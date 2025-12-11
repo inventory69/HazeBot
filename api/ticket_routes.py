@@ -467,6 +467,11 @@ def create_ticket_endpoint():
             f"(ID: {ticket_data['ticket_id']}) by user {discord_id}"
         )
 
+        # Award XP for ticket creation (10 XP)
+        from api.level_helpers import award_xp_from_api
+        if discord_id and member:
+            award_xp_from_api(bot, discord_id, member.name, "ticket_created")
+
         # Send push notification to admins/mods about new ticket
         if send_push_notification_for_ticket_event:
 
@@ -691,6 +696,14 @@ def claim_ticket_endpoint(ticket_id):
         if not result.get("success"):
             return jsonify({"error": result.get("error", "Unknown error")}), 400
 
+        # Award XP for ticket claim (15 XP - Moderator action)
+        from api.level_helpers import award_xp_from_api
+        guild = bot.get_guild(Config.get_guild_id())
+        if guild:
+            member = guild.get_member(int(user_id))
+            if member:
+                award_xp_from_api(bot, str(user_id), member.name, "ticket_claimed")
+
         # WebSocket notification for real-time updates
         if notify_ticket_update:
             notify_ticket_update(ticket_id, "ticket_claimed", {"claimed_by": int(user_id)})
@@ -862,6 +875,16 @@ def close_ticket_endpoint(ticket_id):
         if not result.get("success"):
             logger.error(f"[CLOSE TICKET] Failed: {result.get('error')}")
             return jsonify({"error": result.get("error", "Unknown error")}), 400
+
+        # Award XP for ticket resolution (25 XP - Moderator action)
+        from api.level_helpers import award_xp_from_api
+        claimed_by = ticket.get("claimed_by")
+        if claimed_by:
+            guild = bot.get_guild(Config.get_guild_id())
+            if guild:
+                member = guild.get_member(int(claimed_by))
+                if member:
+                    award_xp_from_api(bot, str(claimed_by), member.name, "ticket_resolved")
 
         # WebSocket notification for real-time updates
         if notify_ticket_update:

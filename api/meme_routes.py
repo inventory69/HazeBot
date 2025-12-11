@@ -257,6 +257,16 @@ def generate_meme():
         if not meme_url:
             return jsonify({"error": "Failed to generate meme"}), 500
 
+        # Award XP for meme generation (15 XP)
+        from api.level_helpers import award_xp_from_api
+        discord_id = getattr(request, 'discord_id', None)
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            guild = bot.get_guild(Config.get_guild_id())
+            if guild:
+                member = guild.get_member(int(discord_id))
+                if member:
+                    award_xp_from_api(bot, discord_id, member.name, "meme_generated")
+
         return jsonify({"success": True, "url": meme_url})
 
     except Exception as e:
@@ -624,6 +634,16 @@ def test_meme_from_source():
         # Pick random meme
         meme = random.choice(memes)
 
+        # Award XP for meme fetch (5 XP)
+        from api.level_helpers import award_xp_from_api
+        discord_id = getattr(request, 'discord_id', None)
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            guild = bot.get_guild(Config.get_guild_id())
+            if guild:
+                member = guild.get_member(int(discord_id))
+                if member:
+                    award_xp_from_api(bot, discord_id, member.name, "meme_fetched")
+
         return jsonify(
             {
                 "success": True,
@@ -679,6 +699,16 @@ def test_random_meme():
         meme = future.result(timeout=30)
 
         if meme:
+            # Award XP for random meme fetch (5 XP)
+            from api.level_helpers import award_xp_from_api
+            discord_id = getattr(request, 'discord_id', None)
+            if discord_id and discord_id not in ["legacy_user", "unknown"]:
+                guild = bot.get_guild(Config.get_guild_id())
+                if guild:
+                    member = guild.get_member(int(discord_id))
+                    if member:
+                        award_xp_from_api(bot, discord_id, member.name, "meme_fetched")
+            
             return jsonify(
                 {
                     "success": True,

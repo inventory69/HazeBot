@@ -34,6 +34,7 @@ import api.cog_routes as cog_routes_module
 import api.config_routes as config_routes_module
 import api.hazehub_cogs_routes as hazehub_cogs_routes_module
 import api.helpers as helpers_module
+import api.level_routes as level_routes_module
 import api.meme_routes as meme_routes_module
 import api.notification_routes as notification_routes_module
 import api.rocket_league_routes as rocket_league_routes_module
@@ -201,6 +202,9 @@ admin_routes_module.init_admin_routes(
 
 # Initialize user routes Blueprint
 user_routes_module.init_user_routes(app, Config, logger, cache, helpers_module, decorator_module)
+
+# Initialize level routes Blueprint
+level_routes_module.init_level_routes(app, Config, logger, decorator_module)
 
 # Initialize meme routes Blueprint
 meme_routes_module.init_meme_routes(app, Config, logger, decorator_module)

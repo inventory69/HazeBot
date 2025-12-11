@@ -409,6 +409,15 @@ class MemePreviewView(discord.ui.View):
         # Post to channel
         await target_channel.send(f"🎨 Custom meme created by {self.user.mention}!", embed=embed)
 
+        # Award XP for meme generation
+        level_cog = self.cog.bot.get_cog("LevelSystem")
+        if level_cog:
+            await level_cog.add_xp(
+                user_id=str(self.user.id),
+                username=self.user.name,
+                xp_type="meme_generated"
+            )
+
         # Track generated meme
         user_id = str(self.user.id)
         self.cog.memes_generated[user_id] = self.cog.memes_generated.get(user_id, 0) + 1
