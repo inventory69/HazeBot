@@ -24,7 +24,7 @@ DISCORD_API_ENDPOINT = "https://discord.com/api/v10"
 
 # OAuth Frontend URLs (Environment-based)
 DISCORD_OAUTH_FRONTEND_URL = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://admin.haze.pro")
-DISCORD_OAUTH_ANALYTICS_URL = os.getenv("DISCORD_OAUTH_ANALYTICS_URL", "https://api.haze.pro")
+DISCORD_OAUTH_ANALYTICS_URL = os.getenv("DISCORD_OAUTH_ANALYTICS_URL", "https://api.haze.pro/analytics/analytics_dashboard.html")
 
 # Extract domains for referer detection (no hardcoded domains!)
 FRONTEND_WEB_DOMAIN = DISCORD_OAUTH_FRONTEND_URL.replace("https://", "").replace("http://", "").split("/")[0]

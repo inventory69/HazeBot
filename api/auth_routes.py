@@ -404,9 +404,9 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             logger.info("📱 Redirecting to Mobile Deep Link")
             return redirect(f"hazebot://oauth?token={token}")
         elif frontend_source == "analytics":
-            # Analytics Dashboard → Environment-based URL
-            logger.info("📊 Redirecting to Analytics Dashboard")
-            return redirect(f"{DISCORD_OAUTH_ANALYTICS_URL}/analytics/analytics_dashboard.html?token={token}")
+            # Analytics Dashboard → Environment-based URL (full URL from env)
+            logger.info(f"📊 Redirecting to Analytics Dashboard: {DISCORD_OAUTH_ANALYTICS_URL}")
+            return redirect(f"{DISCORD_OAUTH_ANALYTICS_URL}?token={token}")
         else:
             # Flutter Web App (default) → Environment-based URL
             logger.info(f"🌐 Redirecting to Flutter Web App: {DISCORD_OAUTH_FRONTEND_URL}")
