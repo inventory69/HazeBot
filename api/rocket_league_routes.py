@@ -194,6 +194,23 @@ def get_rl_stats(platform, username):
         ranks_str = ", ".join([f"{k}: {v}" for k, v in stats.get("tier_names", {}).items()])
         logger.info(f"✅ Fetched RL stats for {stats['username']}: [{ranks_str}]")
 
+        # XP Reward for viewing RL stats via API
+        try:
+            from api.level_helpers import award_xp_from_api
+            discord_id = request.discord_id if hasattr(request, 'discord_id') else None
+            username = request.username if hasattr(request, 'username') else 'Unknown'
+            if discord_id and discord_id not in ["legacy_user", "unknown"]:
+                award_xp_from_api(
+                    bot=bot,
+                    user_id=str(discord_id),
+                    username=username,
+                    xp_type="rl_stats_checked",
+                    amount=5
+                )
+                logger.info(f"⭐ User {username} gained 5 XP for checking RL stats via API")
+        except Exception as e:
+            logger.error(f"❌ Failed to add XP for RL stats check via API: {e}")
+
         return jsonify(
             {
                 "success": True,
@@ -281,6 +298,20 @@ def link_user_rl_account():
             f"✅ Successfully linked RL account for {request.username}: {username} "
             f"(displays as {stats['username']}) ({platform.upper()}) - [{ranks_str}]"
         )
+
+        # XP Reward for linking RL account via API
+        try:
+            from api.level_helpers import award_xp_from_api
+            award_xp_from_api(
+                bot=bot,
+                user_id=str(discord_id),
+                username=request.username,
+                xp_type="rl_account_linked",
+                amount=20
+            )
+            logger.info(f"⭐ User {request.username} gained 20 XP for linking RL account via API")
+        except Exception as e:
+            logger.error(f"❌ Failed to add XP for RL account linking via API: {e}")
 
         return jsonify(
             {

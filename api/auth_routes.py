@@ -16,6 +16,10 @@ from api.auth import (
     DISCORD_CLIENT_ID,
     DISCORD_CLIENT_SECRET,
     DISCORD_REDIRECT_URI,
+    DISCORD_OAUTH_FRONTEND_URL,
+    DISCORD_OAUTH_ANALYTICS_URL,
+    FRONTEND_WEB_DOMAIN,
+    FRONTEND_ANALYTICS_DOMAIN,
     ROLE_PERMISSIONS,
     get_user_role_from_discord,
     token_required,
@@ -213,10 +217,12 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
         # Fallback: Detect from Referer header if state is empty
         if not frontend_source:
             referer = request.headers.get("Referer", "")
+            # Check for analytics paths first (more specific)
             if "/login" in referer or "/analytics" in referer:
                 frontend_source = "analytics"
-                logger.info(f"🔍 Detected Analytics from Referer: {referer}")
-            elif "admin.haze.pro" in referer:
+                logger.info(f"🔍 Detected Analytics from Referer path: {referer}")
+            else:
+                # Default to web for any other referer (Flutter Web App)
                 frontend_source = "web"
                 logger.info(f"🔍 Detected Flutter Web from Referer: {referer}")
 
@@ -253,9 +259,11 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             # Discord redirected us - this is the common case
             # We can't detect from Discord's referer, so rely on state
             referer_hint = ""
-        elif "/login" in referer or "/analytics" in referer or "api.haze.pro/login" in referer:
+        elif "/login" in referer or "/analytics" in referer:
+            # Analytics paths detected
             referer_hint = "analytics"
-        elif "admin.haze.pro" in referer:
+        else:
+            # Default to web (Flutter Web App)
             referer_hint = "web"
 
         # Determine frontend source with fallback chain
@@ -395,14 +403,13 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             logger.info("📱 Redirecting to Mobile Deep Link")
             return redirect(f"hazebot://oauth?token={token}")
         elif frontend_source == "analytics":
-            # Analytics Dashboard → Relative path on api.haze.pro
+            # Analytics Dashboard → Environment-based URL
             logger.info("📊 Redirecting to Analytics Dashboard")
-            return redirect(f"https://api.haze.pro/analytics/analytics_dashboard.html?token={token}")
+            return redirect(f"{DISCORD_OAUTH_ANALYTICS_URL}/analytics/analytics_dashboard.html?token={token}")
         else:
-            # Flutter Web App (default) → admin.haze.pro
-            frontend_url = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://admin.haze.pro")
-            logger.info(f"🌐 Redirecting to Flutter Web App: {frontend_url}")
-            return redirect(f"{frontend_url}?token={token}")
+            # Flutter Web App (default) → Environment-based URL
+            logger.info(f"🌐 Redirecting to Flutter Web App: {DISCORD_OAUTH_FRONTEND_URL}")
+            return redirect(f"{DISCORD_OAUTH_FRONTEND_URL}?token={token}")
 
     @auth_routes.route("/api/auth/me", methods=["GET"])
     @token_required_wrapper

@@ -489,6 +489,10 @@ def post_game_request():
 
         logger.info(f"🎮 Game request posted: {requester.name} -> {target.name} for {game_name}")
 
+        # Award XP for game request (8 XP)
+        from api.level_helpers import award_xp_from_api
+        award_xp_from_api(bot, discord_id, requester.name, "game_request")
+
         return jsonify(
             {
                 "success": True,

@@ -52,7 +52,8 @@ API_PORT = int(os.getenv("API_PORT", "5070"))
 # If set, /status command will show detailed monitoring data from Uptime Kuma
 # If not set, /status will only show basic bot status (latency, guilds, uptime)
 UPTIME_KUMA_URL = os.getenv("UPTIME_KUMA_URL")  # None if not set
-UPTIME_KUMA_ENABLED = bool(UPTIME_KUMA_URL)
+# Disable Uptime Kuma in Test Mode to avoid network errors
+UPTIME_KUMA_ENABLED = bool(UPTIME_KUMA_URL) and PROD_MODE
 
 # Monitor Categories for grouping in status embed
 UPTIME_KUMA_MONITORS = {
@@ -96,6 +97,131 @@ def utc_to_local(dt):
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=ZoneInfo("UTC"))
     return dt.astimezone(ZoneInfo(TIMEZONE))
+
+
+# ============================================================================
+# XP/LEVEL SYSTEM CONFIGURATION
+# ============================================================================
+
+# XP Configuration
+XP_CONFIG = {
+    # Activity XP
+    "meme_generated": 15,      # Custom Meme erstellt
+    "meme_fetched": 5,         # Daily Meme gefetched
+    "message_sent": 2,         # Nachricht gesendet (mit Cooldown)
+    "image_sent": 5,           # Bild gesendet
+    "ticket_created": 10,      # Ticket erstellt
+    "game_request": 8,         # Game Request gesendet
+    
+    # Rocket League XP
+    "rl_account_linked": 20,   # RL Account verknüpft
+    "rl_stats_checked": 5,     # RL Stats abgerufen
+    
+    # Mod Activities (Extra XP)
+    "ticket_resolved": 25,     # Ticket geschlossen (Mod only)
+    "ticket_claimed": 15,      # Ticket claimed (Mod only)
+    
+    # Level Calculation
+    "base_xp_per_level": 100,  # Base XP für Level 1→2
+    "xp_multiplier": 1.5,      # Multiplier pro Level (exponentiell)
+    
+    # Cooldowns (Spam-Prevention)
+    "message_cooldown": 60,    # Sekunden zwischen XP für Messages
+    "daily_xp_cap": 500,       # Max XP pro Tag (optional, 0 = disabled)
+}
+
+# Level Tier Names (Inventory Style)
+LEVEL_TIERS = {
+    "legendary": {
+        "min_level": 50,
+        "name": "🗝️ Vault Keeper",
+        "color": 0xFF0000,  # Rot (Legendary)
+        "description": "Guardian of Legendary Treasures"
+    },
+    "epic": {
+        "min_level": 30,
+        "name": "💎 Crystal Hoarder",
+        "color": 0xFF00FF,  # Pink (Epic)
+        "description": "Collector of Epic Gems"
+    },
+    "rare": {
+        "min_level": 20,
+        "name": "🏺 Artifact Seeker",
+        "color": 0x9B59B6,  # Lila (Rare)
+        "description": "Hunter of Rare Relics"
+    },
+    "uncommon": {
+        "min_level": 10,
+        "name": "🎁 Chest Opener",
+        "color": 0x3498DB,  # Blau (Uncommon)
+        "description": "Finder of Hidden Chests"
+    },
+    "common": {
+        "min_level": 1,
+        "name": "🪙 Token Collector",
+        "color": 0x2ECC71,  # Grün (Common)
+        "description": "Starting the Journey"
+    }
+}
+
+# Level Icon URLs (Twemoji)
+LEVEL_ICONS = {
+    "legendary": "https://twemoji.maxcdn.com/v/latest/svg/1f451.svg",  # 👑 Crown
+    "epic": "https://twemoji.maxcdn.com/v/latest/svg/1f31f.svg",       # 🌟 Star
+    "rare": "https://twemoji.maxcdn.com/v/latest/svg/1f48e.svg",       # 💎 Gem
+    "uncommon": "https://twemoji.maxcdn.com/v/latest/svg/1f6e1.svg",   # 🛡️ Shield
+    "common": "https://twemoji.maxcdn.com/v/latest/svg/1f3c5.svg",     # 🏅 Medal
+}
+
+
+def calculate_level(total_xp: int) -> int:
+    """Berechnet Level basierend auf Total XP (exponentiell)"""
+    level = 1
+    xp_needed = XP_CONFIG["base_xp_per_level"]
+    current_xp = total_xp
+    
+    while current_xp >= xp_needed:
+        current_xp -= xp_needed
+        level += 1
+        xp_needed = int(xp_needed * XP_CONFIG["xp_multiplier"])
+    
+    return level
+
+
+def calculate_xp_for_next_level(current_level: int) -> int:
+    """Berechnet XP needed für nächstes Level"""
+    xp_needed = XP_CONFIG["base_xp_per_level"]
+    
+    for i in range(1, current_level):
+        xp_needed = int(xp_needed * XP_CONFIG["xp_multiplier"])
+    
+    return xp_needed
+
+
+def calculate_total_xp_for_level(level: int) -> int:
+    """Berechnet total XP needed um ein bestimmtes Level zu erreichen"""
+    if level <= 1:
+        return 0
+    
+    total = 0
+    for i in range(1, level):
+        total += calculate_xp_for_next_level(i)
+    
+    return total
+
+
+def get_level_tier(level: int) -> dict:
+    """Returns tier info for a given level"""
+    if level >= 50:
+        return LEVEL_TIERS["legendary"]
+    elif level >= 30:
+        return LEVEL_TIERS["epic"]
+    elif level >= 20:
+        return LEVEL_TIERS["rare"]
+    elif level >= 10:
+        return LEVEL_TIERS["uncommon"]
+    else:
+        return LEVEL_TIERS["common"]
 
 
 # ============================================================================
@@ -157,6 +283,7 @@ COG_PREFIXES = {
     "Preferences": "⚙️ [Preferences]",
     "Presence": "👤 [Presence]",
     "Profile": "👤 [Profile]",
+    "LevelSystem": "⭐ [LevelSystem]",
     "RocketLeague": "🚀 [RocketLeague]",
     "RoleInfo": "📋 [RoleInfo]",
     "ServerGuide": "🌟 [ServerGuide]",
@@ -182,6 +309,15 @@ PROD_IDS = {
     "MEMBER_ROLE_ID": 1424161475718807562,
     "CHANGELOG_ROLE_ID": 1426314743278473307,
     "MEME_ROLE_ID": 1433415594463596567,
+    "LEVEL_NOTIFICATION_ROLE_ID": 1299450758823325807,  # Level-Up Notification Role (Prod)
+    # Level Tier Roles (automatisch bei Level-Up zugewiesen)
+    "LEVEL_TIER_ROLES": {
+        "common": 1448603657514782842,      # Token Collector (Level 1-9)
+        "uncommon": 1448603596676661300,    # Chest Opener (Level 10-19)
+        "rare": 1448603554951594014,        # Artifact Seeker (Level 20-29)
+        "epic": 1448603521430716487,        # Crystal Hoarder (Level 30-49)
+        "legendary": 1448603426459091007,   # Vault Keeper (Level 50+)
+    },
     # Interest Roles
     "INTEREST_ROLE_IDS": [
         1424465865297887345,  # Chat & Memes
@@ -213,6 +349,7 @@ PROD_IDS = {
     "STATUS_CHANNEL_ID": 1446501233476243536,
     "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
     "GAMING_CHANNEL_ID": 1425472657293443236,  # TODO: Replace with actual gaming channel ID
+    "LEVEL_UP_CHANNEL_ID": 1424490032051388538,  # Level-Up Gratulations Channel
     # Categories
     "TICKETS_CATEGORY_ID": 1426113555974979625,
 }
@@ -226,6 +363,15 @@ TEST_IDS = {
     "MEMBER_ROLE_ID": 1429722417428692992,
     "CHANGELOG_ROLE_ID": 1429726011771060344,
     "MEME_ROLE_ID": 1433416262062702686,
+    "LEVEL_NOTIFICATION_ROLE_ID": 1448431457121865779,  # Level-Up Notification Role (Test)
+    # Level Tier Roles (automatisch bei Level-Up zugewiesen)
+    "LEVEL_TIER_ROLES": {
+        "common": 1448602128070479872,      # Token Collector (Level 1-9)
+        "uncommon": 1448602170017452114,    # Chest Opener (Level 10-19)
+        "rare": 1448602356877885493,        # Artifact Seeker (Level 20-29)
+        "epic": 1448602446258765835,        # Crystal Hoarder (Level 30-49)
+        "legendary": 1448602504383299726,   # Vault Keeper (Level 50+)
+    },
     # Interest Roles
     "INTEREST_ROLE_IDS": [
         1429725562074566656,
@@ -257,6 +403,7 @@ TEST_IDS = {
     "STATUS_CHANNEL_ID": 1446935976193818635,
     "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
     "GAMING_CHANNEL_ID": 1429804818481938463,  # TODO: Replace with actual gaming channel ID
+    "LEVEL_UP_CHANNEL_ID": 1448418996457046228,  # Test Level-Up Channel
     # Categories
     "TICKETS_CATEGORY_ID": 1429723767445389352,
 }
@@ -295,6 +442,11 @@ MEME_ROLE_ID = CURRENT_IDS.get("MEME_ROLE_ID")
 SERVER_GUIDE_CHANNEL_ID = CURRENT_IDS.get("SERVER_GUIDE_CHANNEL_ID")
 STATUS_CHANNEL_ID = CURRENT_IDS.get("STATUS_CHANNEL_ID")
 GAMING_CHANNEL_ID = CURRENT_IDS.get("GAMING_CHANNEL_ID")
+
+# Level System
+LEVEL_UP_CHANNEL_ID = CURRENT_IDS["LEVEL_UP_CHANNEL_ID"]
+LEVEL_NOTIFICATION_ROLE_ID = CURRENT_IDS["LEVEL_NOTIFICATION_ROLE_ID"]
+LEVEL_TIER_ROLES = CURRENT_IDS["LEVEL_TIER_ROLES"]
 
 # Welcome System
 WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]

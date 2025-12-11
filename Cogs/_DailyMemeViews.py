@@ -96,6 +96,16 @@ class MemeHubView(discord.ui.View):
                 if channel:
                     # Post with requester information
                     await self.cog.post_meme(meme, channel, requested_by=interaction.user)
+                    
+                    # Award XP for meme fetch
+                    level_cog = self.cog.bot.get_cog("LevelSystem")
+                    if level_cog:
+                        await level_cog.add_xp(
+                            user_id=str(interaction.user.id),
+                            username=interaction.user.name,
+                            xp_type="meme_fetched"
+                        )
+                    
                     await interaction.followup.send(f"✅ Meme posted to {channel.mention}!", ephemeral=True)
                 else:
                     await interaction.followup.send("❌ Target channel not found.", ephemeral=True)
@@ -103,6 +113,15 @@ class MemeHubView(discord.ui.View):
             else:
                 # Normal ephemeral response
                 await interaction.followup.send(embed=embed)
+                
+                # Award XP for meme fetch (even for ephemeral responses)
+                level_cog = self.cog.bot.get_cog("LevelSystem")
+                if level_cog:
+                    await level_cog.add_xp(
+                        user_id=str(interaction.user.id),
+                        username=interaction.user.name,
+                        xp_type="meme_fetched"
+                    )
 
             source_name = meme.get("subreddit", "unknown")
             if source_name not in ["9gag"]:
@@ -272,6 +291,16 @@ class SourceSelectionView(discord.ui.View):
                 if channel:
                     # Post with requester information
                     await self.cog.post_meme(meme, channel, requested_by=interaction.user)
+                    
+                    # Award XP for meme fetch
+                    level_cog = self.cog.bot.get_cog("LevelSystem")
+                    if level_cog:
+                        await level_cog.add_xp(
+                            user_id=str(interaction.user.id),
+                            username=interaction.user.name,
+                            xp_type="meme_fetched"
+                        )
+                    
                     await interaction.followup.send(f"✅ Meme posted to {channel.mention}!", ephemeral=True)
                 else:
                     await interaction.followup.send("❌ Target channel not found.", ephemeral=True)
@@ -279,6 +308,15 @@ class SourceSelectionView(discord.ui.View):
             else:
                 # Normal ephemeral response
                 await interaction.followup.send(embed=embed)
+                
+                # Award XP for meme fetch (even for ephemeral responses)
+                level_cog = self.cog.bot.get_cog("LevelSystem")
+                if level_cog:
+                    await level_cog.add_xp(
+                        user_id=str(interaction.user.id),
+                        username=interaction.user.name,
+                        xp_type="meme_fetched"
+                    )
 
             logger.info(f"Specific meme fetched by {interaction.user} from {source_name}")
 
