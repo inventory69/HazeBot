@@ -221,10 +221,11 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
             if "/login" in referer or "/analytics" in referer:
                 frontend_source = "analytics"
                 logger.info(f"🔍 Detected Analytics from Referer path: {referer}")
-            else:
-                # Default to web for any other referer (Flutter Web App)
+            elif referer and ("admin.haze.pro" in referer or "localhost" in referer):
+                # Only detect web when there's an actual referer from known domains
                 frontend_source = "web"
                 logger.info(f"🔍 Detected Flutter Web from Referer: {referer}")
+            # else: Empty referer (monitoring health checks) - no source, no logs
 
         params = {
             "client_id": DISCORD_CLIENT_ID,
