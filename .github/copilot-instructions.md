@@ -1,199 +1,211 @@
-# GitHub Copilot Code Review Instructions - HazeBot
+# HazeBot Copilot Instructions
 
-## Review Philosophy
-- Only comment when you have HIGH CONFIDENCE (>80%) that an issue exists
-- Be concise: one sentence per comment when possible
-- Focus on actionable feedback, not observations
-- When reviewing text, only comment on clarity issues if the text is genuinely confusing or could lead to errors. "Could be clearer" is not the same as "is confusing" - stay silent unless HIGH confidence it will cause problems
+## Architecture Overview
 
-## Priority Areas (Review These)
+**HazeBot** is a modular Discord bot with REST API and real-time WebSocket communication. The codebase supports **dual-mode operation**:
+- `Main.py` - Bot only (skips AnalyticsManager/APIServer cogs)
+- `start_with_api.py` - Bot + API server (loads all cogs, runs Flask in separate thread)
 
-### Security & Safety
-- Command injection risks (shell commands, user input)
-- Path traversal vulnerabilities
-- Credential exposure or hardcoded secrets (Config.py should NEVER be committed)
-- Missing input validation on external data (Discord messages, API requests)
-- JWT token validation and expiration handling
-- Missing `@token_required` decorator on API endpoints
-- SQL injection risks (even with SQLite)
-- Improper error handling that could leak sensitive info (Discord tokens, API keys)
-- Environment variables not properly loaded from `.env`
-
-### Correctness Issues
-- Logic errors that could cause exceptions or incorrect behavior
-- Race conditions in async Discord.py code
-- Resource leaks (Discord connections, database connections, file handles)
-- Incorrect error propagation (bare `except:` without logging)
-- Discord.py async/await misuse (`asyncio.run_coroutine_threadsafe` for Flask threads)
-- Missing `if mounted:` checks before `setState()` in async callbacks
-- Bot not properly handling Discord reconnects or rate limits
-- Missing checks for `bot.get_cog()` returning None
-- API endpoints not checking if bot instance exists
-- Timeout handling for long-running operations (>45s for APIServer reload)
-- Platform parameter being None in Rocket League stats (must validate before `.lower()`)
-
-### Architecture & Patterns
-- Code that violates modular Blueprint architecture (should not add endpoints directly to app.py)
-- Missing error handling in API endpoints (should return proper JSON error responses)
-- Async/await misuse or blocking operations in Discord event loop
-- API endpoints not using Dependency Injection pattern (should receive dependencies via `init_*()`)
-- Direct imports of global variables instead of via dependency injection
-- Code duplication between Bot Commands and API endpoints (should reuse Bot functions)
-- Missing logging with proper COG_PREFIXES (should use `logger` not `print()`)
-- New API endpoints not registered in correct Blueprint module
-- Helper functions not in `helpers.py` (should use `helpers_module`)
-- Decorators not passed via `decorator_module` namespace
-
-## Project-Specific Context
-
-### Backend (Python/Discord.py/Flask)
-- **Technology**: Python 3.11+, discord.py 2.x, Flask, JWT Authentication
-- **Architecture**: Modular Blueprint-based API (refactored from 6500 → 301 lines main app)
-- **Core Files**:
-  - `Main.py` - Discord Bot standalone
-  - `start_with_api.py` - Bot with APIServer Cog (Port 5070)
-  - `api/app.py` - Flask main app (Blueprint registration only)
-  - `Config.py` - Bot configuration (NEVER commit, use `.env`)
-  - `Cogs/` - Discord Bot commands (modulares Cog-System)
-  - `api/*.py` - Blueprint-Module für API routes
-
-- **Error Handling**: 
-  - Always use try-except with proper logging
-  - API endpoints return `jsonify({"error": "message"})` with HTTP status codes
-  - Bot commands send error embeds to Discord
-  
-- **Async Patterns**: 
-  - Bot uses `@commands.command()` and `@app_commands.command()`
-  - API uses `asyncio.run_coroutine_threadsafe(coro, bot.loop)` to call Bot functions
-  - Always add timeout (10s standard, 45s for APIServer reload)
-
-- **Authentication**:
-  - All API endpoints need `@token_required` decorator
-  - Admin-only endpoints need `@require_permission("admin_panel")`
-  - JWT tokens with session tracking in `active_sessions`
-  
-- **Logging**: 
-  - Use `Utils.Logger` with COG_PREFIXES
-  - NO `print()` statements in production code
-  - API endpoints use `helpers_module.log_api_call()`
-
-- **Config Management**:
-  - Never edit Config.py directly
-  - Use `ConfigLoader.save_config()` for persistent changes
-  - API config endpoints use `helpers_module.get_config_field()` and `set_config_field()`
-
-- **Blueprint Pattern** (Version 3.8):
-  ```python
-  # New Blueprint module: api/feature_routes.py
-  def init_feature_routes(app, config, logger, decorator_module, helpers_module):
-      bp = Blueprint('feature', __name__, url_prefix='/api/feature')
-      token_required = decorator_module.token_required
-      
-      @bp.route('/endpoint', methods=['GET'])
-      @token_required
-      def get_endpoint():
-          try:
-              helpers_module.log_api_call("GET /api/feature/endpoint")
-              # Implementation
-              return jsonify({"success": True})
-          except Exception as e:
-              logger.error(f"Error: {e}")
-              return jsonify({"error": str(e)}), 500
-      
-      app.register_blueprint(bp)
-  ```
-
-- **Cog Protection**:
-  - CogManager: CANNOT be unloaded/reloaded (CRITICAL)
-  - APIServer: CANNOT be unloaded (only reload), returns 403
-
-### Code Quality
-- **Linting**: Use `ruff check --fix .` and `ruff format .`
-- **Type Hints**: Always use type hints in function signatures
-- **No Code Duplication**: Reuse existing Bot functions, don't duplicate logic
-- **No Bare Excepts**: Always catch specific exceptions or log generic ones
-
-## CI Pipeline Context
-
-**Important**: Reviews happen before tests run. Do not flag issues that automated checks will catch.
-
-### What Our Checks Do
-
-**Python checks** (currently manual, should be automated):
-- `ruff check --fix .` - Linting and auto-fix
-- `ruff format .` - Code formatting
-- Manual testing with `python start_with_api.py`
-- API endpoint testing via Postman or `test_api_endpoints.py`
-
-**Key setup**:
-- Uses virtual environment (`.venv`)
-- Loads environment variables from `.env` (never committed)
-- Config.py contains secrets (never committed)
-- Firebase credentials in `firebase-credentials.json` (never committed)
-
-**Testing strategy**:
-- Test on `testrefactor` branch first
-- Merge to `main` after verification
-- Manual rollback via backup files if needed (e.g., `app.py.backup-YYYYMMDD-HHMMSS`)
-
-## Skip These (Low Value)
-
-Do not comment on:
-- **Style/formatting** - ruff handles this
-- **Missing dependencies** - requirements.txt handles this
-- **Minor naming suggestions** - unless truly confusing
-- **Suggestions to add comments** - for self-documenting code
-- **Refactoring suggestions** - unless there's a clear bug or maintainability issue
-- **Multiple issues in one comment** - choose the single most critical issue
-- **Logging suggestions** - unless for errors or security events (we have enough logging)
-- **Pedantic accuracy in text** - unless it would cause actual confusion or errors
-
-## Response Format
-
-When you identify an issue:
-1. **State the problem** (1 sentence)
-2. **Why it matters** (1 sentence, only if not obvious)
-3. **Suggested fix** (code snippet or specific action)
-
-Example:
+### Project Structure
 ```
-This endpoint is missing @token_required decorator. Add it before the route decorator to require authentication.
+HazeBot/
+├── Main.py / start_with_api.py    # Entry points (see above)
+├── Config.py                       # Global constants, PROD_MODE, channel/role IDs
+├── Cogs/                          # 24 modular cogs (discord.py extensions)
+├── api/                           # Flask REST API (Blueprint architecture)
+├── Utils/                         # Shared utilities (Logger, EmbedUtils, etc.)
+├── Data/ vs TestData/             # Environment-based data dirs (PROD_MODE)
+└── analytics/                     # SQLite analytics with dashboard
 ```
 
-## When to Stay Silent
+**Key Architectural Principle:** Config.py centralizes ALL environment-dependent settings (PROD_MODE, GUILD_ID, channel/role IDs). Cogs and API modules ONLY import from Config.py—never hardcode IDs.
 
-If you're uncertain whether something is an issue, don't comment. False positives create noise and reduce trust in the review process.
+## Critical Configuration System
 
-## Project Standards (from AI_PROJECT_INSTRUCTIONS.md)
+### Dual Mode: Production vs Test
+- **PROD_MODE** (Config.py) switches between production/test guilds, tokens, and data directories
+- **PROD_IDS** / **TEST_IDS** dictionaries map logical names to Discord channel/role IDs
+- Access IDs via `Config.CURRENT_IDS["channel_name"]` to get the correct value for current mode
 
-### Code-Wiederverwendung
-- ALWAYS reuse existing Bot functions (e.g., `DailyMeme.fetch_reddit_meme()`)
-- API endpoints should wrap Bot functions, not duplicate logic
-- Use `asyncio.run_coroutine_threadsafe()` to call async Bot functions from Flask
+### Config Persistence
+- Runtime config changes (e.g., via `/config` commands or API) are saved to `Config_{guild_id}.json`
+- `Utils/ConfigLoader.py` loads overrides on startup, modifying `Config.py` module attributes dynamically
+- Example: `Config.RL_RANK_CHECK_INTERVAL_HOURS` starts at 24 but can be changed to 12 via admin UI
 
-### API Development (Modular Blueprint Architecture)
-- **NEW Endpoints**: Add to appropriate Blueprint module (e.g., `meme_routes.py` for Meme features)
-- **Blueprint Pattern**: Always use `init_*()` function with Dependency Injection
-- **Dependencies**: Pass via `init_*()` parameters, NOT global imports
-- **Decorators**: Pass via `decorator_module` namespace (token_required, require_permission)
-- **Helpers**: Pass via `helpers_module` (log_api_call, get_config_field, etc.)
-- **ALWAYS** secure API endpoints with `@token_required`
-- **ALWAYS** add permission checks for Admin-Only features (`@require_permission`)
-- **ALWAYS** handle errors in API calls (try/catch)
-- **ALWAYS** track sessions in `@token_required` Decorator
-- **Blueprint Registration**: Register in `app.py` following established pattern
-- **Module Size**: Keep individual Blueprint files < 1000 lines (split if larger)
+**When adding new config options:** 
+1. Add default to `Config.py`
+2. Add to `api/config_routes.py` GET/POST handlers
+3. Add to `Utils/ConfigLoader.py` save/load logic
 
-### Recent Bug Fixes to Remember
-- **Rocket League Stats**: Always check if `platform` is not None before calling `.lower()` (Bug fixed 29.11.2025)
-- **APIServer Reload**: Needs 45s timeout (operation takes ~27s)
-- **Session Management**: Logout endpoint must remove session immediately
-- **Token Refresh**: Uses proactive refresh with 5-min buffer
+## Cog System (discord.py)
 
-### Files to NEVER Commit
-- `Config.py` - Contains Discord tokens and API keys
-- `.env` - Contains environment variables
-- `firebase-credentials.json` - Contains Firebase credentials
-- `*.log` - Log files
-- `__pycache__/` - Python cache
-- `.venv/` or `venv/` - Virtual environment
+### Cog Loading Pattern
+All cogs follow this structure:
+```python
+class MyCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        # Start background tasks here
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(MyCog(bot))
+```
+
+Cogs are loaded in `Main.py`/`start_with_api.py` via:
+```python
+await bot.load_extension(f"Cogs.{cog_name}")
+```
+
+**Hot-reload support:** `/reload` command and `api/cog_routes.py` allow runtime reload without bot restart.
+
+### Per-Cog Log Levels
+`Config.COG_LOG_LEVELS` dictionary allows setting different log levels per cog (e.g., `{"RocketLeague": logging.DEBUG}`). Applied in `Utils/Logger.py`.
+
+## API Architecture
+
+### Blueprint Pattern
+`api/app.py` is the main Flask app. Each feature area has its own Blueprint file:
+- `auth_routes.py` - JWT auth, Discord OAuth2
+- `ticket_routes.py` - Support ticket CRUD + WebSocket
+- `rocket_league_routes.py` - RL stats, account linking
+- `meme_routes.py` - Meme templates, generation
+- `config_routes.py` - Bot configuration management
+- `cog_routes.py` - Cog load/unload/reload
+- `analytics.py` / `analytics_db.py` - Session tracking (SQLite)
+
+**Integration:** APIServer cog (`Cogs/APIServer.py`) runs Flask app in a separate thread, exposing shared bot state to API via `app.bot_instance`.
+
+### Authentication Flow
+1. **Basic Auth:** Username/password → JWT token (48h expiry)
+2. **Discord OAuth2:** User authorizes → callback receives code → exchange for token → verify guild membership and roles
+3. **Roles:** Admin, Moderator, User (Lootling role in Discord)
+4. JWT stored in Authorization header: `Bearer <token>`
+
+### WebSocket (Tickets)
+`api/ticket_routes.py` uses Flask-SocketIO for real-time ticket chat. Events:
+- `join_ticket` - Client subscribes to ticket room
+- `ticket_message` - Bidirectional chat (admin panel ↔ Discord)
+- `ticket_closed` - Notify clients when ticket is closed
+
+## Analytics System
+
+### Storage: SQLite (preferred) or JSON (legacy)
+- `Config.USE_SQLITE_ANALYTICS` (default: True) switches backends
+- SQLite tables: `sessions`, `session_actions`, `active_sessions`
+- **Partitioning:** Old data auto-moved to `sessions_YYYYMM` tables (see `api/analytics_partitioning.py`)
+
+### Dashboard
+Run `python analytics/view_analytics.py` to launch HTML dashboard at `http://localhost:8089`. Requires JWT auth (admin/mod only).
+
+**Key metrics:** Active users (7d/30d), session duration, platform breakdown (Web/Android/iOS), feature usage by endpoint.
+
+## Coding Conventions (Strictly Enforced)
+
+### Imports & Comments
+```python
+# 📦 Built-in modules
+import logging
+from datetime import datetime
+
+# 📥 Custom modules
+from Config import GUILD_ID, PROD_MODE
+from Utils.Logger import Logger
+```
+**Required:** Use emoji comment prefixes (`# 📦`, `# 📥`, `# 💡`, `# 🌱`) for section clarity.
+
+### Naming & Style
+- **PascalCase:** Classes, functions, variables, constants (`ThemeDict`, `InitLogging`, `UserCooldowns`)
+- **Indentation:** TABS ONLY (no spaces)
+- **Strings:** Single quotes always (`'message'`, not `"message"`)
+- **F-strings:** Single quotes inside (`f'{name}'`)
+
+### Sorting
+- Imports: Longest to shortest (within each emoji section)
+- Example: `from datetime import datetime` before `import logging`
+
+## Development Workflows
+
+### Local Development
+```bash
+# Bot only (no API dependencies)
+python Main.py
+
+# Bot + API (requires api_requirements.txt)
+python start_with_api.py
+```
+
+**Environment Setup:**
+1. Copy `.env.example` to `.env`
+2. Set `PROD_MODE=false` for testing
+3. Configure `TEST_DISCORD_BOT_TOKEN` and `DISCORD_TEST_GUILD_ID`
+4. Edit `Config.py` `TEST_IDS` dictionary with test channel/role IDs
+
+### Code Formatting
+```fish
+source .venv/bin/activate.fish
+ruff format Cogs/        # Format all cogs
+ruff check --fix .       # Auto-fix linting issues
+```
+
+**Note:** User's shell is Fish. Use Fish syntax for multi-command examples.
+
+### Deployment
+- **GitHub Actions:** Push to `main` triggers `/.github/workflows/deploy.yml`
+- Restarts Pterodactyl bot server via API (see workflow for details)
+- **Manual:** SSH to server, `git pull`, restart systemd service
+
+## Common Patterns
+
+### Creating New Cog
+1. Create `Cogs/NewCog.py` with standard structure (see above)
+2. Add emoji prefix to `Config.COG_PREFIXES` (e.g., `"NewCog": "🔧"`)
+3. Optionally add to `Config.COG_LOG_LEVELS` for custom logging
+4. Import Config.py constants—NEVER hardcode IDs
+
+### Adding API Endpoint
+1. Create or edit Blueprint in `api/{feature}_routes.py`
+2. Use `@require_auth` decorator for protected routes
+3. Import bot instance: `from api.app import app; bot = app.bot_instance`
+4. Access Discord state: `bot.get_guild(Config.GUILD_ID)`, `bot.get_channel(...)`
+
+### Ticket System Integration
+- Discord: `Cogs/TicketSystem.py` creates tickets, manages channels
+- API: `api/ticket_routes.py` provides REST + WebSocket for admin panel
+- Both share `Data/tickets.json` (or `TestData/tickets.json`)
+- WebSocket events keep admin panel in sync with Discord messages
+
+## Testing Strategy
+
+- **No formal test suite:** Manual testing in PROD_MODE=false environment
+- **Test Guild:** Dedicated Discord server with matching channel/role structure
+- **API Testing:** `analytics/test_api_endpoints.py` validates critical routes
+- **Analytics:** `analytics/test_partitioning.py` validates database operations
+
+## External Integrations
+
+- **Rocket League:** tracker.gg API for stats, requires `ROCKET_LEAGUE_API_KEY`
+- **Uptime Kuma:** Optional monitoring dashboard (`UPTIME_KUMA_URL` in .env)
+- **Firebase:** Push notifications to mobile admin panel (`FCM_SERVER_KEY`)
+- **Imgflip:** Meme generation API (public templates, no key needed)
+- **Reddit/Lemmy:** Daily meme scraping (no auth, uses JSON APIs)
+
+## Troubleshooting
+
+### Cog Not Loading
+- Check `COG_LOG_LEVELS` isn't suppressing errors
+- Verify cog name matches filename (case-sensitive)
+- Look for import errors in cog's `__init__` method
+
+### Config Changes Not Persisting
+- Ensure `Utils/ConfigLoader.py` includes new config key in `save_config_to_file()`
+- Check `Config_{guild_id}.json` exists in Data/ or TestData/
+
+### API 403 Errors
+- Verify JWT token is valid (check expiry with jwt.io)
+- Confirm user has required role (Admin/Moderator)
+- Check Discord OAuth2 flow completed successfully
+
+### Analytics Not Recording
+- Verify `Config.USE_SQLITE_ANALYTICS = True`
+- Check `Data/analytics.db` (or `TestData/analytics.db`) exists
+- Review `api/analytics.py` `track_session()` calls in routes
