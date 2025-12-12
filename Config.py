@@ -106,28 +106,31 @@ def utc_to_local(dt):
 # XP Configuration
 XP_CONFIG = {
     # Activity XP
-    "meme_generated": 15,      # Custom Meme erstellt
-    "meme_fetched": 5,         # Daily Meme gefetched
-    "message_sent": 2,         # Nachricht gesendet (mit Cooldown)
-    "image_sent": 5,           # Bild gesendet
-    "ticket_created": 10,      # Ticket erstellt
-    "game_request": 8,         # Game Request gesendet
-    
+    "message_sent": 2,  # Nachricht gesendet (mit Cooldown)
+    "image_sent": 5,  # Bild gesendet
+    "ticket_created": 10,  # Ticket erstellt
+    "game_request": 8,  # Game Request gesendet
+    # Meme Activities (REBALANCED - 12. Dez 2025)
+    "meme_fetch": 2,  # Meme gefetched (from source/random) - REDUCED from 5
+    "meme_post": 5,  # Gefetchtes Meme gepostet - NEW
+    "meme_generate": 10,  # Custom Meme generiert - REDUCED from 15
+    "meme_generate_post": 8,  # Generiertes Meme gepostet - NEW
+    # Legacy XP types (kept for backward compatibility)
+    "meme_fetched": 2,  # Alias for meme_fetch
+    "meme_generated": 10,  # Alias for meme_generate
     # Rocket League XP
-    "rl_account_linked": 20,   # RL Account verknüpft
-    "rl_stats_checked": 5,     # RL Stats abgerufen
-    
+    "rl_account_linked": 20,  # RL Account verknüpft
+    "rl_stats_checked": 5,  # RL Stats abgerufen
     # Mod Activities (Extra XP)
-    "ticket_resolved": 25,     # Ticket geschlossen (Mod only)
-    "ticket_claimed": 15,      # Ticket claimed (Mod only)
-    
+    "ticket_resolved": 25,  # Ticket geschlossen (Mod only)
+    "ticket_claimed": 15,  # Ticket claimed (Mod only)
     # Level Calculation
     "base_xp_per_level": 100,  # Base XP für Level 1→2
-    "xp_multiplier": 1.5,      # Multiplier pro Level (exponentiell)
-    
+    "xp_multiplier": 1.5,  # Multiplier pro Level (exponentiell)
     # Cooldowns (Spam-Prevention)
-    "message_cooldown": 60,    # Sekunden zwischen XP für Messages
-    "daily_xp_cap": 500,       # Max XP pro Tag (optional, 0 = disabled)
+    "message_cooldown": 60,  # Sekunden zwischen XP für Messages
+    "meme_fetch_cooldown": 30,  # Sekunden zwischen XP für Meme Fetches - NEW
+    "daily_xp_cap": 500,  # Max XP pro Tag (optional, 0 = disabled)
 }
 
 # Level Tier Names (Inventory Style)
@@ -136,41 +139,41 @@ LEVEL_TIERS = {
         "min_level": 50,
         "name": "🗝️ Vault Keeper",
         "color": 0xFF0000,  # Rot (Legendary)
-        "description": "Guardian of Legendary Treasures"
+        "description": "Guardian of Legendary Treasures",
     },
     "epic": {
         "min_level": 30,
         "name": "💎 Crystal Hoarder",
         "color": 0xFF00FF,  # Pink (Epic)
-        "description": "Collector of Epic Gems"
+        "description": "Collector of Epic Gems",
     },
     "rare": {
         "min_level": 20,
         "name": "🏺 Artifact Seeker",
         "color": 0x9B59B6,  # Lila (Rare)
-        "description": "Hunter of Rare Relics"
+        "description": "Hunter of Rare Relics",
     },
     "uncommon": {
         "min_level": 10,
         "name": "🎁 Chest Opener",
         "color": 0x3498DB,  # Blau (Uncommon)
-        "description": "Finder of Hidden Chests"
+        "description": "Finder of Hidden Chests",
     },
     "common": {
         "min_level": 1,
         "name": "🪙 Token Collector",
         "color": 0x2ECC71,  # Grün (Common)
-        "description": "Starting the Journey"
-    }
+        "description": "Starting the Journey",
+    },
 }
 
 # Level Icon URLs (Twemoji)
 LEVEL_ICONS = {
     "legendary": "https://twemoji.maxcdn.com/v/latest/svg/1f451.svg",  # 👑 Crown
-    "epic": "https://twemoji.maxcdn.com/v/latest/svg/1f31f.svg",       # 🌟 Star
-    "rare": "https://twemoji.maxcdn.com/v/latest/svg/1f48e.svg",       # 💎 Gem
-    "uncommon": "https://twemoji.maxcdn.com/v/latest/svg/1f6e1.svg",   # 🛡️ Shield
-    "common": "https://twemoji.maxcdn.com/v/latest/svg/1f3c5.svg",     # 🏅 Medal
+    "epic": "https://twemoji.maxcdn.com/v/latest/svg/1f31f.svg",  # 🌟 Star
+    "rare": "https://twemoji.maxcdn.com/v/latest/svg/1f48e.svg",  # 💎 Gem
+    "uncommon": "https://twemoji.maxcdn.com/v/latest/svg/1f6e1.svg",  # 🛡️ Shield
+    "common": "https://twemoji.maxcdn.com/v/latest/svg/1f3c5.svg",  # 🏅 Medal
 }
 
 
@@ -179,22 +182,22 @@ def calculate_level(total_xp: int) -> int:
     level = 1
     xp_needed = XP_CONFIG["base_xp_per_level"]
     current_xp = total_xp
-    
+
     while current_xp >= xp_needed:
         current_xp -= xp_needed
         level += 1
         xp_needed = int(xp_needed * XP_CONFIG["xp_multiplier"])
-    
+
     return level
 
 
 def calculate_xp_for_next_level(current_level: int) -> int:
     """Berechnet XP needed für nächstes Level"""
     xp_needed = XP_CONFIG["base_xp_per_level"]
-    
+
     for i in range(1, current_level):
         xp_needed = int(xp_needed * XP_CONFIG["xp_multiplier"])
-    
+
     return xp_needed
 
 
@@ -202,11 +205,11 @@ def calculate_total_xp_for_level(level: int) -> int:
     """Berechnet total XP needed um ein bestimmtes Level zu erreichen"""
     if level <= 1:
         return 0
-    
+
     total = 0
     for i in range(1, level):
         total += calculate_xp_for_next_level(i)
-    
+
     return total
 
 
@@ -312,11 +315,11 @@ PROD_IDS = {
     "LEVEL_NOTIFICATION_ROLE_ID": 1299450758823325807,  # Level-Up Notification Role (Prod)
     # Level Tier Roles (automatisch bei Level-Up zugewiesen)
     "LEVEL_TIER_ROLES": {
-        "common": 1448603657514782842,      # Token Collector (Level 1-9)
-        "uncommon": 1448603596676661300,    # Chest Opener (Level 10-19)
-        "rare": 1448603554951594014,        # Artifact Seeker (Level 20-29)
-        "epic": 1448603521430716487,        # Crystal Hoarder (Level 30-49)
-        "legendary": 1448603426459091007,   # Vault Keeper (Level 50+)
+        "common": 1448603657514782842,  # Token Collector (Level 1-9)
+        "uncommon": 1448603596676661300,  # Chest Opener (Level 10-19)
+        "rare": 1448603554951594014,  # Artifact Seeker (Level 20-29)
+        "epic": 1448603521430716487,  # Crystal Hoarder (Level 30-49)
+        "legendary": 1448603426459091007,  # Vault Keeper (Level 50+)
     },
     # Interest Roles
     "INTEREST_ROLE_IDS": [
@@ -366,11 +369,11 @@ TEST_IDS = {
     "LEVEL_NOTIFICATION_ROLE_ID": 1448431457121865779,  # Level-Up Notification Role (Test)
     # Level Tier Roles (automatisch bei Level-Up zugewiesen)
     "LEVEL_TIER_ROLES": {
-        "common": 1448602128070479872,      # Token Collector (Level 1-9)
-        "uncommon": 1448602170017452114,    # Chest Opener (Level 10-19)
-        "rare": 1448602356877885493,        # Artifact Seeker (Level 20-29)
-        "epic": 1448602446258765835,        # Crystal Hoarder (Level 30-49)
-        "legendary": 1448602504383299726,   # Vault Keeper (Level 50+)
+        "common": 1448602128070479872,  # Token Collector (Level 1-9)
+        "uncommon": 1448602170017452114,  # Chest Opener (Level 10-19)
+        "rare": 1448602356877885493,  # Artifact Seeker (Level 20-29)
+        "epic": 1448602446258765835,  # Crystal Hoarder (Level 30-49)
+        "legendary": 1448602504383299726,  # Vault Keeper (Level 50+)
     },
     # Interest Roles
     "INTEREST_ROLE_IDS": [

@@ -158,9 +158,20 @@ class StatusDashboard(commands.Cog):
                 description="The bot is online and fabulous!",
                 color=Config.PINK,
             )
+            
+            # Handle infinity latency (can occur during connection issues)
+            latency = self.bot.latency
+            if latency == float('inf') or latency == float('-inf'):
+                latency_str = "∞"
+            else:
+                try:
+                    latency_str = f"{round(latency * 1000)}ms"
+                except (OverflowError, ValueError):
+                    latency_str = "N/A"
+            
             embed.add_field(
                 name="📊 Bot Status",
-                value=(f"• **Latency:** {round(self.bot.latency * 1000)}ms\n• **Guilds:** {len(self.bot.guilds)}"),
+                value=(f"• **Latency:** {latency_str}\n• **Guilds:** {len(self.bot.guilds)}"),
                 inline=False,
             )
             set_pink_footer(embed, bot=self.bot.user)

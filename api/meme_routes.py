@@ -257,15 +257,16 @@ def generate_meme():
         if not meme_url:
             return jsonify({"error": "Failed to generate meme"}), 500
 
-        # Award XP for meme generation (15 XP)
+        # Award XP for meme generation (10 XP, reduced from 15)
         from api.level_helpers import award_xp_from_api
-        discord_id = getattr(request, 'discord_id', None)
+
+        discord_id = getattr(request, "discord_id", None)
         if discord_id and discord_id not in ["legacy_user", "unknown"]:
             guild = bot.get_guild(Config.get_guild_id())
             if guild:
                 member = guild.get_member(int(discord_id))
                 if member:
-                    award_xp_from_api(bot, discord_id, member.name, "meme_generated")
+                    award_xp_from_api(bot, discord_id, member.name, "meme_generate")
 
         return jsonify({"success": True, "url": meme_url})
 
@@ -346,6 +347,18 @@ def post_generated_meme_to_discord():
 
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
+
+        # Award XP for posting generated meme (8 XP) - NEW
+        from api.level_helpers import award_xp_from_api
+
+        discord_id = getattr(request, "discord_id", None)
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            guild = bot.get_guild(Config.get_guild_id())
+            if guild:
+                member = guild.get_member(int(discord_id))
+                if member:
+                    award_xp_from_api(bot, discord_id, member.name, "meme_generate_post")
+                    logger.info(f"⭐ User {member.name} gained 8 XP for posting generated meme")
 
         # Track meme generation activity
         discord_id = request.discord_id
@@ -634,15 +647,20 @@ def test_meme_from_source():
         # Pick random meme
         meme = random.choice(memes)
 
-        # Award XP for meme fetch (5 XP)
-        from api.level_helpers import award_xp_from_api
-        discord_id = getattr(request, 'discord_id', None)
+        # Award XP for meme fetch with cooldown (2 XP, 30s cooldown)
+        from api.level_helpers import award_xp_with_cooldown
+
+        discord_id = getattr(request, "discord_id", None)
         if discord_id and discord_id not in ["legacy_user", "unknown"]:
             guild = bot.get_guild(Config.get_guild_id())
             if guild:
                 member = guild.get_member(int(discord_id))
                 if member:
-                    award_xp_from_api(bot, discord_id, member.name, "meme_fetched")
+                    xp_result = award_xp_with_cooldown(
+                        bot, discord_id, member.name, "meme_fetch", check_cooldown="meme_fetch"
+                    )
+                    if not xp_result:
+                        logger.debug(f"⏱️ User {member.name} is in meme fetch cooldown, no XP awarded")
 
         return jsonify(
             {
@@ -699,16 +717,21 @@ def test_random_meme():
         meme = future.result(timeout=30)
 
         if meme:
-            # Award XP for random meme fetch (5 XP)
-            from api.level_helpers import award_xp_from_api
-            discord_id = getattr(request, 'discord_id', None)
+            # Award XP for random meme fetch with cooldown (2 XP, 30s cooldown)
+            from api.level_helpers import award_xp_with_cooldown
+
+            discord_id = getattr(request, "discord_id", None)
             if discord_id and discord_id not in ["legacy_user", "unknown"]:
                 guild = bot.get_guild(Config.get_guild_id())
                 if guild:
                     member = guild.get_member(int(discord_id))
                     if member:
-                        award_xp_from_api(bot, discord_id, member.name, "meme_fetched")
-            
+                        xp_result = award_xp_with_cooldown(
+                            bot, discord_id, member.name, "meme_fetch", check_cooldown="meme_fetch"
+                        )
+                        if not xp_result:
+                            logger.debug(f"⏱️ User {member.name} is in meme fetch cooldown, no XP awarded")
+
             return jsonify(
                 {
                     "success": True,
@@ -852,8 +875,19 @@ def send_meme_to_discord():
         future = asyncio.run_coroutine_threadsafe(post_meme(), loop)
         future.result(timeout=30)
 
+        # Award XP for posting fetched meme (5 XP) - NEW
+        from api.level_helpers import award_xp_from_api
+
+        discord_id = getattr(request, "discord_id", None)
+        if discord_id and discord_id not in ["legacy_user", "unknown"]:
+            guild = bot.get_guild(Config.get_guild_id())
+            if guild:
+                member = guild.get_member(int(discord_id))
+                if member:
+                    award_xp_from_api(bot, discord_id, member.name, "meme_post")
+                    logger.info(f"⭐ User {member.name} gained 5 XP for posting fetched meme")
+
         # Track meme request activity
-        discord_id = request.discord_id
         if discord_id and discord_id not in ["legacy_user", "unknown"]:
             increment_activity_counter("meme_requests.json", str(discord_id))
 
