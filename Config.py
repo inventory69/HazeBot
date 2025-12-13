@@ -662,6 +662,9 @@ WELCOME_BUTTON_REPLIES = [
 RL_ACCOUNTS_FILE = f"{DATA_DIR}/rl_accounts.json"
 RL_CONGRATS_VIEWS_FILE = f"{DATA_DIR}/rl_congrats_views.json"
 
+# Rocket League API Configuration
+RL_CURRENT_SEASON = 35  # Current Rocket League Competitive Season (Update when new season starts)
+
 # Rank Check Configuration
 RL_RANK_CHECK_INTERVAL_HOURS = 3  # How often to check for rank changes
 # Cache duration (2h 55min) - slightly less than check interval to avoid race conditions

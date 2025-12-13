@@ -559,7 +559,7 @@ class RocketLeague(commands.Cog):
             highest_tier_val = 0
             highest_icon_url = None
             for segment in segments:
-                if segment["type"] == "playlist" and segment["attributes"].get("season") == 34:
+                if segment["type"] == "playlist" and segment["attributes"].get("season") == Config.RL_CURRENT_SEASON:
                     pid = segment["attributes"]["playlistId"]
                     name = segment["metadata"]["name"]
                     if pid == 10 or name == "Ranked Duel 1v1":  # 1v1
