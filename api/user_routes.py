@@ -4,6 +4,7 @@ Handles all /api/user/* and /api/gaming/* endpoints for user-specific functions
 """
 
 import asyncio
+import sqlite3
 import traceback
 from pathlib import Path
 
@@ -214,32 +215,84 @@ def get_user_profile():
         except Exception:
             pass
 
+        # Get XP/Level data
+        xp_data = None
+        try:
+            db_path = Path(Config.DATA_DIR) / "user_levels.db"
+            if db_path.exists():
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute(
+                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?",
+                    (str(discord_id),)
+                )
+                row = cursor.fetchone()
+                conn.close()
+                
+                if row:
+                    total_xp = row["total_xp"]
+                    level = row["current_level"]
+                    last_xp_gain = row["last_xp_gain"]
+                    
+                    # Calculate XP needed for next level
+                    xp_for_next_level = Config.calculate_xp_for_next_level(level)
+                    
+                    # Calculate XP required to reach current level (total XP for all previous levels)
+                    xp_for_current_level = Config.calculate_total_xp_for_level(level)
+                    
+                    # Calculate XP within current level (progress towards next level)
+                    xp_in_current_level = total_xp - xp_for_current_level
+                    
+                    # Determine tier using Config helper
+                    tier_info = Config.get_level_tier(level)
+                    
+                    xp_data = {
+                        "total_xp": total_xp,
+                        "level": level,
+                        "tier": tier_info["name"],
+                        "tier_color": tier_info["color"],
+                        "xp_for_next_level": xp_for_next_level,
+                        "xp_in_current_level": xp_in_current_level,
+                        "last_xp_gain": last_xp_gain,
+                    }
+        except Exception as e:
+            logger.error(f"Error fetching XP data: {e}")
+            pass
+
         # Build profile response
+        profile_data = {
+            "discord_id": str(discord_id),
+            "username": member.name,
+            "display_name": member.display_name,
+            "discriminator": member.discriminator,
+            "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
+            "role": user_role,
+            "role_name": user_role_name,
+            "opt_in_roles": opt_in_roles,
+            "rl_rank": rl_rank,
+            "notifications": {
+                "changelog_opt_in": has_changelog,
+                "meme_opt_in": has_meme,
+            },
+            "custom_stats": {
+                "warnings": warnings_count,
+                "resolved_tickets": resolved_tickets,
+            },
+            "activity": activity,
+            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "created_at": member.created_at.isoformat() if member.created_at else None,
+        }
+        
+        # Add XP data if available
+        if xp_data:
+            profile_data["xp"] = xp_data
+        
         return jsonify(
             {
                 "success": True,
-                "profile": {
-                    "discord_id": str(discord_id),
-                    "username": member.name,
-                    "display_name": member.display_name,
-                    "discriminator": member.discriminator,
-                    "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
-                    "role": user_role,
-                    "role_name": user_role_name,
-                    "opt_in_roles": opt_in_roles,
-                    "rl_rank": rl_rank,
-                    "notifications": {
-                        "changelog_opt_in": has_changelog,
-                        "meme_opt_in": has_meme,
-                    },
-                    "custom_stats": {
-                        "warnings": warnings_count,
-                        "resolved_tickets": resolved_tickets,
-                    },
-                    "activity": activity,
-                    "joined_at": member.joined_at.isoformat() if member.joined_at else None,
-                    "created_at": member.created_at.isoformat() if member.created_at else None,
-                },
+                "profile": profile_data,
             }
         )
 

@@ -521,16 +521,23 @@ def log_config_action(config_name):
         @wraps(f)
         def wrapper(*args, **kwargs):
             # Get the request data before processing
-            if request.method in ["PUT", "POST"] and request.is_json:
-                data = request.get_json()
-                action_type = "update" if request.method == "PUT" else "reset" if "reset" in request.path else "action"
-                log_action(
-                    request.username,
-                    f"{action_type}_{config_name}_config",
-                    {"keys_modified": list(data.keys()) if data else []},
-                )
-            elif request.method == "POST" and "reset" in request.path:
-                log_action(request.username, f"reset_{config_name}_config", {"status": "reset to defaults"})
+            if request.method in ["PUT", "POST"]:
+                # Check for reset endpoint first (no body expected)
+                if "reset" in request.path:
+                    log_action(request.username, f"reset_{config_name}_config", {"status": "reset to defaults"})
+                # Only try to parse JSON if Content-Length > 0
+                elif request.is_json and request.content_length and request.content_length > 0:
+                    try:
+                        data = request.get_json()
+                        action_type = "update" if request.method == "PUT" else "action"
+                        log_action(
+                            request.username,
+                            f"{action_type}_{config_name}_config",
+                            {"keys_modified": list(data.keys()) if data else []},
+                        )
+                    except Exception:
+                        # If JSON parsing fails, just continue without logging
+                        pass
 
             return f(*args, **kwargs)
 

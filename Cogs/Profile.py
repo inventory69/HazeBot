@@ -1,4 +1,6 @@
 import logging
+import sqlite3
+from pathlib import Path
 from typing import Any, Optional
 
 import discord
@@ -46,6 +48,50 @@ async def get_resolved_ticket_count(user_id: int) -> int:
         ):
             resolved_count += 1
     return resolved_count
+
+
+# Helper to get XP/Level data for a user
+def get_user_xp_data(user_id: int) -> Optional[dict]:
+    """Get XP and level data for a user from the database."""
+    try:
+        db_path = Path(Config.DATA_DIR) / "user_levels.db"
+        if not db_path.exists():
+            return None
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT total_xp, current_level FROM user_xp WHERE user_id = ?",
+            (str(user_id),)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return None
+        
+        total_xp = row["total_xp"]
+        level = row["current_level"]
+        
+        # Calculate XP needed for next level using Config function
+        xp_for_next_level = Config.calculate_xp_for_next_level(level)
+        
+        # Get tier info using Config function (includes emoji)
+        tier_info = Config.get_level_tier(level)
+        
+        return {
+            "total_xp": total_xp,
+            "level": level,
+            "xp_for_next_level": xp_for_next_level,
+            "tier_name": tier_info["name"],
+            "tier_color": tier_info["color"],
+            "tier_emoji": tier_info["emoji"],
+        }
+    except Exception as e:
+        logger.error(f"Error fetching XP data for user {user_id}: {e}")
+        return None
 
 
 # Helper to load meme requests
@@ -161,6 +207,24 @@ class Profile(commands.Cog):
             ),
             inline=True,
         )
+
+        # XP & Level stats
+        xp_data = get_user_xp_data(member.id)
+        if xp_data:
+            # Tier info already contains emoji from Config.get_level_tier
+            tier_name = xp_data["tier_name"]
+            tier_emoji = xp_data.get("tier_emoji", "🔰")
+            
+            embed.add_field(
+                name="⭐ Level & Experience",
+                value=(
+                    f"**Level:** {xp_data['level']} {tier_emoji}\n"
+                    f"**Tier:** {tier_name.title()}\n"
+                    f"**Total XP:** {xp_data['total_xp']:,}\n"
+                    f"**Next Level:** {xp_data['xp_for_next_level']:,} XP"
+                ),
+                inline=False,
+            )
 
         set_pink_footer(embed, bot=self.bot.user)
         return embed
