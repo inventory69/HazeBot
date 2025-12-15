@@ -113,6 +113,13 @@ def init_config_routes(app, config, log, helpers_module, auth_module):
     vf["config.reset_ticket_config"] = token_required(
         require_permission("all")(log_config_action("tickets")(vf["config.reset_ticket_config"]))
     )
+    vf["config.get_xp_config"] = token_required(vf["config.get_xp_config"])
+    vf["config.update_xp_config"] = token_required(
+        require_permission("all")(log_config_action("xp_config")(vf["config.update_xp_config"]))
+    )
+    vf["config.reset_xp_config"] = token_required(
+        require_permission("all")(log_config_action("xp_config")(vf["config.reset_xp_config"]))
+    )
 
 
 # ===== MAIN CONFIG ENDPOINT =====
@@ -911,3 +918,139 @@ def reset_ticket_config():
 
         logger.error(f"Error resetting ticket config: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to reset ticket config: {str(e)}"}), 500
+
+
+# ============================================================================
+# XP/LEVEL SYSTEM CONFIGURATION
+# ============================================================================
+
+@config_bp.route("/api/config/xp", methods=["GET"])
+def get_xp_config():
+    """Get XP System Configuration"""
+    try:
+        config = {
+            "activity_xp": {
+                "message_sent": Config.XP_CONFIG["message_sent"],
+                "image_sent": Config.XP_CONFIG["image_sent"],
+                "ticket_created": Config.XP_CONFIG["ticket_created"],
+                "game_request": Config.XP_CONFIG["game_request"],
+                "meme_fetch": Config.XP_CONFIG["meme_fetch"],
+                "meme_post": Config.XP_CONFIG["meme_post"],
+                "meme_generate": Config.XP_CONFIG["meme_generate"],
+                "meme_generate_post": Config.XP_CONFIG["meme_generate_post"],
+                "rl_account_linked": Config.XP_CONFIG["rl_account_linked"],
+                "rl_stats_checked": Config.XP_CONFIG["rl_stats_checked"],
+                "ticket_resolved": Config.XP_CONFIG["ticket_resolved"],
+                "ticket_claimed": Config.XP_CONFIG["ticket_claimed"],
+            },
+            "level_calculation": {
+                "base_xp_per_level": Config.XP_CONFIG["base_xp_per_level"],
+                "xp_multiplier": Config.XP_CONFIG["xp_multiplier"],
+            },
+            "cooldowns": {
+                "message_cooldown": Config.XP_CONFIG["message_cooldown"],
+                "meme_fetch_cooldown": Config.XP_CONFIG["meme_fetch_cooldown"],
+                "daily_xp_cap": Config.XP_CONFIG["daily_xp_cap"],
+            },
+            "level_tiers": {
+                tier_key: {
+                    **tier_data,
+                    "color": f"#{tier_data['color']:06X}" if isinstance(tier_data['color'], int) else tier_data['color'],
+                    "emoji": Config.LEVEL_TIER_EMOJIS.get(tier_key, "⭐")
+                }
+                for tier_key, tier_data in Config.LEVEL_TIERS.items()
+            },
+            "level_icons": Config.LEVEL_ICONS,
+        }
+        
+        return jsonify({"success": True, "config": config})
+    except Exception as e:
+        import traceback
+        logger.error(f"Error getting XP config: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get XP config: {str(e)}"}), 500
+
+
+@config_bp.route("/api/config/xp", methods=["PUT"])
+def update_xp_config():
+    """Update XP System Configuration"""
+    try:
+        data = request.json
+        
+        # Update activity XP values
+        if "activity_xp" in data:
+            for key, value in data["activity_xp"].items():
+                if key in Config.XP_CONFIG:
+                    Config.XP_CONFIG[key] = int(value)
+        
+        # Update level calculation
+        if "level_calculation" in data:
+            if "base_xp_per_level" in data["level_calculation"]:
+                Config.XP_CONFIG["base_xp_per_level"] = int(data["level_calculation"]["base_xp_per_level"])
+            if "xp_multiplier" in data["level_calculation"]:
+                Config.XP_CONFIG["xp_multiplier"] = float(data["level_calculation"]["xp_multiplier"])
+        
+        # Update cooldowns
+        if "cooldowns" in data:
+            if "message_cooldown" in data["cooldowns"]:
+                Config.XP_CONFIG["message_cooldown"] = int(data["cooldowns"]["message_cooldown"])
+            if "meme_fetch_cooldown" in data["cooldowns"]:
+                Config.XP_CONFIG["meme_fetch_cooldown"] = int(data["cooldowns"]["meme_fetch_cooldown"])
+            if "daily_xp_cap" in data["cooldowns"]:
+                Config.XP_CONFIG["daily_xp_cap"] = int(data["cooldowns"]["daily_xp_cap"])
+        
+        # Save to file
+        save_config_to_file()
+        
+        log_action(request.username, "update_xp_config", {"updated_fields": list(data.keys())})
+        
+        return jsonify({"success": True, "message": "XP config updated successfully"})
+    
+    except Exception as e:
+        import traceback
+        logger.error(f"Error updating XP config: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to update XP config: {str(e)}"}), 500
+
+
+@config_bp.route("/api/config/xp/reset", methods=["POST"])
+def reset_xp_config():
+    """Reset XP System Configuration to defaults"""
+    try:
+        # Reset to default values (from Config.py initial state)
+        Config.XP_CONFIG = {
+            # Activity XP
+            "message_sent": 2,
+            "image_sent": 5,
+            "ticket_created": 10,
+            "game_request": 8,
+            # Meme Activities (REBALANCED - 12. Dez 2025)
+            "meme_fetch": 2,
+            "meme_post": 5,
+            "meme_generate": 10,
+            "meme_generate_post": 8,
+            # Legacy XP types (kept for backward compatibility)
+            "meme_fetched": 2,  # Alias for meme_fetch
+            "meme_generated": 10,  # Alias for meme_generate
+            # Rocket League XP
+            "rl_account_linked": 20,
+            "rl_stats_checked": 5,
+            # Mod Activities (Extra XP)
+            "ticket_resolved": 25,
+            "ticket_claimed": 15,
+            # Level Calculation
+            "base_xp_per_level": 100,
+            "xp_multiplier": 1.5,
+            # Cooldowns (Spam-Prevention)
+            "message_cooldown": 60,
+            "meme_fetch_cooldown": 30,
+            "daily_xp_cap": 500,
+        }
+        
+        # Save to file
+        save_config_to_file()
+        
+        return jsonify({"success": True, "message": "XP config reset to defaults successfully"})
+    
+    except Exception as e:
+        import traceback
+        logger.error(f"Error resetting XP config: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to reset XP config: {str(e)}"}), 500

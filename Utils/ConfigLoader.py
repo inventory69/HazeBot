@@ -97,6 +97,11 @@ def load_config_from_file():
         if "server_guide" in config_data:
             Config.SERVER_GUIDE_CONFIG = config_data["server_guide"]
 
+        # Apply XP system settings
+        if "xp_config" in config_data:
+            Config.XP_CONFIG = config_data["xp_config"]
+            print(f"✅ Set XP_CONFIG with {len(Config.XP_CONFIG)} settings")
+
         print(f"✅ Loaded configuration from {config_file}")
 
     except Exception as e:

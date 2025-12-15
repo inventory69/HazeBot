@@ -228,6 +228,7 @@ def save_config_to_file(Config, config_file):
             "welcome_button_replies": Config.WELCOME_BUTTON_REPLIES,
         },
         "server_guide": Config.SERVER_GUIDE_CONFIG,
+        "xp_config": Config.XP_CONFIG,
     }
 
     rl_interval = config_data["rocket_league"]["rank_check_interval_hours"]

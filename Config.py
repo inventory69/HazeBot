@@ -167,13 +167,22 @@ LEVEL_TIERS = {
     },
 }
 
-# Level Icon URLs (Twemoji)
+# Level Icon URLs (Twemoji) - Used in Flutter Admin Panel
 LEVEL_ICONS = {
     "legendary": "https://twemoji.maxcdn.com/v/latest/svg/1f451.svg",  # 👑 Crown
     "epic": "https://twemoji.maxcdn.com/v/latest/svg/1f31f.svg",  # 🌟 Star
     "rare": "https://twemoji.maxcdn.com/v/latest/svg/1f48e.svg",  # 💎 Gem
     "uncommon": "https://twemoji.maxcdn.com/v/latest/svg/1f6e1.svg",  # 🛡️ Shield
     "common": "https://twemoji.maxcdn.com/v/latest/svg/1f3c5.svg",  # 🏅 Medal
+}
+
+# Level Tier Emojis - Used in Discord Bot
+LEVEL_TIER_EMOJIS = {
+    "legendary": "👑",  # Crown
+    "epic": "⭐",  # Star
+    "rare": "💎",  # Gem
+    "uncommon": "🛡️",  # Shield
+    "common": "🏅",  # Medal
 }
 
 
@@ -214,17 +223,27 @@ def calculate_total_xp_for_level(level: int) -> int:
 
 
 def get_level_tier(level: int) -> dict:
-    """Returns tier info for a given level"""
+    """Returns tier info for a given level (including name, color, and emoji)"""
+    tier_key = None
     if level >= 50:
-        return LEVEL_TIERS["legendary"]
+        tier_key = "legendary"
     elif level >= 30:
-        return LEVEL_TIERS["epic"]
+        tier_key = "epic"
     elif level >= 20:
-        return LEVEL_TIERS["rare"]
+        tier_key = "rare"
     elif level >= 10:
-        return LEVEL_TIERS["uncommon"]
+        tier_key = "uncommon"
     else:
-        return LEVEL_TIERS["common"]
+        tier_key = "common"
+    
+    tier_info = LEVEL_TIERS[tier_key].copy()
+    tier_info["emoji"] = LEVEL_TIER_EMOJIS[tier_key]
+    
+    # Convert color int to hex string for Frontend compatibility
+    if isinstance(tier_info["color"], int):
+        tier_info["color"] = f"#{tier_info['color']:06X}"
+    
+    return tier_info
 
 
 # ============================================================================

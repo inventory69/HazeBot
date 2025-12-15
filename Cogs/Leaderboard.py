@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import sqlite3
+from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 import discord
@@ -46,6 +48,56 @@ async def load_memes_generated() -> Dict[str, int]:
         return {}
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+# Helper to load XP/Level leaderboard
+@cache(ttl_seconds=300)  # Cache for 5 minutes
+async def load_xp_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
+    """Load XP/Level leaderboard from database."""
+    try:
+        db_path = Path(Config.get_data_dir()) / "user_levels.db"
+        if not db_path.exists():
+            return []
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """
+            SELECT user_id, username, total_xp, current_level
+            FROM user_xp
+            ORDER BY total_xp DESC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        
+        leaderboard = []
+        for row in rows:
+            user_id = row["user_id"]
+            username = row["username"]
+            total_xp = row["total_xp"]
+            level = row["current_level"]
+            
+            # Get tier info using Config function (includes emoji)
+            tier_info = Config.get_level_tier(level)
+            
+            leaderboard.append({
+                "user_id": user_id,
+                "username": username,
+                "total_xp": total_xp,
+                "level": level,
+                "tier_name": tier_info["name"],
+                "tier_emoji": tier_info["emoji"],
+            })
+        
+        return leaderboard
+    except Exception as e:
+        logger.error(f"Error loading XP leaderboard: {e}")
+        return []
 
 
 def save_activity(data: Dict[str, Any]) -> None:
@@ -94,6 +146,37 @@ class Leaderboard(commands.Cog):
                 [f"{i + 1}. <@{uid}>: {value_formatter(val)}" for i, (uid, val) in enumerate(data_list[:10])]
             )
             embed.add_field(name="Top 10", value=text, inline=False)
+        set_pink_footer(embed, bot=self.bot.user)
+        return embed
+
+    async def create_xp_leaderboard_embed(self, leaderboard: List[Dict[str, Any]]) -> discord.Embed:
+        """Create an embed for XP/Level leaderboard with consistent formatting."""
+        embed = discord.Embed(title="⭐ XP & Levels Leaderboard", color=Config.PINK)
+        
+        if not leaderboard:
+            embed.add_field(name="No Data", value="No XP data found yet.", inline=False)
+        else:
+            # Medal emojis for top 3
+            medals = ["🥇", "🥈", "🥉"]
+            
+            entries = []
+            for i, entry in enumerate(leaderboard[:10]):
+                rank_display = medals[i] if i < 3 else f"{i + 1}."
+                tier_emoji = entry["tier_emoji"]
+                username = entry["username"]
+                level = entry["level"]
+                total_xp = entry["total_xp"]
+                tier_name = entry["tier_name"]
+                
+                # Format: 🥇 Username - Level 25 👑 (Legendary) • 15,000 XP
+                entry_text = (
+                    f"{rank_display} **{username}** - Level {level} {tier_emoji} "
+                    f"({tier_name.title()}) • {total_xp:,} XP"
+                )
+                entries.append(entry_text)
+            
+            embed.description = "\n".join(entries)
+        
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 
@@ -160,6 +243,14 @@ class Leaderboard(commands.Cog):
             title="🏆 Leaderboard Overview", description="Top performers in various categories", color=Config.PINK
         )
 
+        # XP & Levels
+        xp_leaderboard = await load_xp_leaderboard(limit=3)
+        if xp_leaderboard:
+            xp_text = ""
+            for i, entry in enumerate(xp_leaderboard):
+                xp_text += f"{i + 1}. <@{entry['user_id']}> (Level {entry['level']} {entry['tier_emoji']} - {entry['total_xp']:,} XP)\n"
+            embed.add_field(name="⭐ XP & Levels", value=xp_text.strip(), inline=False)
+
         # Rocket League Rankings
         rl_text = ""
         rl_categories = [("rl_overall", "Overall"), ("rl_1v1", "1v1"), ("rl_2v2", "2v2"), ("rl_3v3", "3v3")]
@@ -203,7 +294,10 @@ class Leaderboard(commands.Cog):
 
     # 🧩 Shared handler for leaderboard logic
     async def handle_leaderboard(self, ctx_or_interaction: Any, category: str) -> None:
-        if category == "rl_overall":
+        if category == "xp":
+            leaderboard = await load_xp_leaderboard(limit=10)
+            embed = await self.create_xp_leaderboard_embed(leaderboard)
+        elif category == "rl_overall":
             accounts = load_rl_accounts()
             data = {}
             for uid, acc in accounts.items():
@@ -299,6 +393,7 @@ class Leaderboard(commands.Cog):
     @app_commands.describe(category="Choose the leaderboard category (optional for overview)")
     @app_commands.choices(
         category=[
+            app_commands.Choice(name="⭐ XP & Levels", value="xp"),
             app_commands.Choice(name="RL Overall Highest", value="rl_overall"),
             app_commands.Choice(name="RL 1v1 Ranks", value="rl_1v1"),
             app_commands.Choice(name="RL 2v2 Ranks", value="rl_2v2"),
