@@ -41,6 +41,7 @@ import api.rocket_league_routes as rocket_league_routes_module
 import api.ticket_routes as ticket_routes_module
 import api.user_routes as user_routes_module
 import api.debug_routes as debug_routes_module
+import api.community_posts_routes as community_posts_routes_module
 
 # Import error tracking module for error handling
 import api.error_tracking as error_tracking_module
@@ -185,6 +186,10 @@ app.register_blueprint(monitoring_bp)
 # Initialize debug routes Blueprint (error reporting)
 debug_bp = debug_routes_module.debug_bp
 app.register_blueprint(debug_bp)
+
+# Initialize community posts routes Blueprint
+community_posts_routes_module.init_community_posts_routes(app, Config, decorator_module)
+logger.info(f"✅ Community Posts enabled (Channel: {Config.COMMUNITY_POSTS_CHANNEL_ID})")
 
 # Log monitoring status on startup
 if Config.UPTIME_KUMA_ENABLED:
