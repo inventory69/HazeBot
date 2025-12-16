@@ -19,7 +19,7 @@ Author: HazeBot Team
 Date: 15. Dezember 2025
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from datetime import datetime
 from pathlib import Path
 import sqlite3
@@ -470,6 +470,24 @@ def update_post(post_id):
 # ============================================================================
 # DELETE POST
 # ============================================================================
+
+
+@bp.route("/api/community_posts_images/<path:filename>")
+def serve_post_image(filename):
+    """
+    Serve uploaded community post images.
+    
+    Images are stored in DATA_DIR/community_posts_images/.
+    This endpoint makes them accessible via HTTP.
+    
+    Args:
+        filename: Image filename (e.g., "post_123_1234567890.png")
+    
+    Returns:
+        Image file or 404 if not found
+    """
+    image_dir = Path(Config.DATA_DIR) / "community_posts_images"
+    return send_from_directory(image_dir, filename)
 
 
 @bp.route("/api/posts/<int:post_id>", methods=["DELETE"])
