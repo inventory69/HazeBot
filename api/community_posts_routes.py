@@ -62,6 +62,8 @@ def init_community_posts_routes(app, config, decorator_module, log):
     vf["community_posts.get_posts"] = token_required(vf["community_posts.get_posts"])
     vf["community_posts.update_post"] = token_required(vf["community_posts.update_post"])
     vf["community_posts.delete_post"] = token_required(vf["community_posts.delete_post"])
+    vf["community_posts.toggle_like_post"] = token_required(vf["community_posts.toggle_like_post"])
+    vf["community_posts.get_post_likes"] = token_required(vf["community_posts.get_post_likes"])
 
 
 # ============================================================================
@@ -853,7 +855,6 @@ def _format_post(post_row) -> dict:
 
 
 @bp.route("/api/community_posts/<int:post_id>/like", methods=["POST"])
-@token_required
 def toggle_like_post(post_id):
     """Toggle like on a community post"""
     try:
@@ -941,7 +942,6 @@ def toggle_like_post(post_id):
 
 
 @bp.route("/api/community_posts/<int:post_id>/likes", methods=["GET"])
-@token_required
 def get_post_likes(post_id):
     """Get like count and user's like status for a post"""
     try:
