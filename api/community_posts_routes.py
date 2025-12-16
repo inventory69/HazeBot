@@ -195,14 +195,9 @@ def create_post():
         # Determine post type
         post_type = "announcement" if is_announcement else ("admin" if is_mod_or_admin else "normal")
 
-        # Handle image upload
+        # Image will be uploaded to Discord (not stored locally)
+        # We'll get the Discord CDN URL after posting to Discord
         image_url = None
-        if image_data:
-            try:
-                image_url = _save_post_image(image_data, user_id)
-            except Exception as e:
-                print(f"❌ Image upload failed: {e}")
-                return jsonify({"error": f"Image upload failed: {str(e)}"}), 500
 
         # Get avatar URL via bot instance
         bot = current_app.config.get("bot_instance")
@@ -241,26 +236,28 @@ def create_post():
             try:
                 # Run async function in bot's event loop
                 user_data = {"username": request.username, "id": user_id}
-                discord_message_id = asyncio.run_coroutine_threadsafe(
-                    _post_to_discord(bot, post_id, content, image_url, user_data, post_type, is_announcement), bot.loop
+                result = asyncio.run_coroutine_threadsafe(
+                    _post_to_discord(bot, post_id, content, image_data, user_data, post_type, is_announcement), bot.loop
                 ).result(timeout=10)
+                
+                discord_message_id, discord_image_url = result
 
-                # Update with Discord message ID
+                # Update with Discord message ID and Discord CDN image URL
                 cur.execute(
                     """
                     UPDATE community_posts 
-                    SET discord_message_id = ?
+                    SET discord_message_id = ?, image_url = ?
                     WHERE id = ?
-                """,
-                    (discord_message_id, post_id),
+                    """,
+                    (discord_message_id, discord_image_url, post_id),
                 )
                 conn.commit()
-
-                print(f"✅ Posted to Discord: Post #{post_id} → Message {discord_message_id}")
+                
+                # Update image_url for response
+                image_url = discord_image_url
             except Exception as e:
                 print(f"⚠️ Failed to post to Discord: {e}")
-                # Don't fail the request - post is saved in database
-
+        
         cur.close()
         conn.close()
 
@@ -616,22 +613,22 @@ def _save_post_image(base64_data: str, user_id: int) -> str:
     return f"community_posts_images/{filename}"
 
 
-async def _post_to_discord(bot, post_id, content, image_url, author, post_type, is_announcement):
+async def _post_to_discord(bot, post_id, content, image_data, author, post_type, is_announcement):
     """
-    Post to Discord channel and return message ID.
+    Post to Discord channel and return message ID + Discord CDN image URL.
     Uses Config.COMMUNITY_POSTS_CHANNEL_ID (auto-selects Prod/Test).
 
     Args:
         bot: Discord bot instance
         post_id: Database post ID
         content: Post text content
-        image_url: Relative path to image file
+        image_data: Base64-encoded image data (or None)
         author: User dict with username and avatar
         post_type: 'normal', 'admin', or 'announcement'
         is_announcement: Boolean
 
     Returns:
-        int: Discord message ID
+        tuple: (message_id: int, discord_image_url: str | None)
 
     Raises:
         Exception: If channel not found or message send fails
@@ -664,16 +661,20 @@ async def _post_to_discord(bot, post_id, content, image_url, author, post_type, 
         embed.title = "👑 Admin Post"
 
     # Add image
-    if image_url:
-        # Construct full filesystem path
-        image_path = Path(Config.DATA_DIR) / image_url
-        if image_path.exists():
-            # Upload as file attachment
-            file = discord.File(str(image_path), filename=image_path.name)
-            embed.set_image(url=f"attachment://{image_path.name}")
+    if image_data:
+        # Decode base64 image
+        import io
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+        
+        try:
+            image_bytes = base64.b64decode(image_data)
+            # Upload as Discord file attachment
+            file = discord.File(io.BytesIO(image_bytes), filename="post_image.png")
+            embed.set_image(url="attachment://post_image.png")
             message = await channel.send(embed=embed, file=file)
-        else:
-            print(f"⚠️ Image file not found: {image_path}")
+        except Exception as e:
+            print(f"⚠️ Failed to upload image to Discord: {e}")
             message = await channel.send(embed=embed)
     else:
         message = await channel.send(embed=embed)
@@ -682,7 +683,12 @@ async def _post_to_discord(bot, post_id, content, image_url, author, post_type, 
     embed.set_footer(text=f"Post ID: {post_id}")
     await message.edit(embed=embed)
 
-    return message.id
+    # Extract Discord CDN URL from attachment (if present)
+    discord_image_url = None
+    if message.attachments:
+        discord_image_url = message.attachments[0].url
+
+    return message.id, discord_image_url
 
 
 def _get_embed_color(post_type, is_announcement):
