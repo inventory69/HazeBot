@@ -685,9 +685,11 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
             image_bytes = base64.b64decode(image_data)
             print(f"🔍 DEBUG: Decoded image bytes: {len(image_bytes)} bytes")
             # Create Discord file attachment
-            discord_file = discord.File(io.BytesIO(image_bytes), filename="post_image.png")
-            embed.set_image(url="attachment://post_image.png")
-            print(f"🔍 DEBUG: Sending message to Discord with attachment...")
+            image_io = io.BytesIO(image_bytes)
+            image_io.seek(0)  # CRITICAL: Reset to beginning!
+            discord_file = discord.File(image_io, filename="post_image.png")
+            print(f"🔍 DEBUG: Created discord.File, sending to channel...")
+            # DON'T use embed.set_image with attachment:// - just send file separately
             message = await channel.send(embed=embed, file=discord_file)
             print(f"✅ DEBUG: Message sent successfully, attachments: {len(message.attachments)}")
         except Exception as e:
