@@ -356,6 +356,8 @@ class LevelSystem(commands.Cog):
 
             if xp_amount == 0:
                 logger.warning(f"⚠️ Unknown XP type: {xp_type}")
+                logger.debug(f"🔍 DEBUG: xp_type='{xp_type}', amount={amount}, XP_CONFIG has key: {xp_type in XP_CONFIG}")
+                logger.debug(f"🔍 DEBUG: Available XP types: {list(XP_CONFIG.keys())}")
                 return None
 
             # Update User Data
