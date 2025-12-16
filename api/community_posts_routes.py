@@ -669,7 +669,11 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
     elif post_type == "admin":
         embed.title = "👑 Admin Post"
 
-    # Add image
+    # Footer with post ID (ADD BEFORE SENDING!)
+    embed.set_footer(text=f"Post ID: {post_id}")
+
+    # Add image and send message
+    discord_file = None
     if image_data:
         print(f"🔍 DEBUG: Processing image for Discord upload...")
         # Decode base64 image
@@ -680,11 +684,11 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
         try:
             image_bytes = base64.b64decode(image_data)
             print(f"🔍 DEBUG: Decoded image bytes: {len(image_bytes)} bytes")
-            # Upload as Discord file attachment
-            file = discord.File(io.BytesIO(image_bytes), filename="post_image.png")
+            # Create Discord file attachment
+            discord_file = discord.File(io.BytesIO(image_bytes), filename="post_image.png")
             embed.set_image(url="attachment://post_image.png")
             print(f"🔍 DEBUG: Sending message to Discord with attachment...")
-            message = await channel.send(embed=embed, file=file)
+            message = await channel.send(embed=embed, file=discord_file)
             print(f"✅ DEBUG: Message sent successfully, attachments: {len(message.attachments)}")
         except Exception as e:
             print(f"⚠️ DEBUG: Failed to upload image to Discord: {e}")
@@ -694,10 +698,6 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
     else:
         print(f"🔍 DEBUG: No image data, sending text-only message...")
         message = await channel.send(embed=embed)
-
-    # Footer with post ID
-    embed.set_footer(text=f"Post ID: {post_id}")
-    await message.edit(embed=embed)
 
     # Extract Discord CDN URL from attachment (if present)
     discord_image_url = None
