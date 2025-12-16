@@ -61,6 +61,59 @@ def init_community_posts_routes(app, config, decorator_module):
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _get_user_avatar_url(user_id: str, bot_instance) -> str | None:
+    """
+    Get user avatar URL via bot instance.
+    
+    Args:
+        user_id: Discord user ID
+        bot_instance: Discord bot instance
+    
+    Returns:
+        str | None: Avatar URL or None if not found
+    """
+    if not bot_instance:
+        return None
+    
+    try:
+        # Get correct guild based on PROD_MODE
+        prod_mode = os.getenv('PROD_MODE', 'false').lower() == 'true'
+        guild_id_str = os.getenv('DISCORD_GUILD_ID') if prod_mode else os.getenv('DISCORD_TEST_GUILD_ID')
+        
+        if not guild_id_str:
+            print("⚠️ Guild ID not found in environment")
+            return None
+        
+        guild = bot_instance.get_guild(int(guild_id_str))
+        if not guild:
+            print(f"⚠️ Guild {guild_id_str} not found")
+            return None
+        
+        member = guild.get_member(int(user_id))
+        if not member:
+            print(f"⚠️ Member {user_id} not found in guild")
+            return None
+        
+        if member.avatar:
+            avatar_url = member.avatar.url
+            print(f"✅ Got avatar URL for {member.name}: {avatar_url}")
+            return avatar_url
+        elif member.default_avatar:
+            # Fallback to default avatar
+            avatar_url = member.default_avatar.url
+            print(f"✅ Using default avatar for {member.name}: {avatar_url}")
+            return avatar_url
+        
+    except Exception as e:
+        print(f"❌ Failed to get avatar for user {user_id}: {e}")
+    
+    return None
+
+
+# ============================================================================
 # DATABASE HELPER
 # ============================================================================
 
