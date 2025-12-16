@@ -195,6 +195,11 @@ def create_post():
         # Determine post type
         post_type = "announcement" if is_announcement else ("admin" if is_mod_or_admin else "normal")
 
+        # Debug: Log image data presence
+        print(f"🔍 DEBUG: Image data present: {image_data is not None}")
+        if image_data:
+            print(f"🔍 DEBUG: Image data length: {len(image_data)} chars")
+        
         # Image will be uploaded to Discord (not stored locally)
         # We'll get the Discord CDN URL after posting to Discord
         image_url = None
@@ -241,6 +246,10 @@ def create_post():
                 ).result(timeout=10)
                 
                 discord_message_id, discord_image_url = result
+                
+                # Debug: Log Discord response
+                print(f"✅ DEBUG: Discord message ID: {discord_message_id}")
+                print(f"🖼️ DEBUG: Discord CDN URL: {discord_image_url}")
 
                 # Update with Discord message ID and Discord CDN image URL
                 cur.execute(
@@ -662,6 +671,7 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
 
     # Add image
     if image_data:
+        print(f"🔍 DEBUG: Processing image for Discord upload...")
         # Decode base64 image
         import io
         if "," in image_data:
@@ -669,14 +679,20 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
         
         try:
             image_bytes = base64.b64decode(image_data)
+            print(f"🔍 DEBUG: Decoded image bytes: {len(image_bytes)} bytes")
             # Upload as Discord file attachment
             file = discord.File(io.BytesIO(image_bytes), filename="post_image.png")
             embed.set_image(url="attachment://post_image.png")
+            print(f"🔍 DEBUG: Sending message to Discord with attachment...")
             message = await channel.send(embed=embed, file=file)
+            print(f"✅ DEBUG: Message sent successfully, attachments: {len(message.attachments)}")
         except Exception as e:
-            print(f"⚠️ Failed to upload image to Discord: {e}")
+            print(f"⚠️ DEBUG: Failed to upload image to Discord: {e}")
+            import traceback
+            traceback.print_exc()
             message = await channel.send(embed=embed)
     else:
+        print(f"🔍 DEBUG: No image data, sending text-only message...")
         message = await channel.send(embed=embed)
 
     # Footer with post ID
@@ -687,6 +703,9 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
     discord_image_url = None
     if message.attachments:
         discord_image_url = message.attachments[0].url
+        print(f"🖼️ DEBUG: Extracted Discord CDN URL: {discord_image_url}")
+    else:
+        print(f"⚠️ DEBUG: No attachments found in Discord message!")
 
     return message.id, discord_image_url
 
