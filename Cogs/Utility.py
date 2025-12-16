@@ -421,14 +421,14 @@ class Utility(commands.Cog):
 
         # Bot Status
         # Handle infinity latency (can occur during connection issues)
-        if latency == float('inf') or latency == float('-inf'):
+        if latency == float("inf") or latency == float("-inf"):
             latency_str = "∞"
         else:
             try:
                 latency_str = f"{round(latency * 1000)}ms"
             except (OverflowError, ValueError):
                 latency_str = "N/A"
-        
+
         bot_status = f"• **Latency:** {latency_str}\n• **Guilds:** {guild_count}"
         embed.add_field(name="📊 Bot Status", value=bot_status, inline=False)
 

@@ -1266,9 +1266,7 @@ class DailyMeme(commands.Cog):
             level_cog = self.bot.get_cog("LevelSystem")
             if level_cog:
                 await level_cog.add_xp(
-                    user_id=str(interaction.user.id),
-                    username=interaction.user.name,
-                    xp_type="meme_fetched"
+                    user_id=str(interaction.user.id), username=interaction.user.name, xp_type="meme_fetched"
                 )
 
             # Send confirmation to user

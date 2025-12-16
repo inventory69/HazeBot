@@ -197,15 +197,12 @@ def get_rl_stats(platform, username):
         # XP Reward for viewing RL stats via API
         try:
             from api.level_helpers import award_xp_from_api
-            discord_id = request.discord_id if hasattr(request, 'discord_id') else None
-            username = request.username if hasattr(request, 'username') else 'Unknown'
+
+            discord_id = request.discord_id if hasattr(request, "discord_id") else None
+            username = request.username if hasattr(request, "username") else "Unknown"
             if discord_id and discord_id not in ["legacy_user", "unknown"]:
                 award_xp_from_api(
-                    bot=bot,
-                    user_id=str(discord_id),
-                    username=username,
-                    xp_type="rl_stats_checked",
-                    amount=5
+                    bot=bot, user_id=str(discord_id), username=username, xp_type="rl_stats_checked", amount=5
                 )
                 logger.info(f"⭐ User {username} gained 5 XP for checking RL stats via API")
         except Exception as e:
@@ -302,12 +299,9 @@ def link_user_rl_account():
         # XP Reward for linking RL account via API
         try:
             from api.level_helpers import award_xp_from_api
+
             award_xp_from_api(
-                bot=bot,
-                user_id=str(discord_id),
-                username=request.username,
-                xp_type="rl_account_linked",
-                amount=20
+                bot=bot, user_id=str(discord_id), username=request.username, xp_type="rl_account_linked", amount=20
             )
             logger.info(f"⭐ User {request.username} gained 20 XP for linking RL account via API")
         except Exception as e:

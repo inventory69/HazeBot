@@ -75,9 +75,9 @@ async def get_monitoring_status():
                 async with session.get(heartbeat_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     if resp.status == 200:
                         heartbeat_data = await resp.json()
-                        logger.debug(
-                            f"Received heartbeat data: heartbeatList={len(heartbeat_data.get('heartbeatList', {}))}, uptimeList={len(heartbeat_data.get('uptimeList', {}))}"
-                        )
+                        hb_count = len(heartbeat_data.get("heartbeatList", {}))
+                        uptime_count = len(heartbeat_data.get("uptimeList", {}))
+                        logger.debug(f"Received heartbeat data: heartbeatList={hb_count}, uptimeList={uptime_count}")
                     else:
                         logger.warning(
                             f"Heartbeat endpoint returned status {resp.status}, continuing without heartbeat data"

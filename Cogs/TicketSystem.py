@@ -464,13 +464,10 @@ async def create_ticket(
 
     # XP Reward for ticket creation
     try:
-        level_cog = interaction.client.get_cog('LevelSystem')
+        level_cog = interaction.client.get_cog("LevelSystem")
         if level_cog:
             await level_cog.add_xp(
-                user_id=str(interaction.user.id),
-                username=interaction.user.name,
-                xp_type="ticket_created",
-                amount=10
+                user_id=str(interaction.user.id), username=interaction.user.name, xp_type="ticket_created", amount=10
             )
             logger.info(f"⭐ User {interaction.user.name} gained 10 XP for creating ticket #{ticket_num}")
     except Exception as e:
@@ -731,15 +728,17 @@ async def close_ticket_with_message(
     is_mod_or_admin = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in interaction.user.roles)
     if is_mod_or_admin:
         try:
-            level_cog = interaction.client.get_cog('LevelSystem')
+            level_cog = interaction.client.get_cog("LevelSystem")
             if level_cog:
                 await level_cog.add_xp(
                     user_id=str(interaction.user.id),
                     username=interaction.user.name,
                     xp_type="ticket_resolved",
-                    amount=25
+                    amount=25,
                 )
-                logger.info(f"⭐ Mod {interaction.user.name} gained 25 XP for closing ticket #{ticket.get('ticket_num', '?')}")
+                logger.info(
+                    f"⭐ Mod {interaction.user.name} gained 25 XP for closing ticket #{ticket.get('ticket_num', '?')}"
+                )
         except Exception as e:
             logger.error(f"❌ Failed to add XP for ticket close: {e}")
 
@@ -1018,20 +1017,22 @@ class TicketControlView(discord.ui.View):
         await update_embed_and_disable_buttons(interaction)
         await interaction.response.send_message(f"{interaction.user.mention} has claimed the ticket.", ephemeral=False)
         logger.info(f"Ticket in {interaction.channel} claimed by {interaction.user}.")
-        
+
         # XP Reward for claiming ticket (Mod only)
         is_mod_or_admin = any(role.id in [ADMIN_ROLE_ID, MODERATOR_ROLE_ID] for role in interaction.user.roles)
         if is_mod_or_admin:
             try:
-                level_cog = interaction.client.get_cog('LevelSystem')
+                level_cog = interaction.client.get_cog("LevelSystem")
                 if level_cog:
                     await level_cog.add_xp(
                         user_id=str(interaction.user.id),
                         username=interaction.user.name,
                         xp_type="ticket_claimed",
-                        amount=15
+                        amount=15,
                     )
-                    logger.info(f"⭐ Mod {interaction.user.name} gained 15 XP for claiming ticket #{ticket.get('ticket_num', '?')}")
+                    logger.info(
+                        f"⭐ Mod {interaction.user.name} gained 15 XP for claiming ticket #{ticket.get('ticket_num', '?')}"
+                    )
             except Exception as e:
                 logger.error(f"❌ Failed to add XP for ticket claim: {e}")
 

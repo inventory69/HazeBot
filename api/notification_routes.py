@@ -302,8 +302,9 @@ def register_socketio_handlers(socketio_instance):
             # ✅ Track client-to-user mapping for auto-cleanup on disconnect
             client_to_user[request.sid] = str(user_id)
 
+            viewer_count = len(active_ticket_viewers[ticket_id])
             logger.debug(
-                f"🎫 JOIN | Client: {request.sid} | User: {user_id} | Room: {room} | Active viewers: {len(active_ticket_viewers[ticket_id])}"
+                f"🎫 JOIN | Client: {request.sid} | User: {user_id} | Room: {room} | Active viewers: {viewer_count}"
             )
         else:
             logger.debug(f"🎫 JOIN | Client: {request.sid} | Room: {room} | No user_id provided")
@@ -456,8 +457,9 @@ def register_socketio_handlers(socketio_instance):
             # Clean up empty sets
             if not active_ticket_viewers[ticket_id]:
                 del active_ticket_viewers[ticket_id]
+            remaining = len(active_ticket_viewers.get(ticket_id, set()))
             logger.debug(
-                f"🚪 LEAVE | Client: {request.sid} | User: {user_id} | Room: {room} | Remaining viewers: {len(active_ticket_viewers.get(ticket_id, set()))}"
+                f"🚪 LEAVE | Client: {request.sid} | User: {user_id} | Room: {room} | Remaining viewers: {remaining}"
             )
         else:
             logger.debug(f"🚪 LEAVE | Client: {request.sid} | Room: {room}")

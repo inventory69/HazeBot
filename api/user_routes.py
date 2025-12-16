@@ -223,31 +223,30 @@ def get_user_profile():
                 conn = sqlite3.connect(db_path)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                
+
                 cursor.execute(
-                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?",
-                    (str(discord_id),)
+                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?", (str(discord_id),)
                 )
                 row = cursor.fetchone()
                 conn.close()
-                
+
                 if row:
                     total_xp = row["total_xp"]
                     level = row["current_level"]
                     last_xp_gain = row["last_xp_gain"]
-                    
+
                     # Calculate XP needed for next level
                     xp_for_next_level = Config.calculate_xp_for_next_level(level)
-                    
+
                     # Calculate XP required to reach current level (total XP for all previous levels)
                     xp_for_current_level = Config.calculate_total_xp_for_level(level)
-                    
+
                     # Calculate XP within current level (progress towards next level)
                     xp_in_current_level = total_xp - xp_for_current_level
-                    
+
                     # Determine tier using Config helper
                     tier_info = Config.get_level_tier(level)
-                    
+
                     xp_data = {
                         "total_xp": total_xp,
                         "level": level,
@@ -284,11 +283,11 @@ def get_user_profile():
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
         }
-        
+
         # Add XP data if available
         if xp_data:
             profile_data["xp"] = xp_data
-        
+
         return jsonify(
             {
                 "success": True,
@@ -321,7 +320,7 @@ def get_user_profile_by_id(user_id):
             discord_id = int(user_id)
         except ValueError:
             return jsonify({"error": "Invalid user ID"}), 400
-        
+
         member = guild.get_member(discord_id)
         if not member:
             return jsonify({"error": "Member not found in guild"}), 404
@@ -419,24 +418,23 @@ def get_user_profile_by_id(user_id):
                 conn = sqlite3.connect(db_path)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                
+
                 cursor.execute(
-                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?",
-                    (str(discord_id),)
+                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?", (str(discord_id),)
                 )
                 row = cursor.fetchone()
                 conn.close()
-                
+
                 if row:
                     total_xp = row["total_xp"]
                     level = row["current_level"]
                     last_xp_gain = row["last_xp_gain"]
-                    
+
                     xp_for_next_level = Config.calculate_xp_for_next_level(level)
                     xp_for_current_level = Config.calculate_total_xp_for_level(level)
                     xp_in_current_level = total_xp - xp_for_current_level
                     tier_info = Config.get_level_tier(level)
-                    
+
                     xp_data = {
                         "total_xp": total_xp,
                         "level": level,
@@ -464,10 +462,10 @@ def get_user_profile_by_id(user_id):
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
         }
-        
+
         if xp_data:
             profile_data["xp"] = xp_data
-        
+
         return jsonify(
             {
                 "success": True,
@@ -723,6 +721,7 @@ def post_game_request():
 
         # Award XP for game request (8 XP)
         from api.level_helpers import award_xp_from_api
+
         award_xp_from_api(bot, discord_id, requester.name, "game_request")
 
         return jsonify(

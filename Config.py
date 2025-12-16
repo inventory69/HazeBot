@@ -235,14 +235,14 @@ def get_level_tier(level: int) -> dict:
         tier_key = "uncommon"
     else:
         tier_key = "common"
-    
+
     tier_info = LEVEL_TIERS[tier_key].copy()
     tier_info["emoji"] = LEVEL_TIER_EMOJIS[tier_key]
-    
+
     # Convert color int to hex string for Frontend compatibility
     if isinstance(tier_info["color"], int):
         tier_info["color"] = f"#{tier_info['color']:06X}"
-    
+
     return tier_info
 
 

@@ -18,8 +18,6 @@ from api.auth import (
     DISCORD_REDIRECT_URI,
     DISCORD_OAUTH_FRONTEND_URL,
     DISCORD_OAUTH_ANALYTICS_URL,
-    FRONTEND_WEB_DOMAIN,
-    FRONTEND_ANALYTICS_DOMAIN,
     ROLE_PERMISSIONS,
     get_user_role_from_discord,
     token_required,
@@ -272,7 +270,8 @@ def init_auth_routes(app, Config, active_sessions, recent_activity, max_activity
 
         # Debug logging
         logger.info(
-            f"🔍 OAuth callback - state: '{state}' | referer: '{referer}' | hint: '{referer_hint}' | using: '{frontend_source}'"
+            f"🔍 OAuth callback - state: '{state}' | referer: '{referer}' | "
+            f"hint: '{referer_hint}' | using: '{frontend_source}'"
         )
 
         code = request.args.get("code")

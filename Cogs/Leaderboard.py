@@ -58,11 +58,11 @@ async def load_xp_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
         db_path = Path(Config.get_data_dir()) / "user_levels.db"
         if not db_path.exists():
             return []
-        
+
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         cursor.execute(
             """
             SELECT user_id, username, total_xp, current_level
@@ -70,30 +70,32 @@ async def load_xp_leaderboard(limit: int = 10) -> List[Dict[str, Any]]:
             ORDER BY total_xp DESC
             LIMIT ?
             """,
-            (limit,)
+            (limit,),
         )
         rows = cursor.fetchall()
         conn.close()
-        
+
         leaderboard = []
         for row in rows:
             user_id = row["user_id"]
             username = row["username"]
             total_xp = row["total_xp"]
             level = row["current_level"]
-            
+
             # Get tier info using Config function (includes emoji)
             tier_info = Config.get_level_tier(level)
-            
-            leaderboard.append({
-                "user_id": user_id,
-                "username": username,
-                "total_xp": total_xp,
-                "level": level,
-                "tier_name": tier_info["name"],
-                "tier_emoji": tier_info["emoji"],
-            })
-        
+
+            leaderboard.append(
+                {
+                    "user_id": user_id,
+                    "username": username,
+                    "total_xp": total_xp,
+                    "level": level,
+                    "tier_name": tier_info["name"],
+                    "tier_emoji": tier_info["emoji"],
+                }
+            )
+
         return leaderboard
     except Exception as e:
         logger.error(f"Error loading XP leaderboard: {e}")
@@ -152,13 +154,13 @@ class Leaderboard(commands.Cog):
     async def create_xp_leaderboard_embed(self, leaderboard: List[Dict[str, Any]]) -> discord.Embed:
         """Create an embed for XP/Level leaderboard with consistent formatting."""
         embed = discord.Embed(title="⭐ XP & Levels Leaderboard", color=Config.PINK)
-        
+
         if not leaderboard:
             embed.add_field(name="No Data", value="No XP data found yet.", inline=False)
         else:
             # Medal emojis for top 3
             medals = ["🥇", "🥈", "🥉"]
-            
+
             entries = []
             for i, entry in enumerate(leaderboard[:10]):
                 rank_display = medals[i] if i < 3 else f"{i + 1}."
@@ -167,16 +169,16 @@ class Leaderboard(commands.Cog):
                 level = entry["level"]
                 total_xp = entry["total_xp"]
                 tier_name = entry["tier_name"]
-                
+
                 # Format: 🥇 Username - Level 25 👑 (Legendary) • 15,000 XP
                 entry_text = (
                     f"{rank_display} **{username}** - Level {level} {tier_emoji} "
                     f"({tier_name.title()}) • {total_xp:,} XP"
                 )
                 entries.append(entry_text)
-            
+
             embed.description = "\n".join(entries)
-        
+
         set_pink_footer(embed, bot=self.bot.user)
         return embed
 

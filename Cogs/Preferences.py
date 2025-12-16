@@ -53,7 +53,7 @@ class PreferencesSystem(commands.Cog):
         # Check Meme role status
         has_meme_role = any(role.id == MEME_ROLE_ID for role in user.roles)
         meme_status = "✅ Enabled" if has_meme_role else "❌ Disabled"
-        
+
         # Check Level Notification role status
         has_level_role = any(role.id == LEVEL_NOTIFICATION_ROLE_ID for role in user.roles)
         level_status = "✅ Enabled" if has_level_role else "❌ Disabled"
@@ -75,7 +75,7 @@ class PreferencesSystem(commands.Cog):
             value=f"Status: **{meme_status}**\nGet pinged when the daily meme is posted at 12:00 PM.",
             inline=False,
         )
-        
+
         embed.add_field(
             name="⭐ Level-Up Notifications",
             value=f"Status: **{level_status}**\nGet pinged when **you** level up. (Others' level-ups are still visible, but without ping)",
@@ -101,7 +101,7 @@ class PreferencesView(discord.ui.View):
         has_meme = member and any(role.id == MEME_ROLE_ID for role in member.roles)
         meme_label = "🔕 Disable Daily Memes" if has_meme else "🎭 Enable Daily Memes"
         self.add_item(ToggleMemeButton(meme_label, user_id, guild))
-        
+
         # Level-Up button
         has_level = member and any(role.id == LEVEL_NOTIFICATION_ROLE_ID for role in member.roles)
         level_label = "🔕 Disable Level-Ups" if has_level else "⭐ Enable Level-Ups"
@@ -197,7 +197,9 @@ class ToggleLevelButton(discord.ui.Button):
             logger.info(f"User {interaction.user} disabled level-up notifications")
         else:
             await member.add_roles(role)
-            await interaction.response.send_message("⭐ Level-up notifications **enabled**! You'll be pinged when you level up.", ephemeral=True)
+            await interaction.response.send_message(
+                "⭐ Level-up notifications **enabled**! You'll be pinged when you level up.", ephemeral=True
+            )
             logger.info(f"User {interaction.user} enabled level-up notifications")
 
 
