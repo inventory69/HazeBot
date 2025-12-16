@@ -28,6 +28,7 @@ import asyncio
 import discord
 import os
 import traceback
+from Utils.CacheUtils import cache_instance as cache
 
 # Will be initialized by init_community_posts_routes()
 Config = None
@@ -206,13 +207,22 @@ def create_post():
         # Permission check for announcements
         user_id = request.discord_id
         user_role = request.user_role
-        is_mod_or_admin = user_role in ["admin", "mod"]
+        is_admin = user_role == "admin"
+        is_mod = user_role == "mod"
+        is_mod_or_admin = is_admin or is_mod
 
         if is_announcement and not is_mod_or_admin:
             return jsonify({"error": "Only admins/mods can create announcements"}), 403
 
-        # Determine post type
-        post_type = "announcement" if is_announcement else ("admin" if is_mod_or_admin else "normal")
+        # Determine post type (distinguish between mod and admin)
+        if is_announcement:
+            post_type = "announcement"
+        elif is_admin:
+            post_type = "admin"
+        elif is_mod:
+            post_type = "mod"
+        else:
+            post_type = "normal"
 
         # Debug: Log image data presence
         print(f"🔍 DEBUG: Image data present: {image_data is not None}")
@@ -253,6 +263,12 @@ def create_post():
         post_id = cur.lastrowid
         created_at = datetime.now().isoformat()
         conn.commit()
+        
+        # Invalidate cache so all clients get fresh posts
+        cache_key = "community_posts:all"
+        if cache.get(cache_key) is not None:
+            cache.delete(cache_key)
+            logger.info(f"🗑️ Invalidated community posts cache after post creation")
 
         # Post to Discord asynchronously
         bot = current_app.config.get("bot_instance")
@@ -512,6 +528,12 @@ def update_post(post_id):
         conn.commit()
         cur.close()
         conn.close()
+        
+        # Invalidate cache after post update
+        cache_key = "community_posts:all"
+        if cache.get(cache_key) is not None:
+            cache.delete(cache_key)
+            logger.info(f"🗑️ Invalidated community posts cache after post update")
 
         # Update Discord message
         bot = current_app.config.get("bot_instance")
@@ -611,6 +633,12 @@ def delete_post(post_id):
         conn.commit()
         cur.close()
         conn.close()
+        
+        # Invalidate cache after post deletion
+        cache_key = "community_posts:all"
+        if cache.get(cache_key) is not None:
+            cache.delete(cache_key)
+            logger.info(f"🗑️ Invalidated community posts cache after post deletion")
 
         # Delete Discord message
         bot = current_app.config.get("bot_instance")
@@ -950,6 +978,12 @@ def toggle_like_post(post_id):
         # Save updated likes
         save_community_post_likes(likes, likes_file)
         logger.info(f"💾 Saved likes for post {post_id}, new count: {len(user_likes)}")
+        
+        # Invalidate cache after like toggle (like counts changed)
+        cache_key = "community_posts:all"
+        if cache.get(cache_key) is not None:
+            cache.delete(cache_key)
+            logger.info(f"🗑️ Invalidated community posts cache after like toggle")
         
         # Get current counts
         like_count = len(user_likes)

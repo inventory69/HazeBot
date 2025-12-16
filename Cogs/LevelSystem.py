@@ -51,6 +51,14 @@ class LevelSystem(commands.Cog):
         self._community_post_cooldowns = {}  # user_id: last_post_time
         self._community_post_like_cooldowns = {}  # user_id: last_like_time
         self._meme_like_cooldowns = {}  # user_id: last_meme_like_time
+        
+        # Debug: Log XP_CONFIG at init to verify community post XP types
+        logger.info(f"🔍 [LevelSystem] XP_CONFIG keys loaded: {len(XP_CONFIG.keys())} types")
+        if "community_post_like" in XP_CONFIG:
+            logger.info(f"✅ [LevelSystem] community_post_like XP: {XP_CONFIG['community_post_like']}")
+        else:
+            logger.warning(f"⚠️ [LevelSystem] community_post_like NOT found in XP_CONFIG!")
+        
         self._init_database()
 
     def _init_database(self):
