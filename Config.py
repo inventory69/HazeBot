@@ -124,12 +124,19 @@ XP_CONFIG = {
     # Mod Activities (Extra XP)
     "ticket_resolved": 25,  # Ticket geschlossen (Mod only)
     "ticket_claimed": 15,  # Ticket claimed (Mod only)
+    # Community Posts & Engagement (16. Dez 2025)
+    "community_post_create": 15,  # Community Post erstellt (mit Cooldown)
+    "community_post_like": 2,  # Community Post geliked (mit Cooldown)
+    "meme_like": 2,  # Meme geliked (mit Cooldown)
     # Level Calculation
     "base_xp_per_level": 100,  # Base XP für Level 1→2
     "xp_multiplier": 1.5,  # Multiplier pro Level (exponentiell)
     # Cooldowns (Spam-Prevention)
     "message_cooldown": 60,  # Sekunden zwischen XP für Messages
-    "meme_fetch_cooldown": 30,  # Sekunden zwischen XP für Meme Fetches - NEW
+    "meme_fetch_cooldown": 30,  # Sekunden zwischen XP für Meme Fetches
+    "community_post_cooldown": 300,  # 5 Min zwischen Post-Erstellung XP
+    "community_post_like_cooldown": 10,  # 10s zwischen Like-XP
+    "meme_like_cooldown": 10,  # 10s zwischen Meme-Like XP
     "daily_xp_cap": 500,  # Max XP pro Tag (optional, 0 = disabled)
 }
 

@@ -40,6 +40,22 @@ def save_upvotes(upvotes, upvotes_file):
         json.dump(upvotes, f, indent=2)
 
 
+# Community Post Likes storage helpers
+def load_community_post_likes(likes_file):
+    """Load community post likes from file"""
+    if likes_file.exists():
+        with open(likes_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}  # {post_id: [discord_id1, discord_id2, ...]}
+
+
+def save_community_post_likes(likes, likes_file):
+    """Save community post likes to file"""
+    likes_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(likes_file, "w", encoding="utf-8") as f:
+        json.dump(likes, f, indent=2)
+
+
 # App usage tracking helpers
 def load_app_usage(app_usage_file):
     """Load app usage data from file"""

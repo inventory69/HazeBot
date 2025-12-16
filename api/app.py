@@ -188,7 +188,7 @@ debug_bp = debug_routes_module.debug_bp
 app.register_blueprint(debug_bp)
 
 # Initialize community posts routes Blueprint
-community_posts_routes_module.init_community_posts_routes(app, Config, decorator_module)
+community_posts_routes_module.init_community_posts_routes(app, Config, decorator_module, logger)
 logger.info(f"✅ Community Posts enabled (Channel: {Config.COMMUNITY_POSTS_CHANNEL_ID})")
 
 # Log monitoring status on startup

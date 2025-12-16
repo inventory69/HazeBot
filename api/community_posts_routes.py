@@ -27,15 +27,17 @@ import base64
 import asyncio
 import discord
 import os
+import traceback
 
 # Will be initialized by init_community_posts_routes()
 Config = None
 token_required = None
+logger = None
 
 bp = Blueprint("community_posts", __name__)
 
 
-def init_community_posts_routes(app, config, decorator_module):
+def init_community_posts_routes(app, config, decorator_module, log):
     """
     Initialize community posts routes Blueprint with dependencies
 
@@ -43,11 +45,13 @@ def init_community_posts_routes(app, config, decorator_module):
         app: Flask app instance
         config: Config module
         decorator_module: SimpleNamespace containing token_required decorator
+        log: Logger instance
     """
-    global Config, token_required
+    global Config, token_required, logger
 
     Config = config
     token_required = decorator_module.token_required
+    logger = log
 
     # Register blueprint
     app.register_blueprint(bp)
@@ -267,6 +271,20 @@ def create_post():
             except Exception as e:
                 print(f"⚠️ Failed to post to Discord: {e}")
         
+        # Award XP for post creation (15 XP with 5 min cooldown)
+        from api.level_helpers import award_xp_from_api
+        
+        if bot:
+            guild = bot.get_guild(Config.get_guild_id())
+            if guild:
+                member = guild.get_member(int(user_id))
+                if member:
+                    xp_result = award_xp_from_api(bot, user_id, member.name, "community_post_create")
+                    if xp_result:
+                        logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for post creation")
+                    else:
+                        logger.info(f"⏳ {member.name} on cooldown for post XP (5 min)")
+        
         cur.close()
         conn.close()
 
@@ -349,9 +367,31 @@ def get_posts():
         cur.close()
         conn.close()
 
+        # Load likes and add to posts
+        from api.helpers import load_community_post_likes
+        
+        likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
+        all_likes = load_community_post_likes(likes_file)
+        
+        # Format posts and add like data
+        formatted_posts = []
+        for post in posts:
+            formatted_post = _format_post(post)
+            post_id_str = str(formatted_post["id"])
+            user_likes = all_likes.get(post_id_str, [])
+            formatted_post["like_count"] = len(user_likes)
+            
+            # Check if current user has liked
+            if discord_id not in ["legacy_user", "unknown"]:
+                formatted_post["has_liked"] = discord_id in user_likes
+            else:
+                formatted_post["has_liked"] = False
+            
+            formatted_posts.append(formatted_post)
+
         return jsonify(
             {
-                "posts": [_format_post(p) for p in posts],
+                "posts": formatted_posts,
                 "pagination": {
                     "total": total_count,
                     "limit": limit,
@@ -805,3 +845,130 @@ def _format_post(post_row) -> dict:
         "edited_at": post_row["edited_at"],
         "discord_message_id": post_row["discord_message_id"],
     }
+
+
+# ============================================================================
+# LIKE SYSTEM (Instagram-Style)
+# ============================================================================
+
+
+@bp.route("/api/community_posts/<int:post_id>/like", methods=["POST"])
+@token_required
+def toggle_like_post(post_id):
+    """Toggle like on a community post"""
+    try:
+        from api.helpers import load_community_post_likes, save_community_post_likes
+        from api.level_helpers import award_xp_from_api
+        
+        discord_id = request.discord_id
+        if discord_id in ["legacy_user", "unknown"]:
+            return jsonify({"error": "Discord authentication required"}), 401
+        
+        # Check if post exists
+        db_path = Path(Config.DATA_DIR) / "community_posts.db"
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, author_id FROM community_posts WHERE id = ? AND deleted_at IS NULL", (post_id,))
+        post = cursor.fetchone()
+        conn.close()
+        
+        if not post:
+            return jsonify({"error": "Post not found"}), 404
+        
+        post_author_id = post[1]
+        
+        # Prevent self-liking
+        if str(discord_id) == str(post_author_id):
+            return jsonify({"error": "Cannot like your own post"}), 400
+        
+        # Load current likes
+        likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
+        likes = load_community_post_likes(likes_file)
+        
+        # Initialize post likes if not exists
+        post_id_str = str(post_id)
+        if post_id_str not in likes:
+            likes[post_id_str] = []
+        
+        # Check if user has already liked
+        user_likes = likes[post_id_str]
+        has_liked = discord_id in user_likes
+        
+        # Award XP ONLY when adding like (not removing)
+        xp_awarded = False
+        
+        # Toggle the like
+        if has_liked:
+            # Remove like
+            user_likes.remove(discord_id)
+            action = "removed"
+        else:
+            # Add like
+            user_likes.append(discord_id)
+            action = "added"
+            
+            # Award XP for liking (2 XP with 10s cooldown)
+            bot = current_app.config.get("bot_instance")
+            if bot:
+                guild = bot.get_guild(Config.get_guild_id())
+                if guild:
+                    member = guild.get_member(int(discord_id))
+                    if member:
+                        xp_result = award_xp_from_api(bot, discord_id, member.name, "community_post_like")
+                        if xp_result:
+                            xp_awarded = True
+                            logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for liking post #{post_id}")
+        
+        # Save updated likes
+        save_community_post_likes(likes, likes_file)
+        
+        # Get current counts
+        like_count = len(user_likes)
+        has_liked_now = discord_id in user_likes
+        
+        return jsonify({
+            "success": True,
+            "post_id": post_id,
+            "action": action,
+            "like_count": like_count,
+            "has_liked": has_liked_now,
+            "xp_awarded": xp_awarded
+        })
+    
+    except Exception as e:
+        logger.error(f"Error toggling like: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to toggle like: {str(e)}"}), 500
+
+
+@bp.route("/api/community_posts/<int:post_id>/likes", methods=["GET"])
+@token_required
+def get_post_likes(post_id):
+    """Get like count and user's like status for a post"""
+    try:
+        from api.helpers import load_community_post_likes
+        
+        discord_id = request.discord_id
+        
+        # Load likes
+        likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
+        likes = load_community_post_likes(likes_file)
+        
+        post_id_str = str(post_id)
+        user_likes = likes.get(post_id_str, [])
+        like_count = len(user_likes)
+        
+        # Check if current user has liked
+        has_liked = False
+        if discord_id not in ["legacy_user", "unknown"]:
+            has_liked = discord_id in user_likes
+        
+        return jsonify({
+            "success": True,
+            "post_id": post_id,
+            "like_count": like_count,
+            "has_liked": has_liked
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting likes: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get likes: {str(e)}"}), 500

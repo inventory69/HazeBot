@@ -503,6 +503,9 @@ def toggle_upvote_meme(message_id):
         user_upvotes = upvotes[message_id]
         has_upvoted = discord_id in user_upvotes
 
+        # Award XP ONLY when adding upvote (not removing)
+        xp_awarded = False
+
         # Toggle the upvote
         if has_upvoted:
             # Remove upvote
@@ -512,6 +515,19 @@ def toggle_upvote_meme(message_id):
             # Add upvote
             user_upvotes.append(discord_id)
             action = "added"
+            
+            # Award XP for liking meme (2 XP with 10s cooldown)
+            from api.level_helpers import award_xp_from_api
+            
+            if bot:
+                guild = bot.get_guild(Config.get_guild_id())
+                if guild:
+                    member = guild.get_member(int(discord_id))
+                    if member:
+                        xp_result = award_xp_from_api(bot, discord_id, member.name, "meme_like")
+                        if xp_result:
+                            xp_awarded = True
+                            logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for liking meme")
 
         # Save updated upvotes
         save_upvotes(upvotes, upvotes_file)
@@ -527,6 +543,7 @@ def toggle_upvote_meme(message_id):
                 "action": action,
                 "upvote_count": upvote_count,
                 "has_upvoted": has_upvoted_now,
+                "xp_awarded": xp_awarded,
             }
         )
 

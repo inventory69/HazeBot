@@ -48,6 +48,9 @@ class LevelSystem(commands.Cog):
         self.db_path = Path(Config.DATA_DIR) / "user_levels.db"
         self._cooldowns = {}  # user_id: last_message_time
         self._meme_fetch_cooldowns = {}  # user_id: last_meme_fetch_time
+        self._community_post_cooldowns = {}  # user_id: last_post_time
+        self._community_post_like_cooldowns = {}  # user_id: last_like_time
+        self._meme_like_cooldowns = {}  # user_id: last_meme_like_time
         self._init_database()
 
     def _init_database(self):
@@ -138,6 +141,25 @@ class LevelSystem(commands.Cog):
             try:
                 cursor.execute("ALTER TABLE user_xp ADD COLUMN generated_memes_posted INTEGER DEFAULT 0")
                 logger.info("⭐ [LevelSystem] Added generated_memes_posted column")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            # Migration: Community Post tracking columns (16. Dez 2025)
+            try:
+                cursor.execute("ALTER TABLE user_xp ADD COLUMN community_posts_created INTEGER DEFAULT 0")
+                logger.info("⭐ [LevelSystem] Added community_posts_created column")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            try:
+                cursor.execute("ALTER TABLE user_xp ADD COLUMN community_posts_liked INTEGER DEFAULT 0")
+                logger.info("⭐ [LevelSystem] Added community_posts_liked column")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            try:
+                cursor.execute("ALTER TABLE user_xp ADD COLUMN memes_liked INTEGER DEFAULT 0")
+                logger.info("⭐ [LevelSystem] Added memes_liked column")
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
@@ -237,6 +259,57 @@ class LevelSystem(commands.Cog):
         """Update meme fetch cooldown timestamp"""
         self._meme_fetch_cooldowns[user_id] = datetime.now(timezone.utc)
 
+    def _check_community_post_cooldown(self, user_id: str) -> bool:
+        """Check if user can gain XP for creating post (5 min cooldown)"""
+        if user_id not in self._community_post_cooldowns:
+            return True
+        
+        last_post = self._community_post_cooldowns[user_id]
+        cooldown = XP_CONFIG.get("community_post_cooldown", 300)
+        
+        if (datetime.now(timezone.utc) - last_post).total_seconds() >= cooldown:
+            return True
+        
+        return False
+
+    def _update_community_post_cooldown(self, user_id: str):
+        """Update community post cooldown timestamp"""
+        self._community_post_cooldowns[user_id] = datetime.now(timezone.utc)
+
+    def _check_community_post_like_cooldown(self, user_id: str) -> bool:
+        """Check if user can gain XP for liking post (10s cooldown)"""
+        if user_id not in self._community_post_like_cooldowns:
+            return True
+        
+        last_like = self._community_post_like_cooldowns[user_id]
+        cooldown = XP_CONFIG.get("community_post_like_cooldown", 10)
+        
+        if (datetime.now(timezone.utc) - last_like).total_seconds() >= cooldown:
+            return True
+        
+        return False
+
+    def _update_community_post_like_cooldown(self, user_id: str):
+        """Update community post like cooldown timestamp"""
+        self._community_post_like_cooldowns[user_id] = datetime.now(timezone.utc)
+
+    def _check_meme_like_cooldown(self, user_id: str) -> bool:
+        """Check if user can gain XP for liking meme (10s cooldown)"""
+        if user_id not in self._meme_like_cooldowns:
+            return True
+        
+        last_like = self._meme_like_cooldowns[user_id]
+        cooldown = XP_CONFIG.get("meme_like_cooldown", 10)
+        
+        if (datetime.now(timezone.utc) - last_like).total_seconds() >= cooldown:
+            return True
+        
+        return False
+
+    def _update_meme_like_cooldown(self, user_id: str):
+        """Update meme like cooldown timestamp"""
+        self._meme_like_cooldowns[user_id] = datetime.now(timezone.utc)
+
     async def add_xp(self, user_id: str, username: str, xp_type: str, amount: int = None) -> Optional[dict]:
         """
         Add XP to user and check for level-up
@@ -256,11 +329,27 @@ class LevelSystem(commands.Cog):
             if not user_data:
                 return None
 
-            # Cooldown Check (für Messages)
+            # Cooldown Check
             if xp_type == "message_sent":
                 if not self._check_cooldown(user_id):
                     return None  # Still on cooldown
                 self._update_cooldown(user_id)
+            elif xp_type == "meme_fetch" or xp_type == "meme_fetched":
+                if not self._check_meme_fetch_cooldown(user_id):
+                    return None  # Still on cooldown
+                self._update_meme_fetch_cooldown(user_id)
+            elif xp_type == "community_post_create":
+                if not self._check_community_post_cooldown(user_id):
+                    return None  # Still on cooldown
+                self._update_community_post_cooldown(user_id)
+            elif xp_type == "community_post_like":
+                if not self._check_community_post_like_cooldown(user_id):
+                    return None  # Still on cooldown
+                self._update_community_post_like_cooldown(user_id)
+            elif xp_type == "meme_like":
+                if not self._check_meme_like_cooldown(user_id):
+                    return None  # Still on cooldown
+                self._update_meme_like_cooldown(user_id)
 
             # Calculate XP
             xp_amount = amount if amount is not None else XP_CONFIG.get(xp_type, 0)
@@ -305,6 +394,10 @@ class LevelSystem(commands.Cog):
                 "meme_post": "memes_posted",
                 "meme_generate": "memes_generated",
                 "meme_generate_post": "generated_memes_posted",
+                # Community Posts & Engagement (16. Dez 2025)
+                "community_post_create": "community_posts_created",
+                "community_post_like": "community_posts_liked",
+                "meme_like": "memes_liked",
                 # Other activities
                 "message_sent": "messages_sent",
                 "image_sent": "images_sent",
