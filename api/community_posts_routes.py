@@ -138,16 +138,29 @@ def get_posts_db():
 
     # Initialize DB if it doesn't exist
     if not db_path.exists():
-        init_script = Path(Config.DATA_DIR) / "init_community_posts.sql"
-        if init_script.exists():
+        # Try multiple locations for init script
+        init_script_locations = [
+            Path(Config.DATA_DIR) / "init_community_posts.sql",  # Local copy
+            Path(__file__).parent.parent / "sql" / "schemas" / "init_community_posts.sql",  # Git-tracked
+        ]
+        
+        init_script = None
+        for location in init_script_locations:
+            if location.exists():
+                init_script = location
+                break
+        
+        if init_script:
             conn = sqlite3.connect(str(db_path))
             with open(init_script, "r", encoding="utf-8") as f:
                 conn.executescript(f.read())
             conn.commit()
             conn.close()
-            print(f"✅ Initialized community_posts.db in {Config.DATA_DIR}")
+            print(f"✅ Initialized community_posts.db in {Config.DATA_DIR} from {init_script}")
         else:
-            print(f"⚠️ Warning: {init_script} not found, creating empty database")
+            print(f"❌ ERROR: init_community_posts.sql not found in any location!")
+            print(f"   Searched: {', '.join(str(loc) for loc in init_script_locations)}")
+            raise FileNotFoundError("Community posts schema not found")
 
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
