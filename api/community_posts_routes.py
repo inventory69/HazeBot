@@ -26,6 +26,7 @@ import sqlite3
 import base64
 import asyncio
 import discord
+import os
 
 # Will be initialized by init_community_posts_routes()
 Config = None
@@ -147,6 +148,10 @@ def create_post():
                 print(f"❌ Image upload failed: {e}")
                 return jsonify({'error': f'Image upload failed: {str(e)}'}), 500
         
+        # Get avatar URL via bot instance
+        bot = current_app.config.get("bot_instance")
+        avatar_url = _get_user_avatar_url(user_id, bot)
+        
         # Save to database
         conn = get_posts_db()
         cur = conn.cursor()
@@ -161,7 +166,7 @@ def create_post():
             image_url,
             user_id,
             request.username,
-            None,  # Avatar URL - we don't have it in request context
+            avatar_url,
             post_type,
             1 if is_announcement else 0,
             Config.COMMUNITY_POSTS_CHANNEL_ID
