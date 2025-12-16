@@ -864,8 +864,11 @@ def toggle_like_post(post_id):
         from api.helpers import load_community_post_likes, save_community_post_likes
         from api.level_helpers import award_xp_from_api
         
-        discord_id = request.discord_id
+        discord_id = getattr(request, 'discord_id', 'unknown')
+        logger.info(f"🔄 Like request for post {post_id} from user {discord_id}")
+        
         if discord_id in ["legacy_user", "unknown"]:
+            logger.warning(f"⚠️  Unauthenticated like attempt for post {post_id}")
             return jsonify({"error": "Discord authentication required"}), 401
         
         # Check if post exists
@@ -906,10 +909,12 @@ def toggle_like_post(post_id):
             # Remove like
             user_likes.remove(discord_id)
             action = "removed"
+            logger.info(f"➖ Removed like from post {post_id} by {discord_id}")
         else:
             # Add like
             user_likes.append(discord_id)
             action = "added"
+            logger.info(f"➕ Added like to post {post_id} by {discord_id}")
             
             # Award XP for liking (2 XP with 10s cooldown)
             bot = current_app.config.get("bot_instance")
@@ -922,13 +927,22 @@ def toggle_like_post(post_id):
                         if xp_result:
                             xp_awarded = True
                             logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for liking post #{post_id}")
+                    else:
+                        logger.warning(f"⚠️  Member {discord_id} not found in guild for XP award")
+                else:
+                    logger.warning(f"⚠️  Guild not found for XP award")
+            else:
+                logger.warning(f"⚠️  Bot instance not available for XP award")
         
         # Save updated likes
         save_community_post_likes(likes, likes_file)
+        logger.info(f"💾 Saved likes for post {post_id}, new count: {len(user_likes)}")
         
         # Get current counts
         like_count = len(user_likes)
         has_liked_now = discord_id in user_likes
+        
+        logger.info(f"✅ Like toggle complete: post={post_id}, action={action}, count={like_count}, has_liked={has_liked_now}, xp={xp_awarded}")
         
         return jsonify({
             "success": True,
