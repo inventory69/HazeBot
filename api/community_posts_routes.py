@@ -375,6 +375,9 @@ def get_posts():
         likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
         all_likes = load_community_post_likes(likes_file)
         
+        # Get current user's discord_id (if authenticated)
+        discord_id = getattr(request, 'discord_id', 'unknown')
+        
         # Format posts and add like data
         formatted_posts = []
         for post in posts:
