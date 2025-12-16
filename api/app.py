@@ -262,12 +262,13 @@ def internal_error(e):
     logger.error(f"Internal server error: {e}")
     # Track error
     try:
-        error_tracking_module.track_api_error(
-            error_tracker=error_tracker,
-            exception=e,
-            endpoint="unknown",
-            request_data={"error_type": "500_internal_error"},
-        )
+        if error_tracker:
+            error_tracking_module.track_api_error(
+                error_tracker=error_tracker,
+                exception=e,
+                endpoint="unknown",
+                request_data={"error_type": "500_internal_error"},
+            )
     except Exception as track_error:
         logger.error(f"Failed to track error: {track_error}")
     return jsonify({"error": "Internal server error"}), 500
@@ -280,20 +281,21 @@ def handle_exception(e):
 
     # Track error
     try:
-        from flask import request
+        if error_tracker:
+            from flask import request
 
-        endpoint = request.endpoint or "unknown"
-        user_id = getattr(request, "discord_id", None)
-        username = getattr(request, "username", None)
+            endpoint = request.endpoint or "unknown"
+            user_id = getattr(request, "discord_id", None)
+            username = getattr(request, "username", None)
 
-        error_tracking_module.track_api_error(
-            error_tracker=error_tracker,
-            exception=e,
-            endpoint=endpoint,
-            user_id=user_id,
-            username=username,
-            request_data={"method": request.method, "url": request.url, "remote_addr": request.remote_addr},
-        )
+            error_tracking_module.track_api_error(
+                error_tracker=error_tracker,
+                exception=e,
+                endpoint=endpoint,
+                user_id=user_id,
+                username=username,
+                request_data={"method": request.method, "url": request.url, "remote_addr": request.remote_addr},
+            )
     except Exception as track_error:
         logger.error(f"Failed to track error: {track_error}")
 

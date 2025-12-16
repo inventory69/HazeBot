@@ -20,7 +20,7 @@ sys.path.insert(0, project_root)
 load_dotenv()
 
 # Configuration
-API_BASE_URL = "http://localhost:5070"
+API_BASE_URL = "http://192.168.0.188:5070"
 SECRET_KEY = os.getenv("API_SECRET_KEY", "dev-secret-key-change-in-production")
 
 print(f"🔑 Using SECRET_KEY: {SECRET_KEY[:20]}...")
