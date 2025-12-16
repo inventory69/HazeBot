@@ -1041,12 +1041,19 @@ def reset_xp_config():
             # Mod Activities (Extra XP)
             "ticket_resolved": 25,
             "ticket_claimed": 15,
+            # Community Posts & Engagement (16. Dez 2025)
+            "community_post_create": 15,
+            "community_post_like": 2,
+            "meme_like": 2,
             # Level Calculation
             "base_xp_per_level": 100,
             "xp_multiplier": 1.5,
             # Cooldowns (Spam-Prevention)
             "message_cooldown": 60,
             "meme_fetch_cooldown": 30,
+            "community_post_cooldown": 300,
+            "community_post_like_cooldown": 10,
+            "meme_like_cooldown": 10,
             "daily_xp_cap": 500,
         }
 

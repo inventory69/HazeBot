@@ -97,10 +97,12 @@ def load_config_from_file():
         if "server_guide" in config_data:
             Config.SERVER_GUIDE_CONFIG = config_data["server_guide"]
 
-        # Apply XP system settings
+        # Apply XP system settings (MERGE instead of REPLACE to keep new keys)
         if "xp_config" in config_data:
-            Config.XP_CONFIG = config_data["xp_config"]
-            print(f"✅ Set XP_CONFIG with {len(Config.XP_CONFIG)} settings")
+            # Merge: Keep all existing keys, override only specified ones
+            for key, value in config_data["xp_config"].items():
+                Config.XP_CONFIG[key] = value
+            print(f"✅ Merged XP_CONFIG overrides: {len(config_data['xp_config'])} values updated")
 
         print(f"✅ Loaded configuration from {config_file}")
 
