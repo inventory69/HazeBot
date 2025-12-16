@@ -412,11 +412,7 @@ class MemePreviewView(discord.ui.View):
         # Award XP for meme generation
         level_cog = self.cog.bot.get_cog("LevelSystem")
         if level_cog:
-            await level_cog.add_xp(
-                user_id=str(self.user.id),
-                username=self.user.name,
-                xp_type="meme_generated"
-            )
+            await level_cog.add_xp(user_id=str(self.user.id), username=self.user.name, xp_type="meme_generated")
 
         # Track generated meme
         user_id = str(self.user.id)

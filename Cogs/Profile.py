@@ -57,30 +57,27 @@ def get_user_xp_data(user_id: int) -> Optional[dict]:
         db_path = Path(Config.DATA_DIR) / "user_levels.db"
         if not db_path.exists():
             return None
-        
+
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
-        cursor.execute(
-            "SELECT total_xp, current_level FROM user_xp WHERE user_id = ?",
-            (str(user_id),)
-        )
+
+        cursor.execute("SELECT total_xp, current_level FROM user_xp WHERE user_id = ?", (str(user_id),))
         row = cursor.fetchone()
         conn.close()
-        
+
         if not row:
             return None
-        
+
         total_xp = row["total_xp"]
         level = row["current_level"]
-        
+
         # Calculate XP needed for next level using Config function
         xp_for_next_level = Config.calculate_xp_for_next_level(level)
-        
+
         # Get tier info using Config function (includes emoji)
         tier_info = Config.get_level_tier(level)
-        
+
         return {
             "total_xp": total_xp,
             "level": level,
@@ -214,7 +211,7 @@ class Profile(commands.Cog):
             # Tier info already contains emoji from Config.get_level_tier
             tier_name = xp_data["tier_name"]
             tier_emoji = xp_data.get("tier_emoji", "🔰")
-            
+
             embed.add_field(
                 name="⭐ Level & Experience",
                 value=(

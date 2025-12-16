@@ -97,16 +97,16 @@ class RocketLeagueHubView(discord.ui.View):
             await loading_msg.delete()
             await interaction.followup.send(embed=embed, ephemeral=is_ephemeral)
             logger.info(f"RL stats viewed by {interaction.user} (button)")
-            
+
             # XP Reward for viewing RL stats via button
             try:
-                level_cog = interaction.client.get_cog('LevelSystem')
+                level_cog = interaction.client.get_cog("LevelSystem")
                 if level_cog:
                     await level_cog.add_xp(
                         user_id=str(interaction.user.id),
                         username=interaction.user.name,
                         xp_type="rl_stats_checked",
-                        amount=5
+                        amount=5,
                     )
                     logger.info(f"⭐ User {interaction.user.name} gained 5 XP for checking RL stats (button)")
             except Exception as xp_error:
@@ -361,21 +361,21 @@ class ConfirmLinkView(discord.ui.View):
             view=None,
         )
         logger.info(f"Rocket League account linked by {interaction.user}")
-        
+
         # XP Reward for linking RL account
         try:
-            level_cog = self.cog.bot.get_cog('LevelSystem')
+            level_cog = self.cog.bot.get_cog("LevelSystem")
             if level_cog:
                 await level_cog.add_xp(
                     user_id=str(interaction.user.id),
                     username=interaction.user.name,
                     xp_type="rl_account_linked",
-                    amount=20
+                    amount=20,
                 )
                 logger.info(f"⭐ User {interaction.user.name} gained 20 XP for linking RL account")
         except Exception as e:
             logger.error(f"❌ Failed to add XP for RL account linking: {e}")
-        
+
         self.stop()
         await asyncio.sleep(5)
         await self.message.delete()
@@ -1072,16 +1072,16 @@ class RocketLeague(commands.Cog):
         embed = await self._create_rl_embed(stats, platform)
         await interaction.followup.send(embed=embed, ephemeral=ephemeral)
         logger.info(f"RL stats viewed by {interaction.user}")
-        
+
         # XP Reward for viewing RL stats
         try:
-            level_cog = self.bot.get_cog('LevelSystem')
+            level_cog = self.bot.get_cog("LevelSystem")
             if level_cog:
                 await level_cog.add_xp(
                     user_id=str(interaction.user.id),
                     username=interaction.user.name,
                     xp_type="rl_stats_checked",
-                    amount=5
+                    amount=5,
                 )
                 logger.info(f"⭐ User {interaction.user.name} gained 5 XP for checking RL stats")
         except Exception as e:

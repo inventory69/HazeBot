@@ -924,6 +924,7 @@ def reset_ticket_config():
 # XP/LEVEL SYSTEM CONFIGURATION
 # ============================================================================
 
+
 @config_bp.route("/api/config/xp", methods=["GET"])
 def get_xp_config():
     """Get XP System Configuration"""
@@ -955,17 +956,20 @@ def get_xp_config():
             "level_tiers": {
                 tier_key: {
                     **tier_data,
-                    "color": f"#{tier_data['color']:06X}" if isinstance(tier_data['color'], int) else tier_data['color'],
-                    "emoji": Config.LEVEL_TIER_EMOJIS.get(tier_key, "⭐")
+                    "color": f"#{tier_data['color']:06X}"
+                    if isinstance(tier_data["color"], int)
+                    else tier_data["color"],
+                    "emoji": Config.LEVEL_TIER_EMOJIS.get(tier_key, "⭐"),
                 }
                 for tier_key, tier_data in Config.LEVEL_TIERS.items()
             },
             "level_icons": Config.LEVEL_ICONS,
         }
-        
+
         return jsonify({"success": True, "config": config})
     except Exception as e:
         import traceback
+
         logger.error(f"Error getting XP config: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to get XP config: {str(e)}"}), 500
 
@@ -975,20 +979,20 @@ def update_xp_config():
     """Update XP System Configuration"""
     try:
         data = request.json
-        
+
         # Update activity XP values
         if "activity_xp" in data:
             for key, value in data["activity_xp"].items():
                 if key in Config.XP_CONFIG:
                     Config.XP_CONFIG[key] = int(value)
-        
+
         # Update level calculation
         if "level_calculation" in data:
             if "base_xp_per_level" in data["level_calculation"]:
                 Config.XP_CONFIG["base_xp_per_level"] = int(data["level_calculation"]["base_xp_per_level"])
             if "xp_multiplier" in data["level_calculation"]:
                 Config.XP_CONFIG["xp_multiplier"] = float(data["level_calculation"]["xp_multiplier"])
-        
+
         # Update cooldowns
         if "cooldowns" in data:
             if "message_cooldown" in data["cooldowns"]:
@@ -997,16 +1001,17 @@ def update_xp_config():
                 Config.XP_CONFIG["meme_fetch_cooldown"] = int(data["cooldowns"]["meme_fetch_cooldown"])
             if "daily_xp_cap" in data["cooldowns"]:
                 Config.XP_CONFIG["daily_xp_cap"] = int(data["cooldowns"]["daily_xp_cap"])
-        
+
         # Save to file
         save_config_to_file()
-        
+
         log_action(request.username, "update_xp_config", {"updated_fields": list(data.keys())})
-        
+
         return jsonify({"success": True, "message": "XP config updated successfully"})
-    
+
     except Exception as e:
         import traceback
+
         logger.error(f"Error updating XP config: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to update XP config: {str(e)}"}), 500
 
@@ -1044,13 +1049,14 @@ def reset_xp_config():
             "meme_fetch_cooldown": 30,
             "daily_xp_cap": 500,
         }
-        
+
         # Save to file
         save_config_to_file()
-        
+
         return jsonify({"success": True, "message": "XP config reset to defaults successfully"})
-    
+
     except Exception as e:
         import traceback
+
         logger.error(f"Error resetting XP config: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to reset XP config: {str(e)}"}), 500

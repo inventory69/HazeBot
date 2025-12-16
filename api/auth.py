@@ -24,7 +24,9 @@ DISCORD_API_ENDPOINT = "https://discord.com/api/v10"
 
 # OAuth Frontend URLs (Environment-based)
 DISCORD_OAUTH_FRONTEND_URL = os.getenv("DISCORD_OAUTH_FRONTEND_URL", "https://admin.haze.pro")
-DISCORD_OAUTH_ANALYTICS_URL = os.getenv("DISCORD_OAUTH_ANALYTICS_URL", "https://api.haze.pro/analytics/analytics_dashboard.html")
+DISCORD_OAUTH_ANALYTICS_URL = os.getenv(
+    "DISCORD_OAUTH_ANALYTICS_URL", "https://api.haze.pro/analytics/analytics_dashboard.html"
+)
 
 # Extract domains for referer detection (no hardcoded domains!)
 FRONTEND_WEB_DOMAIN = DISCORD_OAUTH_FRONTEND_URL.replace("https://", "").replace("http://", "").split("/")[0]
@@ -50,31 +52,31 @@ analytics_aggregator = None
 def _detect_emulator(device_info: str, user_agent: str) -> bool:
     """
     Detect if device is an Android emulator based on device info and user agent.
-    
+
     Args:
         device_info: Device information string (e.g., "Google sdk_gphone64_arm64")
         user_agent: User agent string from request headers
-        
+
     Returns:
         True if device is detected as an emulator, False otherwise
     """
     if not device_info or not user_agent:
         return False
-    
+
     # Common Android emulator patterns
     emulator_patterns = [
-        'sdk_gphone',      # Android Emulator (new versions)
-        'generic',         # Generic Android emulator
-        'emulator',        # Explicit emulator identifier
-        'vbox',           # VirtualBox Android
-        'goldfish',       # Android Goldfish emulator
-        'ranchu',         # Android Ranchu emulator
-        'simulator',      # iOS Simulator (if we ever support iOS)
+        "sdk_gphone",  # Android Emulator (new versions)
+        "generic",  # Generic Android emulator
+        "emulator",  # Explicit emulator identifier
+        "vbox",  # VirtualBox Android
+        "goldfish",  # Android Goldfish emulator
+        "ranchu",  # Android Ranchu emulator
+        "simulator",  # iOS Simulator (if we ever support iOS)
     ]
-    
+
     device_lower = device_info.lower()
     ua_lower = user_agent.lower()
-    
+
     # Check if any emulator pattern is present in device info or user agent
     return any(pattern in device_lower or pattern in ua_lower for pattern in emulator_patterns)
 
@@ -337,7 +339,7 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
 
             # 🐛 ANALYTICS FIX: Check if this is a debug session
             is_debug_session = "(Debug)" in platform or "(Debug)" in device_info
-            
+
             # 📱 EMULATOR DETECTION: Check if device is an Android emulator
             is_emulator = _detect_emulator(device_info, user_agent)
 
@@ -412,7 +414,8 @@ def token_required(f, app, Config, active_sessions, recent_activity, max_activit
                 except Exception as e:
                     logger.error(f"Failed to start analytics session: {e}")
 
-            # Analytics: Update session activity (skip high-frequency endpoints + analytics dashboard + debug + generic device info)
+            # Analytics: Update session activity
+            # (skip high-frequency endpoints + analytics dashboard + debug + generic device info)
             if (
                 analytics_aggregator is not None
                 and not is_analytics_request

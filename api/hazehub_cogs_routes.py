@@ -503,6 +503,9 @@ def toggle_upvote_meme(message_id):
         user_upvotes = upvotes[message_id]
         has_upvoted = discord_id in user_upvotes
 
+        # Award XP ONLY when adding upvote (not removing)
+        xp_awarded = False
+
         # Toggle the upvote
         if has_upvoted:
             # Remove upvote
@@ -512,6 +515,19 @@ def toggle_upvote_meme(message_id):
             # Add upvote
             user_upvotes.append(discord_id)
             action = "added"
+            
+            # Award XP for liking meme (2 XP with 10s cooldown)
+            from api.level_helpers import award_xp_from_api
+            
+            if bot:
+                guild = bot.get_guild(Config.get_guild_id())
+                if guild:
+                    member = guild.get_member(int(discord_id))
+                    if member:
+                        xp_result = award_xp_from_api(bot, discord_id, member.name, "meme_like")
+                        if xp_result:
+                            xp_awarded = True
+                            logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for liking meme")
 
         # Save updated upvotes
         save_upvotes(upvotes, upvotes_file)
@@ -527,6 +543,7 @@ def toggle_upvote_meme(message_id):
                 "action": action,
                 "upvote_count": upvote_count,
                 "has_upvoted": has_upvoted_now,
+                "xp_awarded": xp_awarded,
             }
         )
 
@@ -631,37 +648,40 @@ def get_latest_levelups():
         import sqlite3
         import os
         from flask import current_app
-        
+
         bot = current_app.config.get("bot_instance")
-        
+
         limit = request.args.get("limit", 10, type=int)
         limit = min(limit, 50)  # Max 50 level-ups
-        
+
         # Check cache first (60 second TTL - level-ups change frequently)
         cache_key = f"hazehub:latest_levelups:{limit}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return jsonify(cached_result)
-        
+
         # Query level_history database
-        db_path = os.path.join(Config.DATA_DIR, 'user_levels.db')
-        
+        db_path = os.path.join(Config.DATA_DIR, "user_levels.db")
+
         if not os.path.exists(db_path):
             # Return empty list if database doesn't exist yet
             result = {"success": True, "levelups": []}
             cache.set(cache_key, result, ttl=60)
             return jsonify(result)
-        
+
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
-        cursor.execute("""
+
+        cursor.execute(
+            """
             SELECT user_id, old_level, new_level, total_xp, timestamp
             FROM level_history
             ORDER BY timestamp DESC
             LIMIT ?
-        """, (limit,))
-        
+        """,
+            (limit,),
+        )
+
         levelups = []
         for row in cursor.fetchall():
             user_id = row[0]
@@ -669,39 +689,41 @@ def get_latest_levelups():
             new_level = row[2]
             total_xp = row[3]
             timestamp = row[4]
-            
+
             # Get tier for new level
             tier_info = _get_level_tier(new_level)
-            
+
             # Get Discord user info from bot
             user = bot.get_user(int(user_id)) if bot else None
             username = user.name if user else f"User {user_id}"
             display_name = user.display_name if user else username
             avatar_url = str(user.display_avatar.url) if user and user.display_avatar else None
-            
-            levelups.append({
-                "user_id": user_id,
-                "username": username,
-                "display_name": display_name,
-                "avatar_url": avatar_url,
-                "old_level": old_level,
-                "new_level": new_level,
-                "total_xp": total_xp,
-                "timestamp": timestamp,
-                "tier_name": tier_info.get("name", "🔰 Novice"),
-                "tier_color": tier_info.get("color", "#808080"),
-                "tier_emoji": tier_info.get("emoji", "🔰"),
-            })
-        
+
+            levelups.append(
+                {
+                    "user_id": user_id,
+                    "username": username,
+                    "display_name": display_name,
+                    "avatar_url": avatar_url,
+                    "old_level": old_level,
+                    "new_level": new_level,
+                    "total_xp": total_xp,
+                    "timestamp": timestamp,
+                    "tier_name": tier_info.get("name", "🔰 Novice"),
+                    "tier_color": tier_info.get("color", "#808080"),
+                    "tier_emoji": tier_info.get("emoji", "🔰"),
+                }
+            )
+
         conn.close()
-        
+
         result = {"success": True, "levelups": levelups}
-        
+
         # Cache for 60 seconds
         cache.set(cache_key, result, ttl=60)
-        
+
         return jsonify(result)
-        
+
     except Exception as e:
         logger.error(f"Error getting latest levelups: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to get latest levelups: {str(e)}"}), 500

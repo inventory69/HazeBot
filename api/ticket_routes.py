@@ -469,6 +469,7 @@ def create_ticket_endpoint():
 
         # Award XP for ticket creation (10 XP)
         from api.level_helpers import award_xp_from_api
+
         if discord_id and member:
             award_xp_from_api(bot, discord_id, member.name, "ticket_created")
 
@@ -698,6 +699,7 @@ def claim_ticket_endpoint(ticket_id):
 
         # Award XP for ticket claim (15 XP - Moderator action)
         from api.level_helpers import award_xp_from_api
+
         guild = bot.get_guild(Config.get_guild_id())
         if guild:
             member = guild.get_member(int(user_id))
@@ -878,6 +880,7 @@ def close_ticket_endpoint(ticket_id):
 
         # Award XP for ticket resolution (25 XP - Moderator action)
         from api.level_helpers import award_xp_from_api
+
         claimed_by = ticket.get("claimed_by")
         if claimed_by:
             guild = bot.get_guild(Config.get_guild_id())
@@ -1302,9 +1305,9 @@ def send_ticket_message_endpoint(ticket_id):
         logger.debug(f"🗑️ Invalidated message cache for ticket {ticket_id}")
 
         # Notify WebSocket clients about new message
-        logger.debug(
-            f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {message_data.get('author_name')} | Content preview: {message_data.get('content', '')[:50]}..."
-        )
+        author = message_data.get("author_name")
+        preview = message_data.get("content", "")[:50]
+        logger.debug(f"📨 NEW MESSAGE | Ticket: {ticket_id} | Author: {author} | Content preview: {preview}...")
         notify_ticket_update(ticket_id, "new_message", message_data)
 
         # Send push notification for new message

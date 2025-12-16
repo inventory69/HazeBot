@@ -223,31 +223,30 @@ def get_user_profile():
                 conn = sqlite3.connect(db_path)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
-                
+
                 cursor.execute(
-                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?",
-                    (str(discord_id),)
+                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?", (str(discord_id),)
                 )
                 row = cursor.fetchone()
                 conn.close()
-                
+
                 if row:
                     total_xp = row["total_xp"]
                     level = row["current_level"]
                     last_xp_gain = row["last_xp_gain"]
-                    
+
                     # Calculate XP needed for next level
                     xp_for_next_level = Config.calculate_xp_for_next_level(level)
-                    
+
                     # Calculate XP required to reach current level (total XP for all previous levels)
                     xp_for_current_level = Config.calculate_total_xp_for_level(level)
-                    
+
                     # Calculate XP within current level (progress towards next level)
                     xp_in_current_level = total_xp - xp_for_current_level
-                    
+
                     # Determine tier using Config helper
                     tier_info = Config.get_level_tier(level)
-                    
+
                     xp_data = {
                         "total_xp": total_xp,
                         "level": level,
@@ -284,11 +283,11 @@ def get_user_profile():
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "created_at": member.created_at.isoformat() if member.created_at else None,
         }
-        
+
         # Add XP data if available
         if xp_data:
             profile_data["xp"] = xp_data
-        
+
         return jsonify(
             {
                 "success": True,
@@ -298,6 +297,184 @@ def get_user_profile():
 
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to fetch profile: {str(e)}"}), 500
+
+
+@user_bp.route("/api/users/<user_id>/profile", methods=["GET"])
+def get_user_profile_by_id(user_id):
+    """Get any user's public profile information by Discord ID"""
+    try:
+        from flask import current_app
+
+        bot = current_app.config.get("bot_instance")
+        if not bot:
+            return jsonify({"error": "Bot not initialized"}), 503
+
+        # Get guild
+        guild = bot.get_guild(Config.GUILD_ID)
+        if not guild:
+            return jsonify({"error": "Guild not found"}), 404
+
+        # Get member
+        try:
+            discord_id = int(user_id)
+        except ValueError:
+            return jsonify({"error": "Invalid user ID"}), 400
+
+        member = guild.get_member(discord_id)
+        if not member:
+            return jsonify({"error": "Member not found in guild"}), 404
+
+        # Determine role (Admin, Moderator, or Lootling) and get actual role name
+        user_role = "lootling"
+        user_role_name = "Lootling"
+        for role in member.roles:
+            if role.id == Config.ADMIN_ROLE_ID:
+                user_role = "admin"
+                user_role_name = role.name
+                break
+            elif role.id == Config.MODERATOR_ROLE_ID:
+                user_role = "mod"
+                user_role_name = role.name
+                break
+
+        # Get opt-in roles (interest roles)
+        opt_in_roles = []
+        for role in member.roles:
+            if role.id in Config.INTEREST_ROLE_IDS:
+                opt_in_roles.append(
+                    {
+                        "id": str(role.id),
+                        "name": role.name,
+                        "color": role.color.value if role.color else 0,
+                    }
+                )
+
+        # Get Rocket League rank (if available)
+        rl_rank = None
+        try:
+            from Cogs.RocketLeague import RANK_EMOJIS, load_rl_accounts
+            from Config import RL_TIER_ORDER
+
+            rl_accounts = load_rl_accounts()
+            if str(discord_id) in rl_accounts:
+                account = rl_accounts[str(discord_id)]
+                ranks = account.get("ranks", {})
+                icon_urls = account.get("icon_urls", {})
+
+                # Calculate highest rank
+                highest_tier = "Unranked"
+                highest_playlist = None
+                for playlist, tier in ranks.items():
+                    if tier in RL_TIER_ORDER and RL_TIER_ORDER.index(tier) > RL_TIER_ORDER.index(highest_tier):
+                        highest_tier = tier
+                        highest_playlist = playlist
+
+                if highest_tier and highest_tier != "Unranked" and highest_playlist:
+                    rank_emoji = RANK_EMOJIS.get(highest_tier, "")
+                    icon_url = icon_urls.get(highest_playlist)
+
+                    rl_rank = {
+                        "rank": highest_tier,
+                        "emoji": rank_emoji,
+                        "icon_url": icon_url,
+                        "platform": account.get("platform"),
+                        "username": account.get("username"),
+                    }
+        except Exception:
+            pass
+
+        # Get activity stats
+        activity = {"messages": 0, "images": 0, "memes_requested": 0, "memes_generated": 0}
+        try:
+            from Cogs.Leaderboard import get_user_activity
+
+            activity_sync = get_user_activity(discord_id)
+            if hasattr(activity_sync, "__await__"):
+                activity_data = asyncio.run(activity_sync)
+            else:
+                activity_data = activity_sync
+            activity["messages"] = activity_data.get("messages", 0)
+            activity["images"] = activity_data.get("images", 0)
+        except Exception:
+            pass
+
+        # Get meme stats
+        try:
+            from Cogs.Profile import load_meme_requests, load_memes_generated
+
+            meme_requests = load_meme_requests()
+            memes_generated = load_memes_generated()
+            activity["memes_requested"] = meme_requests.get(str(discord_id), 0)
+            activity["memes_generated"] = memes_generated.get(str(discord_id), 0)
+        except Exception:
+            pass
+
+        # Get XP/Level data
+        xp_data = None
+        try:
+            db_path = Path(Config.DATA_DIR) / "user_levels.db"
+            if db_path.exists():
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "SELECT total_xp, current_level, last_xp_gain FROM user_xp WHERE user_id = ?", (str(discord_id),)
+                )
+                row = cursor.fetchone()
+                conn.close()
+
+                if row:
+                    total_xp = row["total_xp"]
+                    level = row["current_level"]
+                    last_xp_gain = row["last_xp_gain"]
+
+                    xp_for_next_level = Config.calculate_xp_for_next_level(level)
+                    xp_for_current_level = Config.calculate_total_xp_for_level(level)
+                    xp_in_current_level = total_xp - xp_for_current_level
+                    tier_info = Config.get_level_tier(level)
+
+                    xp_data = {
+                        "total_xp": total_xp,
+                        "level": level,
+                        "tier": tier_info["name"],
+                        "tier_color": tier_info["color"],
+                        "xp_for_next_level": xp_for_next_level,
+                        "xp_in_current_level": xp_in_current_level,
+                        "last_xp_gain": last_xp_gain,
+                    }
+        except Exception as e:
+            logger.error(f"Error fetching XP data: {e}")
+
+        # Build profile response (public data only - no warnings or resolved tickets)
+        profile_data = {
+            "discord_id": str(discord_id),
+            "username": member.name,
+            "display_name": member.display_name,
+            "discriminator": member.discriminator,
+            "avatar_url": str(member.display_avatar.url) if member.display_avatar else None,
+            "role": user_role,
+            "role_name": user_role_name,
+            "opt_in_roles": opt_in_roles,
+            "rl_rank": rl_rank,
+            "activity": activity,
+            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "created_at": member.created_at.isoformat() if member.created_at else None,
+        }
+
+        if xp_data:
+            profile_data["xp"] = xp_data
+
+        return jsonify(
+            {
+                "success": True,
+                "profile": profile_data,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error fetching user profile by ID: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to fetch profile: {str(e)}"}), 500
 
 
@@ -544,6 +721,7 @@ def post_game_request():
 
         # Award XP for game request (8 XP)
         from api.level_helpers import award_xp_from_api
+
         award_xp_from_api(bot, discord_id, requester.name, "game_request")
 
         return jsonify(

@@ -124,12 +124,19 @@ XP_CONFIG = {
     # Mod Activities (Extra XP)
     "ticket_resolved": 25,  # Ticket geschlossen (Mod only)
     "ticket_claimed": 15,  # Ticket claimed (Mod only)
+    # Community Posts & Engagement (16. Dez 2025)
+    "community_post_create": 15,  # Community Post erstellt (mit Cooldown)
+    "community_post_like": 2,  # Community Post geliked (mit Cooldown)
+    "meme_like": 2,  # Meme geliked (mit Cooldown)
     # Level Calculation
     "base_xp_per_level": 100,  # Base XP für Level 1→2
     "xp_multiplier": 1.5,  # Multiplier pro Level (exponentiell)
     # Cooldowns (Spam-Prevention)
     "message_cooldown": 60,  # Sekunden zwischen XP für Messages
-    "meme_fetch_cooldown": 30,  # Sekunden zwischen XP für Meme Fetches - NEW
+    "meme_fetch_cooldown": 30,  # Sekunden zwischen XP für Meme Fetches
+    "community_post_cooldown": 300,  # 5 Min zwischen Post-Erstellung XP
+    "community_post_like_cooldown": 10,  # 10s zwischen Like-XP
+    "meme_like_cooldown": 10,  # 10s zwischen Meme-Like XP
     "daily_xp_cap": 500,  # Max XP pro Tag (optional, 0 = disabled)
 }
 
@@ -235,14 +242,14 @@ def get_level_tier(level: int) -> dict:
         tier_key = "uncommon"
     else:
         tier_key = "common"
-    
+
     tier_info = LEVEL_TIERS[tier_key].copy()
     tier_info["emoji"] = LEVEL_TIER_EMOJIS[tier_key]
-    
+
     # Convert color int to hex string for Frontend compatibility
     if isinstance(tier_info["color"], int):
         tier_info["color"] = f"#{tier_info['color']:06X}"
-    
+
     return tier_info
 
 
@@ -372,6 +379,7 @@ PROD_IDS = {
     "TRANSCRIPT_CHANNEL_ID": 1428690310971785327,
     "GAMING_CHANNEL_ID": 1425472657293443236,  # TODO: Replace with actual gaming channel ID
     "LEVEL_UP_CHANNEL_ID": 1424490032051388538,  # Level-Up Gratulations Channel
+    "COMMUNITY_POSTS_CHANNEL_ID": 1424490032051388538,  # Community Posts Channel
     # Categories
     "TICKETS_CATEGORY_ID": 1426113555974979625,
 }
@@ -426,6 +434,7 @@ TEST_IDS = {
     "TRANSCRIPT_CHANNEL_ID": 1429732029645324359,
     "GAMING_CHANNEL_ID": 1429804818481938463,  # TODO: Replace with actual gaming channel ID
     "LEVEL_UP_CHANNEL_ID": 1448418996457046228,  # Test Level-Up Channel
+    "COMMUNITY_POSTS_CHANNEL_ID": 1450218300683456553,  # Test Community Posts Channel
     # Categories
     "TICKETS_CATEGORY_ID": 1429723767445389352,
 }
@@ -469,6 +478,9 @@ GAMING_CHANNEL_ID = CURRENT_IDS.get("GAMING_CHANNEL_ID")
 LEVEL_UP_CHANNEL_ID = CURRENT_IDS["LEVEL_UP_CHANNEL_ID"]
 LEVEL_NOTIFICATION_ROLE_ID = CURRENT_IDS["LEVEL_NOTIFICATION_ROLE_ID"]
 LEVEL_TIER_ROLES = CURRENT_IDS["LEVEL_TIER_ROLES"]
+
+# Community Posts
+COMMUNITY_POSTS_CHANNEL_ID = CURRENT_IDS["COMMUNITY_POSTS_CHANNEL_ID"]
 
 # Welcome System
 WELCOME_RULES_CHANNEL_ID = CURRENT_IDS["WELCOME_RULES_CHANNEL_ID"]
