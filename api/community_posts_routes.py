@@ -144,13 +144,13 @@ def get_posts_db():
             Path(Config.DATA_DIR) / "init_community_posts.sql",  # Local copy
             Path(__file__).parent.parent / "sql" / "schemas" / "init_community_posts.sql",  # Git-tracked
         ]
-        
+
         init_script = None
         for location in init_script_locations:
             if location.exists():
                 init_script = location
                 break
-        
+
         if init_script:
             conn = sqlite3.connect(str(db_path))
             with open(init_script, "r", encoding="utf-8") as f:
@@ -159,7 +159,7 @@ def get_posts_db():
             conn.close()
             print(f"✅ Initialized community_posts.db in {Config.DATA_DIR} from {init_script}")
         else:
-            print(f"❌ ERROR: init_community_posts.sql not found in any location!")
+            print("❌ ERROR: init_community_posts.sql not found in any location!")
             print(f"   Searched: {', '.join(str(loc) for loc in init_script_locations)}")
             raise FileNotFoundError("Community posts schema not found")
 
@@ -228,7 +228,7 @@ def create_post():
         print(f"🔍 DEBUG: Image data present: {image_data is not None}")
         if image_data:
             print(f"🔍 DEBUG: Image data length: {len(image_data)} chars")
-        
+
         # Image will be uploaded to Discord (not stored locally)
         # We'll get the Discord CDN URL after posting to Discord
         image_url = None
@@ -263,12 +263,6 @@ def create_post():
         post_id = cur.lastrowid
         created_at = datetime.now().isoformat()
         conn.commit()
-        
-        # Invalidate cache so all clients get fresh posts
-        cache_key = "community_posts:all"
-        if cache.get(cache_key) is not None:
-            cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after post creation")
 
         # Post to Discord asynchronously
         bot = current_app.config.get("bot_instance")
@@ -279,9 +273,9 @@ def create_post():
                 result = asyncio.run_coroutine_threadsafe(
                     _post_to_discord(bot, post_id, content, image_data, user_data, post_type, is_announcement), bot.loop
                 ).result(timeout=10)
-                
+
                 discord_message_id, discord_image_url = result
-                
+
                 # Debug: Log Discord response
                 print(f"✅ DEBUG: Discord message ID: {discord_message_id}")
                 print(f"🖼️ DEBUG: Discord CDN URL: {discord_image_url}")
@@ -296,15 +290,15 @@ def create_post():
                     (discord_message_id, discord_image_url, post_id),
                 )
                 conn.commit()
-                
+
                 # Update image_url for response
                 image_url = discord_image_url
             except Exception as e:
                 print(f"⚠️ Failed to post to Discord: {e}")
-        
+
         # Award XP for post creation (15 XP with 5 min cooldown)
         from api.level_helpers import award_xp_from_api
-        
+
         if bot:
             guild = bot.get_guild(Config.get_guild_id())
             if guild:
@@ -315,11 +309,25 @@ def create_post():
                         logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for post creation")
                     else:
                         logger.info(f"⏳ {member.name} on cooldown for post XP (5 min)")
-        
+
         cur.close()
         conn.close()
 
-        return jsonify({"success": True, "post_id": post_id, "created_at": created_at}), 201
+        return jsonify(
+            {
+                "success": True,
+                "post_id": post_id,
+                "created_at": created_at,
+                "author_id": str(user_id),
+                "author_name": request.username,
+                "author_avatar": avatar_url,
+                "post_type": post_type,
+                "is_announcement": is_announcement,
+                "image_url": image_url,
+                "discord_channel_id": str(Config.COMMUNITY_POSTS_CHANNEL_ID),
+                "discord_message_id": str(discord_message_id) if discord_message_id else None,
+            }
+        ), 201
 
     except Exception as e:
         print(f"❌ Error creating post: {e}")
@@ -400,13 +408,13 @@ def get_posts():
 
         # Load likes and add to posts
         from api.helpers import load_community_post_likes
-        
+
         likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
         all_likes = load_community_post_likes(likes_file)
-        
+
         # Get current user's discord_id (if authenticated)
-        discord_id = getattr(request, 'discord_id', 'unknown')
-        
+        discord_id = getattr(request, "discord_id", "unknown")
+
         # Format posts and add like data
         formatted_posts = []
         for post in posts:
@@ -414,13 +422,13 @@ def get_posts():
             post_id_str = str(formatted_post["id"])
             user_likes = all_likes.get(post_id_str, [])
             formatted_post["like_count"] = len(user_likes)
-            
+
             # Check if current user has liked
             if discord_id not in ["legacy_user", "unknown"]:
                 formatted_post["has_liked"] = discord_id in user_likes
             else:
                 formatted_post["has_liked"] = False
-            
+
             formatted_posts.append(formatted_post)
 
         return jsonify(
@@ -528,12 +536,6 @@ def update_post(post_id):
         conn.commit()
         cur.close()
         conn.close()
-        
-        # Invalidate cache after post update
-        cache_key = "community_posts:all"
-        if cache.get(cache_key) is not None:
-            cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after post update")
 
         # Update Discord message
         bot = current_app.config.get("bot_instance")
@@ -562,13 +564,13 @@ def update_post(post_id):
 def serve_post_image(filename):
     """
     Serve uploaded community post images.
-    
+
     Images are stored in DATA_DIR/community_posts_images/.
     This endpoint makes them accessible via HTTP.
-    
+
     Args:
         filename: Image filename (e.g., "post_123_1234567890.png")
-    
+
     Returns:
         Image file or 404 if not found
     """
@@ -633,12 +635,6 @@ def delete_post(post_id):
         conn.commit()
         cur.close()
         conn.close()
-        
-        # Invalidate cache after post deletion
-        cache_key = "community_posts:all"
-        if cache.get(cache_key) is not None:
-            cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after post deletion")
 
         # Delete Discord message
         bot = current_app.config.get("bot_instance")
@@ -763,9 +759,10 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
     if image_data:
         # Decode base64 image
         import io
+
         if "," in image_data:
             image_data = image_data.split(",")[1]
-        
+
         try:
             image_bytes = base64.b64decode(image_data)
             # Create Discord file attachment
@@ -777,6 +774,7 @@ async def _post_to_discord(bot, post_id, content, image_data, author, post_type,
         except Exception as e:
             print(f"⚠️ Failed to upload image to Discord: {e}")
             import traceback
+
             traceback.print_exc()
             message = await channel.send(embed=embed)
     else:
@@ -904,14 +902,14 @@ def toggle_like_post(post_id):
     try:
         from api.helpers import load_community_post_likes, save_community_post_likes
         from api.level_helpers import award_xp_from_api
-        
-        discord_id = getattr(request, 'discord_id', 'unknown')
+
+        discord_id = getattr(request, "discord_id", "unknown")
         logger.info(f"🔄 Like request for post {post_id} from user {discord_id}")
-        
+
         if discord_id in ["legacy_user", "unknown"]:
             logger.warning(f"⚠️  Unauthenticated like attempt for post {post_id}")
             return jsonify({"error": "Discord authentication required"}), 401
-        
+
         # Check if post exists
         db_path = Path(Config.DATA_DIR) / "community_posts.db"
         conn = sqlite3.connect(db_path)
@@ -919,32 +917,32 @@ def toggle_like_post(post_id):
         cursor.execute("SELECT id, author_id FROM community_posts WHERE id = ? AND deleted_at IS NULL", (post_id,))
         post = cursor.fetchone()
         conn.close()
-        
+
         if not post:
             return jsonify({"error": "Post not found"}), 404
-        
+
         post_author_id = post[1]
-        
+
         # Prevent self-liking
         if str(discord_id) == str(post_author_id):
             return jsonify({"error": "Cannot like your own post"}), 400
-        
+
         # Load current likes
         likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
         likes = load_community_post_likes(likes_file)
-        
+
         # Initialize post likes if not exists
         post_id_str = str(post_id)
         if post_id_str not in likes:
             likes[post_id_str] = []
-        
+
         # Check if user has already liked
         user_likes = likes[post_id_str]
         has_liked = discord_id in user_likes
-        
+
         # Award XP ONLY when adding like (not removing)
         xp_awarded = False
-        
+
         # Toggle the like
         if has_liked:
             # Remove like
@@ -956,7 +954,7 @@ def toggle_like_post(post_id):
             user_likes.append(discord_id)
             action = "added"
             logger.info(f"➕ Added like to post {post_id} by {discord_id}")
-            
+
             # Award XP for liking (2 XP with 10s cooldown)
             bot = current_app.config.get("bot_instance")
             if bot:
@@ -967,39 +965,46 @@ def toggle_like_post(post_id):
                         xp_result = award_xp_from_api(bot, discord_id, member.name, "community_post_like")
                         if xp_result:
                             xp_awarded = True
-                            logger.info(f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for liking post #{post_id}")
+                            logger.info(
+                                f"✅ Awarded {xp_result['xp_gained']} XP to {member.name} for liking post #{post_id}"
+                            )
                     else:
                         logger.warning(f"⚠️  Member {discord_id} not found in guild for XP award")
                 else:
-                    logger.warning(f"⚠️  Guild not found for XP award")
+                    logger.warning("⚠️  Guild not found for XP award")
             else:
-                logger.warning(f"⚠️  Bot instance not available for XP award")
-        
+                logger.warning("⚠️  Bot instance not available for XP award")
+
         # Save updated likes
         save_community_post_likes(likes, likes_file)
         logger.info(f"💾 Saved likes for post {post_id}, new count: {len(user_likes)}")
-        
+
         # Invalidate cache after like toggle (like counts changed)
         cache_key = "community_posts:all"
         if cache.get(cache_key) is not None:
             cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after like toggle")
-        
+            logger.info("🗑️ Invalidated community posts cache after like toggle")
+
         # Get current counts
         like_count = len(user_likes)
         has_liked_now = discord_id in user_likes
-        
-        logger.info(f"✅ Like toggle complete: post={post_id}, action={action}, count={like_count}, has_liked={has_liked_now}, xp={xp_awarded}")
-        
-        return jsonify({
-            "success": True,
-            "post_id": post_id,
-            "action": action,
-            "like_count": like_count,
-            "has_liked": has_liked_now,
-            "xp_awarded": xp_awarded
-        })
-    
+
+        logger.info(
+            f"✅ Like toggle: post={post_id}, action={action}, "
+            f"count={like_count}, liked={has_liked_now}, xp={xp_awarded}"
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "post_id": post_id,
+                "action": action,
+                "like_count": like_count,
+                "has_liked": has_liked_now,
+                "xp_awarded": xp_awarded,
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error toggling like: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to toggle like: {str(e)}"}), 500
@@ -1010,29 +1015,24 @@ def get_post_likes(post_id):
     """Get like count and user's like status for a post"""
     try:
         from api.helpers import load_community_post_likes
-        
+
         discord_id = request.discord_id
-        
+
         # Load likes
         likes_file = Path(Config.DATA_DIR) / "community_post_likes.json"
         likes = load_community_post_likes(likes_file)
-        
+
         post_id_str = str(post_id)
         user_likes = likes.get(post_id_str, [])
         like_count = len(user_likes)
-        
+
         # Check if current user has liked
         has_liked = False
         if discord_id not in ["legacy_user", "unknown"]:
             has_liked = discord_id in user_likes
-        
-        return jsonify({
-            "success": True,
-            "post_id": post_id,
-            "like_count": like_count,
-            "has_liked": has_liked
-        })
-    
+
+        return jsonify({"success": True, "post_id": post_id, "like_count": like_count, "has_liked": has_liked})
+
     except Exception as e:
         logger.error(f"Error getting likes: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to get likes: {str(e)}"}), 500

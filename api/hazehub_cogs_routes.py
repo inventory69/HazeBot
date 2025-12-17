@@ -515,10 +515,10 @@ def toggle_upvote_meme(message_id):
             # Add upvote
             user_upvotes.append(discord_id)
             action = "added"
-            
+
             # Award XP for liking meme (2 XP with 10s cooldown)
             from api.level_helpers import award_xp_from_api
-            
+
             if bot:
                 guild = bot.get_guild(Config.get_guild_id())
                 if guild:

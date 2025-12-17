@@ -65,7 +65,7 @@ def test_create_post(token):
     data = {"content": "Test post for like functionality 🎉"}
 
     response = requests.post(f"{API_BASE_URL}/api/posts", headers=headers, json=data)
-    
+
     if response.status_code in [200, 201]:
         result = response.json()
         post_id = result.get("post_id")
@@ -79,19 +79,16 @@ def test_create_post(token):
 def test_like_post(token, post_id, user_name="User1"):
     """Test liking a post"""
     print(f"\n👍 Testing LIKE POST (User: {user_name})")
-    
+
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    
-    response = requests.post(
-        f"{API_BASE_URL}/api/community_posts/{post_id}/like",
-        headers=headers
-    )
-    
+
+    response = requests.post(f"{API_BASE_URL}/api/community_posts/{post_id}/like", headers=headers)
+
     print(f"Status: {response.status_code}")
-    
+
     if response.status_code == 200:
         result = response.json()
-        print(f"✅ Success!")
+        print("✅ Success!")
         print(f"   Action: {result.get('action')}")
         print(f"   Like Count: {result.get('like_count')}")
         print(f"   Has Liked: {result.get('has_liked')}")
@@ -104,20 +101,17 @@ def test_like_post(token, post_id, user_name="User1"):
 
 def test_get_likes(token, post_id):
     """Test getting like count"""
-    print(f"\n📊 Testing GET LIKES")
-    
+    print("\n📊 Testing GET LIKES")
+
     headers = {"Authorization": f"Bearer {token}"}
-    
-    response = requests.get(
-        f"{API_BASE_URL}/api/community_posts/{post_id}/likes",
-        headers=headers
-    )
-    
+
+    response = requests.get(f"{API_BASE_URL}/api/community_posts/{post_id}/likes", headers=headers)
+
     print(f"Status: {response.status_code}")
-    
+
     if response.status_code == 200:
         result = response.json()
-        print(f"✅ Success!")
+        print("✅ Success!")
         print(f"   Like Count: {result.get('like_count')}")
         print(f"   Has Liked: {result.get('has_liked')}")
         return result
@@ -128,20 +122,17 @@ def test_get_likes(token, post_id):
 
 def test_unlike_post(token, post_id):
     """Test unliking a post"""
-    print(f"\n👎 Testing UNLIKE POST")
-    
+    print("\n👎 Testing UNLIKE POST")
+
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    
-    response = requests.post(
-        f"{API_BASE_URL}/api/community_posts/{post_id}/like",
-        headers=headers
-    )
-    
+
+    response = requests.post(f"{API_BASE_URL}/api/community_posts/{post_id}/like", headers=headers)
+
     print(f"Status: {response.status_code}")
-    
+
     if response.status_code == 200:
         result = response.json()
-        print(f"✅ Success!")
+        print("✅ Success!")
         print(f"   Action: {result.get('action')}")
         print(f"   Like Count: {result.get('like_count')}")
         print(f"   Has Liked: {result.get('has_liked')}")
@@ -153,19 +144,16 @@ def test_unlike_post(token, post_id):
 
 def test_self_like_prevention(token_author, post_id):
     """Test that self-liking is prevented"""
-    print(f"\n🚫 Testing SELF-LIKE PREVENTION")
-    
+    print("\n🚫 Testing SELF-LIKE PREVENTION")
+
     headers = {"Authorization": f"Bearer {token_author}", "Content-Type": "application/json"}
-    
-    response = requests.post(
-        f"{API_BASE_URL}/api/community_posts/{post_id}/like",
-        headers=headers
-    )
-    
+
+    response = requests.post(f"{API_BASE_URL}/api/community_posts/{post_id}/like", headers=headers)
+
     print(f"Status: {response.status_code}")
-    
+
     if response.status_code == 400:
-        print(f"✅ Self-like correctly prevented!")
+        print("✅ Self-like correctly prevented!")
         print(f"   Error: {response.json().get('error')}")
         return True
     else:
@@ -199,7 +187,7 @@ def main():
     if not result:
         print("\n❌ Test failed")
         return
-    
+
     # Verify like count is 1
     if result.get("like_count") != 1:
         print(f"\n❌ Expected like_count=1, got {result.get('like_count')}")
@@ -232,10 +220,10 @@ def main():
     print("\n" + "=" * 60)
     print("👥 Testing Multiple Users Liking")
     print("=" * 60)
-    
+
     token_user3 = create_test_token(username="TestUser3", discord_id="333333333")
     result = test_like_post(token_user3, post_id, "User3")
-    
+
     if not result or result.get("like_count") != 2:
         print(f"\n❌ Multiple likes failed - expected 2, got {result.get('like_count')}")
         return
