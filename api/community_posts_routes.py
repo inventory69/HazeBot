@@ -1036,3 +1036,81 @@ def get_post_likes(post_id):
     except Exception as e:
         logger.error(f"Error getting likes: {e}\n{traceback.format_exc()}")
         return jsonify({"error": f"Failed to get likes: {str(e)}"}), 500
+
+
+@bp.route("/api/community_posts/<int:post_id>/fresh-image-url", methods=["GET"])
+def get_fresh_image_url(post_id):
+    """
+    Get a fresh Discord CDN URL for a post's image.
+    This is needed because Discord CDN URLs expire after some time.
+    
+    Returns:
+        JSON with fresh image URL or error
+    """
+    try:
+        db_path = Path(Config.DATA_DIR) / "community_posts.db"
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get discord_message_id for this post
+        cursor.execute(
+            "SELECT discord_message_id FROM community_posts WHERE id = ? AND deleted = 0",
+            (post_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row or not row["discord_message_id"]:
+            return jsonify({"error": "Post not found or no Discord message"}), 404
+        
+        discord_message_id = int(row["discord_message_id"])
+        
+        # Get bot instance and fetch fresh URL
+        from api.app import bot
+        
+        if not bot:
+            return jsonify({"error": "Bot not available"}), 503
+        
+        # Run async function to fetch message
+        result = asyncio.run_coroutine_threadsafe(
+            _fetch_fresh_discord_image_url(bot, discord_message_id), bot.loop
+        ).result(timeout=5)
+        
+        if not result:
+            return jsonify({"error": "No image found in Discord message"}), 404
+        
+        return jsonify({"success": True, "image_url": result})
+        
+    except Exception as e:
+        logger.error(f"Error getting fresh image URL: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get fresh image URL: {str(e)}"}), 500
+
+
+async def _fetch_fresh_discord_image_url(bot, message_id):
+    """
+    Fetch a fresh Discord CDN URL from a message.
+    
+    Args:
+        bot: Discord bot instance
+        message_id: Discord message ID
+    
+    Returns:
+        str | None: Fresh Discord CDN URL or None if not found
+    """
+    channel_id = Config.COMMUNITY_POSTS_CHANNEL_ID
+    if not channel_id:
+        return None
+    
+    channel = bot.get_channel(int(channel_id))
+    if not channel:
+        return None
+    
+    try:
+        message = await channel.fetch_message(message_id)
+        if message.attachments:
+            return message.attachments[0].url
+        return None
+    except Exception as e:
+        print(f"Failed to fetch Discord message {message_id}: {e}")
+        return None
