@@ -51,14 +51,14 @@ class LevelSystem(commands.Cog):
         self._community_post_cooldowns = {}  # user_id: last_post_time
         self._community_post_like_cooldowns = {}  # user_id: last_like_time
         self._meme_like_cooldowns = {}  # user_id: last_meme_like_time
-        
+
         # Debug: Log XP_CONFIG at init to verify community post XP types
         logger.info(f"🔍 [LevelSystem] XP_CONFIG keys loaded: {len(XP_CONFIG.keys())} types")
         if "community_post_like" in XP_CONFIG:
             logger.info(f"✅ [LevelSystem] community_post_like XP: {XP_CONFIG['community_post_like']}")
         else:
-            logger.warning(f"⚠️ [LevelSystem] community_post_like NOT found in XP_CONFIG!")
-        
+            logger.warning("⚠️ [LevelSystem] community_post_like NOT found in XP_CONFIG!")
+
         self._init_database()
 
     def _init_database(self):
@@ -271,13 +271,13 @@ class LevelSystem(commands.Cog):
         """Check if user can gain XP for creating post (5 min cooldown)"""
         if user_id not in self._community_post_cooldowns:
             return True
-        
+
         last_post = self._community_post_cooldowns[user_id]
         cooldown = XP_CONFIG.get("community_post_cooldown", 300)
-        
+
         if (datetime.now(timezone.utc) - last_post).total_seconds() >= cooldown:
             return True
-        
+
         return False
 
     def _update_community_post_cooldown(self, user_id: str):
@@ -288,13 +288,13 @@ class LevelSystem(commands.Cog):
         """Check if user can gain XP for liking post (10s cooldown)"""
         if user_id not in self._community_post_like_cooldowns:
             return True
-        
+
         last_like = self._community_post_like_cooldowns[user_id]
         cooldown = XP_CONFIG.get("community_post_like_cooldown", 10)
-        
+
         if (datetime.now(timezone.utc) - last_like).total_seconds() >= cooldown:
             return True
-        
+
         return False
 
     def _update_community_post_like_cooldown(self, user_id: str):
@@ -305,13 +305,13 @@ class LevelSystem(commands.Cog):
         """Check if user can gain XP for liking meme (10s cooldown)"""
         if user_id not in self._meme_like_cooldowns:
             return True
-        
+
         last_like = self._meme_like_cooldowns[user_id]
         cooldown = XP_CONFIG.get("meme_like_cooldown", 10)
-        
+
         if (datetime.now(timezone.utc) - last_like).total_seconds() >= cooldown:
             return True
-        
+
         return False
 
     def _update_meme_like_cooldown(self, user_id: str):
@@ -364,7 +364,9 @@ class LevelSystem(commands.Cog):
 
             if xp_amount == 0:
                 logger.warning(f"⚠️ Unknown XP type: {xp_type}")
-                logger.debug(f"🔍 DEBUG: xp_type='{xp_type}', amount={amount}, XP_CONFIG has key: {xp_type in XP_CONFIG}")
+                logger.debug(
+                    f"🔍 DEBUG: xp_type='{xp_type}', amount={amount}, XP_CONFIG has key: {xp_type in XP_CONFIG}"
+                )
                 logger.debug(f"🔍 DEBUG: Available XP types: {list(XP_CONFIG.keys())}")
                 return None
 

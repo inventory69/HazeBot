@@ -40,13 +40,13 @@ def create_test_token():
 def test_endpoint(method, path, token):
     """Test if endpoint exists"""
     headers = {"Authorization": f"Bearer {token}"}
-    
+
     try:
         if method == "GET":
             response = requests.get(f"{API_BASE_URL}{path}", headers=headers, timeout=2)
         elif method == "POST":
             response = requests.post(f"{API_BASE_URL}{path}", headers=headers, timeout=2)
-        
+
         return response.status_code
     except Exception as e:
         return str(e)
@@ -56,9 +56,9 @@ def main():
     print("\n" + "=" * 60)
     print("🔍 Testing Community Posts Endpoints")
     print("=" * 60)
-    
+
     token = create_test_token()
-    
+
     endpoints = [
         ("GET", "/api/posts", "Get posts"),
         ("POST", "/api/posts", "Create post"),
@@ -67,7 +67,7 @@ def main():
         ("POST", "/api/posts/17/like", "Toggle like (short path)"),
         ("GET", "/api/posts/17/likes", "Get likes (short path)"),
     ]
-    
+
     for method, path, description in endpoints:
         status = test_endpoint(method, path, token)
         emoji = "✅" if isinstance(status, int) and status < 500 else "❌"
