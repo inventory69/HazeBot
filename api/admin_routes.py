@@ -525,9 +525,10 @@ def send_level_up_notification():
         if not all([user_id, level, tier_name]):
             return jsonify({"error": "Missing required fields: user_id, level, tier_name"}), 400
 
-        # Get bot instance from app context
-        from flask import current_app
-        bot = current_app.bot
+        # Get bot instance from Config
+        bot = Config.bot
+        if not bot:
+            return jsonify({"error": "Bot instance not available"}), 503
 
         # Get level-up channel from config
         level_up_channel_id = Config.LEVEL_UP_CHANNEL_ID
@@ -557,9 +558,9 @@ def send_level_up_notification():
             await channel.send(embed=embed)
             return True, "Message sent successfully"
         
-        # Run the async function
-        loop = bot.loop
-        success, message = loop.create_task(send_embed()).result()
+        # Run the async function using asyncio.run_coroutine_threadsafe
+        future = asyncio.run_coroutine_threadsafe(send_embed(), bot.loop)
+        success, message = future.result(timeout=10)
         
         if success:
             return jsonify({"success": True, "message": message})
