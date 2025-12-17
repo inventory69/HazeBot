@@ -10,6 +10,9 @@ aiohttp
 # Synchronous HTTP requests (used in some utilities)
 requests
 
+# Image processing for community post proxy
+Pillow>=10.0.0
+
 # HTML parsing for web scraping (e.g., Rocket League stats)
 bs4
 
