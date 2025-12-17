@@ -9,3 +9,7 @@ psutil  # System monitoring for health checks
 
 # Firebase Cloud Messaging for push notifications
 firebase-admin
+
+# Image processing for community post proxy
+Pillow>=10.0.0
+requests  # HTTP client for Discord CDN image fetching
