@@ -1066,8 +1066,9 @@ def get_fresh_image_url(post_id):
         
         discord_message_id = int(row["discord_message_id"])
         
-        # Get bot instance and fetch fresh URL
-        from api.app import bot
+        # Get bot instance from Flask app config
+        from flask import current_app
+        bot = current_app.config.get("bot_instance")
         
         if not bot:
             return jsonify({"error": "Bot not available"}), 503
