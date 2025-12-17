@@ -568,8 +568,14 @@ class LevelSystem(commands.Cog):
         # Get tier info
         tier_info = get_level_tier(new_level)
         tier_name = tier_info["name"]
-        color = tier_info["color"]
+        color_hex = tier_info["color"]
         tier_description = tier_info["description"]
+        
+        # Convert hex string back to int for Discord (get_level_tier returns hex for Frontend)
+        if isinstance(color_hex, str) and color_hex.startswith("#"):
+            color = int(color_hex[1:], 16)
+        else:
+            color = color_hex  # Fallback if already int
 
         # Check milestone
         is_milestone = new_level % 5 == 0
