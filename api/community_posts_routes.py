@@ -323,7 +323,7 @@ def create_post():
             "post_type": post_type,
             "is_announcement": is_announcement,
             "image_url": image_url,
-            "discord_channel_id": Config.COMMUNITY_POSTS_CHANNEL_ID,
+            "discord_channel_id": str(Config.COMMUNITY_POSTS_CHANNEL_ID),
             "discord_message_id": str(discord_message_id) if discord_message_id else None,
         }), 201
 
