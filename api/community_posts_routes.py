@@ -317,14 +317,14 @@ def create_post():
             "success": True,
             "post_id": post_id,
             "created_at": created_at,
-            "author_id": user_id,
+            "author_id": str(user_id),
             "author_name": request.username,
             "author_avatar": avatar_url,
             "post_type": post_type,
             "is_announcement": is_announcement,
             "image_url": image_url,
             "discord_channel_id": Config.COMMUNITY_POSTS_CHANNEL_ID,
-            "discord_message_id": discord_message_id if bot else None,
+            "discord_message_id": str(discord_message_id) if discord_message_id else None,
         }), 201
 
     except Exception as e:
