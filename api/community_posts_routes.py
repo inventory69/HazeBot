@@ -263,12 +263,6 @@ def create_post():
         post_id = cur.lastrowid
         created_at = datetime.now().isoformat()
         conn.commit()
-        
-        # Invalidate cache so all clients get fresh posts
-        cache_key = "community_posts:all"
-        if cache.get(cache_key) is not None:
-            cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after post creation")
 
         # Post to Discord asynchronously
         bot = current_app.config.get("bot_instance")
@@ -319,7 +313,19 @@ def create_post():
         cur.close()
         conn.close()
 
-        return jsonify({"success": True, "post_id": post_id, "created_at": created_at}), 201
+        return jsonify({
+            "success": True,
+            "post_id": post_id,
+            "created_at": created_at,
+            "author_id": user_id,
+            "author_name": request.username,
+            "author_avatar": avatar_url,
+            "post_type": post_type,
+            "is_announcement": is_announcement,
+            "image_url": image_url,
+            "discord_channel_id": Config.COMMUNITY_POSTS_CHANNEL_ID,
+            "discord_message_id": discord_message_id if bot else None,
+        }), 201
 
     except Exception as e:
         print(f"❌ Error creating post: {e}")
@@ -528,12 +534,6 @@ def update_post(post_id):
         conn.commit()
         cur.close()
         conn.close()
-        
-        # Invalidate cache after post update
-        cache_key = "community_posts:all"
-        if cache.get(cache_key) is not None:
-            cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after post update")
 
         # Update Discord message
         bot = current_app.config.get("bot_instance")
@@ -633,12 +633,6 @@ def delete_post(post_id):
         conn.commit()
         cur.close()
         conn.close()
-        
-        # Invalidate cache after post deletion
-        cache_key = "community_posts:all"
-        if cache.get(cache_key) is not None:
-            cache.delete(cache_key)
-            logger.info(f"🗑️ Invalidated community posts cache after post deletion")
 
         # Delete Discord message
         bot = current_app.config.get("bot_instance")
