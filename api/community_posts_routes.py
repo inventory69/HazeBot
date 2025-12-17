@@ -1115,3 +1115,187 @@ async def _fetch_fresh_discord_image_url(bot, message_id):
     except Exception as e:
         print(f"Failed to fetch Discord message {message_id}: {e}")
         return None
+
+
+def is_discord_url_expired(url: str) -> bool:
+    """
+    Check if Discord CDN URL is expired or close to expiring
+    
+    Discord CDN URLs contain ?ex=HEXTIME parameter:
+    - ex: Expiry timestamp (hex)
+    - is: Issue timestamp (hex)
+    - hm: HMAC signature
+    
+    Returns:
+        True if expired or expires in <1 hour
+    """
+    if not url or 'cdn.discordapp.com' not in url:
+        return False
+    
+    import re
+    from datetime import timedelta
+    
+    # Parse ?ex=6942cb18 (hex timestamp)
+    match = re.search(r'[?&]ex=([0-9a-f]+)', url)
+    if not match:
+        return True  # No expiry param = old format, assume expired
+    
+    try:
+        expire_hex = match.group(1)
+        expire_timestamp = int(expire_hex, 16)
+        expire_time = datetime.utcfromtimestamp(expire_timestamp)
+        
+        # Consider expired if <1 hour remaining
+        return expire_time < datetime.utcnow() + timedelta(hours=1)
+    except Exception as e:
+        logger.warning(f"Failed to parse Discord URL expiry: {e}")
+        return True  # Assume expired on error
+
+
+@bp.route("/api/community_posts/images/<int:post_id>", methods=["GET"])
+def get_post_image(post_id):
+    """
+    Optimized image proxy for community posts
+    
+    Features:
+    - Automatic URL expiry detection & refresh
+    - On-the-fly resize & compression
+    - Browser caching (6 hours)
+    - JPEG/WebP output
+    
+    Query Parameters:
+        - width: Max width in pixels (default: 800, max: 1920)
+        - quality: JPEG/WebP quality 1-100 (default: 80)
+        - format: 'jpeg' or 'webp' (default: 'jpeg')
+        - original: 'true' to bypass proxy (default: 'false')
+    
+    Examples:
+        /api/community_posts/images/2                           # 800px, 80% quality
+        /api/community_posts/images/2?width=400&quality=60      # Thumbnail
+        /api/community_posts/images/2?width=1920&quality=95     # High-res
+        /api/community_posts/images/2?original=true             # Full original
+    
+    Returns:
+        - 200: Compressed image (image/jpeg or image/webp)
+        - 302: Redirect to original Discord URL (if original=true)
+        - 404: Post not found
+        - 502: Failed to fetch from Discord
+    """
+    from PIL import Image
+    import io
+    import requests
+    from flask import make_response, redirect, send_file
+    from werkzeug.http import http_date
+    from datetime import timedelta
+    
+    # Parse parameters
+    width = min(int(request.args.get('width', 800)), 1920)
+    quality = max(1, min(int(request.args.get('quality', 80)), 100))
+    output_format = request.args.get('format', 'jpeg').lower()
+    bypass_proxy = request.args.get('original', 'false').lower() == 'true'
+    
+    # 1. Get post from database
+    db_path = Path(Config.DATA_DIR) / "community_posts.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT image_url, discord_message_id 
+        FROM community_posts 
+        WHERE id = ? AND is_deleted = 0
+    """, (post_id,))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row or not row["image_url"]:
+        return jsonify({"error": "Post not found or no image"}), 404
+    
+    image_url = row["image_url"]
+    
+    # 2. Check if URL expired, get fresh one if needed
+    if is_discord_url_expired(image_url) and row["discord_message_id"]:
+        logger.info(f"🔄 Discord URL expired for post {post_id}, fetching fresh URL...")
+        bot = current_app.config.get("bot_instance")
+        if bot:
+            try:
+                fresh_url = asyncio.run_coroutine_threadsafe(
+                    _fetch_fresh_discord_image_url(bot, row["discord_message_id"]),
+                    bot.loop
+                ).result(timeout=5)
+                if fresh_url:
+                    image_url = fresh_url
+                    logger.info(f"✅ Got fresh URL for post {post_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to get fresh URL: {e}")
+    
+    # 3. If original requested, redirect to Discord CDN
+    if bypass_proxy:
+        return redirect(image_url, code=302)
+    
+    # 4. Download original image
+    try:
+        response = requests.get(image_url, timeout=15)
+        response.raise_for_status()
+    except Exception as e:
+        logger.error(f"Failed to fetch image from Discord: {e}")
+        return jsonify({"error": "Failed to fetch image from Discord"}), 502
+    
+    # 5. Resize & Compress
+    try:
+        img = Image.open(io.BytesIO(response.content))
+        
+        # Convert to RGB if needed (PNG with transparency)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            if img.mode in ('RGBA', 'LA'):
+                background.paste(img, mask=img.split()[-1])
+            else:
+                background.paste(img)
+            img = background
+        
+        # Resize if image is larger than requested width
+        if img.width > width:
+            aspect_ratio = img.height / img.width
+            new_height = int(width * aspect_ratio)
+            img = img.resize((width, new_height), Image.Resampling.LANCZOS)
+        
+        # Save to BytesIO
+        output = io.BytesIO()
+        if output_format == 'webp':
+            img.save(output, format='WEBP', quality=quality, method=6)
+            mimetype = 'image/webp'
+            ext = 'webp'
+        else:
+            img.save(output, format='JPEG', quality=quality, optimize=True)
+            mimetype = 'image/jpeg'
+            ext = 'jpg'
+        
+        output.seek(0)
+        
+        # 6. Create response with caching headers
+        response = make_response(send_file(
+            output,
+            mimetype=mimetype,
+            as_attachment=False,
+            download_name=f'post_{post_id}.{ext}'
+        ))
+        
+        # Cache for 6 hours
+        response.headers['Cache-Control'] = 'public, max-age=21600'
+        response.headers['Expires'] = http_date(datetime.utcnow() + timedelta(hours=6))
+        response.headers['ETag'] = f'"{post_id}-{width}-{quality}-{output_format}"'
+        
+        # Add original URL as header (for debugging/fullscreen view)
+        response.headers['X-Original-URL'] = image_url
+        
+        logger.info(f"✅ Served optimized image for post {post_id}: {width}px, {quality}% quality")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Failed to process image: {e}")
+        return jsonify({"error": "Failed to process image"}), 500
