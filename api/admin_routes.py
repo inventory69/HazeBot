@@ -504,3 +504,68 @@ def cleanup_analytics():
     except Exception as e:
         logger.error(f"Failed to cleanup analytics: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/api/admin/send-level-up-notification", methods=["POST"])
+def send_level_up_notification():
+    """
+    Manually send a level-up notification to a user
+    Body: {"user_id": "123", "level": 2, "tier_name": "Token Collector", "tier_color": "#2ECC71"}
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        user_id = data.get("user_id")
+        level = data.get("level")
+        tier_name = data.get("tier_name")
+        tier_color = data.get("tier_color", "#2ECC71")
+
+        if not all([user_id, level, tier_name]):
+            return jsonify({"error": "Missing required fields: user_id, level, tier_name"}), 400
+
+        # Get bot instance from app context
+        from flask import current_app
+        bot = current_app.bot
+
+        # Get level-up channel from config
+        level_up_channel_id = Config.LEVEL_UP_CHANNEL_ID
+        
+        # Create and send embed
+        import discord
+        import asyncio
+        
+        async def send_embed():
+            channel = bot.get_channel(level_up_channel_id)
+            if not channel:
+                return False, f"Channel {level_up_channel_id} not found"
+            
+            # Convert hex color to int
+            if tier_color.startswith('#'):
+                color_int = int(tier_color[1:], 16)
+            else:
+                color_int = int(tier_color, 16)
+            
+            embed = discord.Embed(
+                title="🎉 Level Up!",
+                description=f"<@{user_id}> reached **Level {level}**!",
+                color=color_int
+            )
+            embed.add_field(name="Tier Role", value=tier_name, inline=False)
+            
+            await channel.send(embed=embed)
+            return True, "Message sent successfully"
+        
+        # Run the async function
+        loop = bot.loop
+        success, message = loop.create_task(send_embed()).result()
+        
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"error": message}), 500
+
+    except Exception as e:
+        logger.error(f"Failed to send level-up notification: {e}")
+        return jsonify({"error": str(e)}), 500
