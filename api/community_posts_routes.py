@@ -1055,7 +1055,7 @@ def get_fresh_image_url(post_id):
         
         # Get discord_message_id for this post
         cursor.execute(
-            "SELECT discord_message_id FROM community_posts WHERE id = ? AND deleted = 0",
+            "SELECT discord_message_id FROM community_posts WHERE id = ? AND is_deleted = 0",
             (post_id,)
         )
         row = cursor.fetchone()
