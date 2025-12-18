@@ -1165,15 +1165,15 @@
             sessions.forEach(session => {
                 const used = session.endpoints_used || {};
                 Object.entries(used).forEach(([endpoint, count]) => {
-                    // Clean endpoint name (remove blueprint prefix)
-                    const cleanName = endpoint.split('.').pop().replace(/_/g, ' ');
-                    
                     // Skip excluded endpoints
                     if (excludedEndpoints.includes(endpoint.split('.').pop())) {
                         return;
                     }
                     
-                    endpoints[cleanName] = (endpoints[cleanName] || 0) + count;
+                    // Use user-friendly endpoint name with emoji icons
+                    const friendlyName = getEndpointDisplayName(endpoint);
+                    
+                    endpoints[friendlyName] = (endpoints[friendlyName] || 0) + count;
                 });
             });
 
@@ -1310,7 +1310,7 @@
                 // Actions
                 row.insertCell().textContent = session.actions_count || 0;
 
-                // Top feature (exclude noise endpoints)
+                // Top feature (exclude noise endpoints) - with user-friendly names
                 const endpoints = session.endpoints_used || {};
                 const excludedEndpoints = ['ping', 'verify_token', 'refresh_token', 'active_sessions'];
                 
@@ -1321,7 +1321,7 @@
                     .sort((a, b) => b[1] - a[1])[0];
                 
                 const topFeature = topEndpoint 
-                    ? topEndpoint[0].split('.').pop().replace(/_/g, ' ')
+                    ? getEndpointDisplayName(topEndpoint[0])
                     : '-';
                 row.insertCell().textContent = topFeature;
             });
@@ -1891,7 +1891,7 @@
                 const endpoints = session.endpoints_used || {};
                 const topEndpoint = Object.entries(endpoints)
                     .sort((a, b) => b[1] - a[1])[0];
-                const topEndpointName = topEndpoint ? topEndpoint[0] : '-';
+                const topEndpointName = topEndpoint ? getEndpointDisplayName(topEndpoint[0]) : '-';
 
                 csv += [
                     session.session_id,
