@@ -88,8 +88,11 @@
         }
 
         .container {
-            max-width: 1800px;
+            max-width: 100vw; /* Never exceed viewport */
+            overflow-x: hidden; /* Prevent horizontal scroll */
             margin: 0 auto;
+            padding: 20px;
+            box-sizing: border-box;
         }
 
         header {
@@ -214,8 +217,9 @@
         .charts-grid {
             display: grid;
             /* grid-template-columns dynamically set by JavaScript */
-            gap: 15px;
+            gap: clamp(8px, 1vw, 15px); /* Responsive gap */
             margin-bottom: 15px;
+            width: 100%;
         }
 
         .chart-container {
@@ -226,16 +230,16 @@
             display: flex;
             flex-direction: column;
             transition: background-color 0.3s ease;
+            max-width: 100%; /* Overflow protection */
+            overflow: hidden;
+            box-sizing: border-box;
         }
 
         .chart-container canvas {
             max-height: 280px;
         }
 
-        .chart-container.full-width {
-            grid-column: 1 / -1;
-        }
-
+        /* Remove fixed grid-column rules - JS controls spanning dynamically */
         .chart-container.full-width canvas {
             max-height: 200px;
         }
@@ -323,33 +327,22 @@
                 gap: 12px; /* Slightly tighter gap for density */
             }
 
-            /* Regular charts take 1 column each */
+            /* Remove all fixed grid-column rules - JS controls everything */
             .chart-container {
-                grid-column: span 1;
-                min-width: 350px; /* Reduced from 450px for compactness */
-            }
-
-            /* Full-width sections: Only 2 columns instead of full width */
-            .chart-container.full-width {
-                grid-column: span 2;
+                max-width: 100%; /* Overflow protection */
+                overflow: hidden;
             }
 
             /* Compact chart height for density */
             .chart-wrapper {
-                height: 250px; /* Slightly reduced from 280px */
-            }
-
-            /* Feature Analytics: 2 columns */
-            #section-feature-analytics {
-                grid-column: span 2;
+                height: 250px;
+                width: 100%;
+                max-width: 100%;
+                overflow: hidden;
             }
 
             #section-feature-analytics .chart-wrapper {
-                height: 200px; /* More compact */
-            }
-
-            #section-error-analytics {
-                grid-column: span 4;
+                height: 200px;
             }
 
             /* Tables: More compact to show more rows */
@@ -1045,10 +1038,81 @@
         }
 
         /**
-         * Dynamically adjust grid columns based on visible sections and viewport
+         * Calculate optimal columns with overflow protection
+         */
+        function calculateOptimalColumns(viewportWidth, sectionCount) {
+            let columns = 1;
+            let minSectionWidth = 300;
+            
+            if (viewportWidth >= 2560) {
+                minSectionWidth = 350;
+                columns = Math.min(sectionCount, 4);
+            } else if (viewportWidth >= 1920) {
+                minSectionWidth = 400;
+                columns = Math.min(sectionCount, 3);
+            } else if (viewportWidth >= 1440) {
+                minSectionWidth = 450;
+                columns = Math.min(sectionCount, 2);
+            } else if (viewportWidth >= 1024) {
+                minSectionWidth = 400;
+                columns = Math.min(sectionCount, 2);
+            } else {
+                minSectionWidth = 300;
+                columns = 1;
+            }
+            
+            // Overflow protection: Calculate max possible columns
+            const containerPadding = 40; // Left + Right padding
+            const gridGap = 15; // Gap between sections
+            const availableWidth = viewportWidth - containerPadding;
+            const widthPerColumn = minSectionWidth + gridGap;
+            const maxPossibleColumns = Math.floor((availableWidth + gridGap) / widthPerColumn);
+            
+            // Return minimum of desired and possible columns
+            columns = Math.min(columns, maxPossibleColumns, sectionCount);
+            
+            return Math.max(columns, 1);
+        }
+
+        /**
+         * Apply special spanning rules for specific sections
+         */
+        function applySpecialSpanning(sections, totalColumns) {
+            sections.forEach(section => {
+                // Reset all to single span first
+                section.style.gridColumn = 'span 1';
+                
+                const sectionId = section.id;
+                
+                // User Growth: Full width if only section in its grid
+                if (sectionId === 'section-user-growth' && sections.length === 1) {
+                    section.style.gridColumn = `span ${totalColumns}`;
+                } else if (sectionId === 'section-user-growth' && totalColumns >= 2) {
+                    section.style.gridColumn = 'span 2';
+                }
+                
+                // Feature Analytics: 2 columns on ultrawide if space allows
+                if (sectionId === 'section-feature-analytics' && totalColumns >= 3) {
+                    section.style.gridColumn = 'span 2';
+                }
+                
+                // Error Analytics: 2 columns minimum, full width if alone
+                if (sectionId === 'section-error-analytics') {
+                    if (sections.length === 1) {
+                        section.style.gridColumn = `span ${totalColumns}`;
+                    } else if (totalColumns >= 2) {
+                        section.style.gridColumn = 'span 2';
+                    }
+                }
+            });
+        }
+
+        /**
+         * Dynamically adjust grid columns based on visible sections and viewport (ENHANCED)
          */
         function recalculateGridLayout() {
             const grids = document.querySelectorAll('.charts-grid');
+            const viewportWidth = window.innerWidth;
             
             grids.forEach(grid => {
                 // Count visible sections in this grid
@@ -1065,29 +1129,17 @@
                 
                 grid.style.display = 'grid';
                 
-                // Calculate optimal columns based on viewport and section count
-                const viewportWidth = window.innerWidth;
-                let columns = 2;
-                
-                if (viewportWidth >= 2560) {
-                    // Ultrawide: Aggressive columns for maximum density
-                    columns = Math.min(visibleCount, 4);
-                } else if (viewportWidth >= 1920) {
-                    // Full HD: Moderate columns
-                    columns = Math.min(visibleCount, 3);
-                } else if (viewportWidth >= 1440) {
-                    // Laptop: Conservative
-                    columns = Math.min(visibleCount, 2);
-                } else {
-                    // Mobile/Small: Single column
-                    columns = 1;
-                }
+                // Calculate optimal columns with overflow protection
+                const columns = calculateOptimalColumns(viewportWidth, visibleCount);
                 
                 // Apply dynamic grid template
                 grid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+                
+                // Apply special spanning rules for specific sections
+                applySpecialSpanning(visibleSections, columns);
             });
             
-            console.log('✅ Grid layout recalculated');
+            console.log(`✅ Grid recalculated - Viewport: ${viewportWidth}px`);
         }
 
         /**
@@ -1105,8 +1157,10 @@
                 }
             });
             
-            // Recalculate grid layout after visibility changes
-            recalculateGridLayout();
+            // Force immediate re-render with slight delay for DOM update
+            setTimeout(() => {
+                recalculateGridLayout();
+            }, 10);
             
             console.log('✅ Applied section visibility');
         }
@@ -1133,6 +1187,37 @@
         }
 
         // Initialize section visibility on page load
+        /**
+         * Make charts responsive to container size changes
+         */
+        function initResponsiveCharts() {
+            if (!('ResizeObserver' in window)) {
+                console.warn('ResizeObserver not supported - charts may not resize properly');
+                return;
+            }
+            
+            const canvases = document.querySelectorAll('.chart-wrapper canvas');
+            const resizeObserver = new ResizeObserver(entries => {
+                entries.forEach(entry => {
+                    const canvas = entry.target;
+                    if (window.Chart) {
+                        const chart = Chart.getChart(canvas);
+                        if (chart) {
+                            chart.resize();
+                        }
+                    }
+                });
+            });
+            
+            canvases.forEach(canvas => {
+                if (canvas.parentElement) {
+                    resizeObserver.observe(canvas.parentElement);
+                }
+            });
+            
+            console.log('✅ Chart responsiveness initialized');
+        }
+
         // Window resize listener (debounced)
         let resizeTimeout;
         window.addEventListener('resize', () => {
@@ -1462,6 +1547,11 @@
             updateEndpointsChart(sessions);
             updateHourlyChart(sessions);
             updateSessionsTable(sessions);
+            
+            // Initialize chart responsiveness after charts are created
+            setTimeout(() => {
+                initResponsiveCharts();
+            }, 500);
         }
 
         // ==================== ENDPOINT DISPLAY NAMES (User-Friendly) ====================
