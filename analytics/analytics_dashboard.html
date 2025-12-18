@@ -1045,6 +1045,83 @@
             updateSessionsTable(sessions);
         }
 
+        // ==================== ENDPOINT DISPLAY NAMES (User-Friendly) ====================
+        
+        // Endpoint display names mapping (defined early for use in all chart/table functions)
+        const endpointDisplayNames = {
+            // Auth & Session
+            'auth_routes.login': '🔐 User Login',
+            'auth_routes.logout': '👋 User Logout',
+            'auth_routes.verify_token': '✓ Token Verification',
+            'auth.discord_callback': '🔐 Discord Login',
+            
+            // Community Posts
+            'community_posts.get_posts': '📝 Browse Posts',
+            'community_posts.create_post': '✨ Create Post',
+            'community_posts.update_post': '✏️ Edit Post',
+            'community_posts.delete_post': '🗑️ Delete Post',
+            'community_posts.toggle_like_post': '❤️ Like Post',
+            'community_posts.get_post_likes': '👥 View Likes',
+            
+            // Gaming & Users
+            'user.get_gaming_members': '🎮 View Gaming Members',
+            'user.add_gaming_member': '➕ Add Gaming Member',
+            'user.get_profile': '👤 View Profile',
+            'user.update_profile': '✏️ Update Profile',
+            'user.me': '👤 My Profile',
+            
+            // Rocket League
+            'rocket_league.get_user_rl_account': '🚀 Check RL Account',
+            'rocket_league.link_account': '🔗 Link RL Account',
+            'rocket_league.get_rl_stats': '📊 View RL Stats',
+            'rocket_league.get_stats': '📊 View RL Stats',
+            'rocket_league.get_profile': '🚀 RL Profile',
+            
+            // Memes
+            'memes.get_latest_memes': '😂 Browse Memes',
+            'memes.upload': '📤 Upload Meme',
+            'memes.vote': '👍 Vote on Meme',
+            'meme.get_random': '🎲 Random Meme',
+            
+            // Admin
+            'admin.get_active_sessions': '👁️ View Live Users',
+            'admin.get_analytics': '📈 View Analytics',
+            
+            // Config
+            'config.get_config': '⚙️ View Config',
+            'config.update_config': '🔧 Update Config',
+            
+            // Tickets
+            'tickets.create': '🎫 Create Ticket',
+            'tickets.get_tickets': '📋 View Tickets',
+            'tickets.close': '✓ Close Ticket',
+            
+            // Data Cache
+            'data_cache.get_gaming_members': '💾 Load Gaming Data',
+            'data_cache.get_latest_memes': '💾 Load Memes',
+            'data_cache.get_latest_rankups': '💾 Load Rankups',
+        };
+        
+        /**
+         * Get user-friendly display name for endpoint
+         * @param {string} endpoint - Raw endpoint name (e.g., "community_posts.get_posts")
+         * @returns {string} User-friendly name with emoji (e.g., "📝 Browse Posts")
+         */
+        function getEndpointDisplayName(endpoint) {
+            // Try exact match first
+            if (endpointDisplayNames[endpoint]) {
+                return endpointDisplayNames[endpoint];
+            }
+            
+            // Fallback: humanize the endpoint name
+            return endpoint
+                .replace(/_/g, ' ')
+                .replace(/\./g, ' › ')
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+        }
+
         function updateUserGrowthChart(sessions) {
             const dailyUsers = {};
             
@@ -1492,78 +1569,7 @@
                 return 'Other';
             }
             
-            // Endpoint display names (user-friendly descriptions)
-            const endpointDisplayNames = {
-                // Auth & Session
-                'auth_routes.login': '🔐 User Login',
-                'auth_routes.logout': '👋 User Logout',
-                'auth_routes.verify_token': '✓ Token Verification',
-                'auth.discord_callback': '🔐 Discord Login',
-                
-                // Community Posts
-                'community_posts.get_posts': '📝 Browse Posts',
-                'community_posts.create_post': '✨ Create Post',
-                'community_posts.update_post': '✏️ Edit Post',
-                'community_posts.delete_post': '🗑️ Delete Post',
-                'community_posts.toggle_like_post': '❤️ Like Post',
-                'community_posts.get_post_likes': '👥 View Likes',
-                
-                // Gaming & Users
-                'user.get_gaming_members': '🎮 View Gaming Members',
-                'user.add_gaming_member': '➕ Add Gaming Member',
-                'user.get_profile': '👤 View Profile',
-                'user.update_profile': '✏️ Update Profile',
-                'user.me': '👤 My Profile',
-                
-                // Rocket League
-                'rocket_league.get_user_rl_account': '🚀 Check RL Account',
-                'rocket_league.link_account': '🔗 Link RL Account',
-                'rocket_league.get_rl_stats': '📊 View RL Stats',
-                'rocket_league.get_stats': '📊 View RL Stats',
-                'rocket_league.get_profile': '🚀 RL Profile',
-                
-                // Memes
-                'memes.get_latest_memes': '😂 Browse Memes',
-                'memes.upload': '📤 Upload Meme',
-                'memes.vote': '👍 Vote on Meme',
-                'meme.get_random': '🎲 Random Meme',
-                
-                // Admin
-                'admin.get_active_sessions': '👁️ View Live Users',
-                'admin.get_analytics': '📈 View Analytics',
-                
-                // Config
-                'config.get_config': '⚙️ View Config',
-                'config.update_config': '🔧 Update Config',
-                
-                // Tickets
-                'tickets.create': '🎫 Create Ticket',
-                'tickets.get_tickets': '📋 View Tickets',
-                'tickets.close': '✓ Close Ticket',
-                
-                // Data Cache
-                'data_cache.get_gaming_members': '💾 Load Gaming Data',
-                'data_cache.get_latest_memes': '💾 Load Memes',
-                'data_cache.get_latest_rankups': '💾 Load Rankups',
-            };
-            
-            /**
-             * Get user-friendly display name for endpoint
-             */
-            function getEndpointDisplayName(endpoint) {
-                // Try exact match first
-                if (endpointDisplayNames[endpoint]) {
-                    return endpointDisplayNames[endpoint];
-                }
-                
-                // Fallback: humanize the endpoint name
-                return endpoint
-                    .replace(/_/g, ' ')
-                    .replace(/\./g, ' › ')
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
-            }
+            // Note: getEndpointDisplayName() is defined globally above (before chart functions)
             
             // Aggregate by category
             const features = {};
