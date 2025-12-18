@@ -213,7 +213,7 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            /* grid-template-columns dynamically set by JavaScript */
             gap: 15px;
             margin-bottom: 15px;
         }
@@ -317,15 +317,16 @@
                 font-size: 1.6em;
             }
 
-            /* Charts: 4 columns for maximum density */
+            /* Charts: Dynamic columns set by JavaScript */
             .charts-grid {
-                grid-template-columns: repeat(4, 1fr);
-                gap: 15px;
+                /* grid-template-columns set by JS recalculateGridLayout() */
+                gap: 12px; /* Slightly tighter gap for density */
             }
 
             /* Regular charts take 1 column each */
             .chart-container {
                 grid-column: span 1;
+                min-width: 350px; /* Reduced from 450px for compactness */
             }
 
             /* Full-width sections: Only 2 columns instead of full width */
@@ -333,18 +334,18 @@
                 grid-column: span 2;
             }
 
-            /* Very compact chart height to fit more */
+            /* Compact chart height for density */
             .chart-wrapper {
-                height: 280px;
+                height: 250px; /* Slightly reduced from 280px */
             }
 
-            /* Feature Analytics and Error Analytics: 2 columns each */
+            /* Feature Analytics: 2 columns */
             #section-feature-analytics {
                 grid-column: span 2;
             }
 
             #section-feature-analytics .chart-wrapper {
-                height: 220px;
+                height: 200px; /* More compact */
             }
 
             #section-error-analytics {
@@ -1044,6 +1045,52 @@
         }
 
         /**
+         * Dynamically adjust grid columns based on visible sections and viewport
+         */
+        function recalculateGridLayout() {
+            const grids = document.querySelectorAll('.charts-grid');
+            
+            grids.forEach(grid => {
+                // Count visible sections in this grid
+                const visibleSections = Array.from(grid.children)
+                    .filter(child => child.classList.contains('dashboard-section') && 
+                                   !child.classList.contains('section-hidden'));
+                
+                const visibleCount = visibleSections.length;
+                
+                if (visibleCount === 0) {
+                    grid.style.display = 'none'; // Hide empty grids
+                    return;
+                }
+                
+                grid.style.display = 'grid';
+                
+                // Calculate optimal columns based on viewport and section count
+                const viewportWidth = window.innerWidth;
+                let columns = 2;
+                
+                if (viewportWidth >= 2560) {
+                    // Ultrawide: Aggressive columns for maximum density
+                    columns = Math.min(visibleCount, 4);
+                } else if (viewportWidth >= 1920) {
+                    // Full HD: Moderate columns
+                    columns = Math.min(visibleCount, 3);
+                } else if (viewportWidth >= 1440) {
+                    // Laptop: Conservative
+                    columns = Math.min(visibleCount, 2);
+                } else {
+                    // Mobile/Small: Single column
+                    columns = 1;
+                }
+                
+                // Apply dynamic grid template
+                grid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+            });
+            
+            console.log('✅ Grid layout recalculated');
+        }
+
+        /**
          * Apply visibility state to all sections
          */
         function applySectionVisibility(visibility) {
@@ -1057,6 +1104,9 @@
                     }
                 }
             });
+            
+            // Recalculate grid layout after visibility changes
+            recalculateGridLayout();
             
             console.log('✅ Applied section visibility');
         }
@@ -1083,11 +1133,23 @@
         }
 
         // Initialize section visibility on page load
+        // Window resize listener (debounced)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                recalculateGridLayout();
+            }, 200); // 200ms debounce
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
             // Load and apply saved visibility
             const visibility = loadSectionVisibility();
             applySectionVisibility(visibility);
             updateSettingsPanelState(visibility);
+            
+            // Initial grid layout calculation
+            recalculateGridLayout();
             
             // Open settings panel
             document.getElementById('openSectionSettings')?.addEventListener('click', () => {
