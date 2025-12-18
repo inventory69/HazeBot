@@ -414,6 +414,49 @@ def get_feature_analytics():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/analytics/inactive-users", methods=["GET"])
+def get_inactive_users():
+    """
+    Get users who haven't been active recently with their last app version
+
+    Query Parameters:
+        days (int): Number of days to consider inactive (default: 30)
+
+    Returns:
+        JSON with inactive users data including:
+        - total_inactive: Count of inactive users
+        - users: List with discord_id, username, last_seen, app_version, platform, device_info, days_inactive
+        - analyzed_days: Days parameter used
+        - cutoff_date: Inactivity threshold date
+        - version_distribution: Count per app version
+
+    Example:
+        GET /api/analytics/inactive-users?days=30
+    """
+    try:
+        from flask import request
+
+        days = int(request.args.get("days", 30))
+
+        # Validate days parameter
+        if days < 1:
+            return jsonify({"error": "Days must be positive"}), 400
+        if days > 365:
+            return jsonify({"error": "Days cannot exceed 365"}), 400
+
+        if analytics is None:
+            return jsonify({"error": "Analytics not available"}), 503
+
+        analysis = analytics.get_inactive_users_analysis(days=days)
+        return jsonify(analysis), 200
+
+    except ValueError:
+        return jsonify({"error": "Invalid days parameter"}), 400
+    except Exception as e:
+        logger.error(f"Failed to get inactive users: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/analytics/reset", methods=["DELETE"])
 def reset_analytics():
     """Reset ALL analytics data (admin only)

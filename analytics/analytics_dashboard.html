@@ -561,6 +561,56 @@
             </div>
         </div>
 
+        <!-- Inactive Users Section -->
+        <div id="inactiveUsersSection" class="table-container" style="margin-bottom: 15px; display: none;">
+            <h3 class="chart-title">👥 Inactive Users Analysis</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalInactive">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);" id="inactiveSince">Loading...</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="oldestVersion">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Oldest Version</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="mostCommonVersion">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Most Common Version</div>
+                    </div>
+                </div>
+                <div style="margin-left: 20px;">
+                    <label style="font-size: 0.9em; color: var(--text-secondary);">
+                        Inactive for: 
+                        <select id="inactiveDaysFilter" onchange="loadInactiveUsers()" style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;">
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30" selected>30 days</option>
+                            <option value="60">60 days</option>
+                            <option value="90">90 days</option>
+                            <option value="180">180 days</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+            
+            <table id="inactiveUsersTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortInactiveUsers('username')" style="cursor: pointer;">Username ↕</th>
+                        <th onclick="sortInactiveUsers('last_seen')" style="cursor: pointer;">Last Seen ↕</th>
+                        <th onclick="sortInactiveUsers('days_inactive')" style="cursor: pointer;">Days Inactive ↕</th>
+                        <th onclick="sortInactiveUsers('app_version')" style="cursor: pointer;">App Version ↕</th>
+                        <th onclick="sortInactiveUsers('platform')" style="cursor: pointer;">Platform ↕</th>
+                        <th>Device</th>
+                    </tr>
+                </thead>
+                <tbody id="inactiveUsersBody">
+                    <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading inactive users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <!-- Error Analytics Section -->
         <div id="errorAnalyticsSection" class="table-container" style="margin-bottom: 15px; display: none;">
             <h3 class="chart-title">🐛 Error Analytics</h3>
@@ -1322,15 +1372,16 @@
             const categories = {
                 'Auth': ['auth_routes', 'auth.', 'login', 'logout', 'ping', 'current_user'],
                 'Gaming Members': ['gaming_members', 'get_top_users', 'user.get_gaming'],
-                'Rocket League': ['rocket_league', 'rl_account', 'rl_stats'],
+                'Rocket League': ['rocket_league', 'rl_account', 'rl_stats', 'get_user_rl'],
                 'Memes': ['meme', 'meme_templates', 'meme_sources', 'latest_memes'],
                 'Config': ['config.', 'get_config', 'update_config', 'config_general'],
                 'Tickets': ['tickets', 'ticket_messages', 'create_ticket', 'get_my_tickets'],
-                'User Profile': ['user_profile', 'get_user_profile', 'update_user_profile'],
+                'User Profile': ['user_profile', 'get_user_profile', 'update_user_profile', 'user.me'],
                 'Admin': ['admin.', 'active_sessions', 'force_sync'],
                 'Rankups': ['rankups', 'latest_rankups'],
                 'HazeHub Cogs': ['hazehub_cogs', 'hazehub'],
                 'Notifications': ['notification', 'push_token'],
+                'Community Posts': ['community_posts', 'posts.', 'get_posts', 'create_post', 'like_post', 'delete_post'],
                 'Other': []
             };
             
@@ -1439,6 +1490,79 @@
                     }
                 }
                 return 'Other';
+            }
+            
+            // Endpoint display names (user-friendly descriptions)
+            const endpointDisplayNames = {
+                // Auth & Session
+                'auth_routes.login': '🔐 User Login',
+                'auth_routes.logout': '👋 User Logout',
+                'auth_routes.verify_token': '✓ Token Verification',
+                'auth.discord_callback': '🔐 Discord Login',
+                
+                // Community Posts
+                'community_posts.get_posts': '📝 Browse Posts',
+                'community_posts.create_post': '✨ Create Post',
+                'community_posts.update_post': '✏️ Edit Post',
+                'community_posts.delete_post': '🗑️ Delete Post',
+                'community_posts.toggle_like_post': '❤️ Like Post',
+                'community_posts.get_post_likes': '👥 View Likes',
+                
+                // Gaming & Users
+                'user.get_gaming_members': '🎮 View Gaming Members',
+                'user.add_gaming_member': '➕ Add Gaming Member',
+                'user.get_profile': '👤 View Profile',
+                'user.update_profile': '✏️ Update Profile',
+                'user.me': '👤 My Profile',
+                
+                // Rocket League
+                'rocket_league.get_user_rl_account': '🚀 Check RL Account',
+                'rocket_league.link_account': '🔗 Link RL Account',
+                'rocket_league.get_rl_stats': '📊 View RL Stats',
+                'rocket_league.get_stats': '📊 View RL Stats',
+                'rocket_league.get_profile': '🚀 RL Profile',
+                
+                // Memes
+                'memes.get_latest_memes': '😂 Browse Memes',
+                'memes.upload': '📤 Upload Meme',
+                'memes.vote': '👍 Vote on Meme',
+                'meme.get_random': '🎲 Random Meme',
+                
+                // Admin
+                'admin.get_active_sessions': '👁️ View Live Users',
+                'admin.get_analytics': '📈 View Analytics',
+                
+                // Config
+                'config.get_config': '⚙️ View Config',
+                'config.update_config': '🔧 Update Config',
+                
+                // Tickets
+                'tickets.create': '🎫 Create Ticket',
+                'tickets.get_tickets': '📋 View Tickets',
+                'tickets.close': '✓ Close Ticket',
+                
+                // Data Cache
+                'data_cache.get_gaming_members': '💾 Load Gaming Data',
+                'data_cache.get_latest_memes': '💾 Load Memes',
+                'data_cache.get_latest_rankups': '💾 Load Rankups',
+            };
+            
+            /**
+             * Get user-friendly display name for endpoint
+             */
+            function getEndpointDisplayName(endpoint) {
+                // Try exact match first
+                if (endpointDisplayNames[endpoint]) {
+                    return endpointDisplayNames[endpoint];
+                }
+                
+                // Fallback: humanize the endpoint name
+                return endpoint
+                    .replace(/_/g, ' ')
+                    .replace(/\./g, ' › ')
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
             }
             
             // Aggregate by category
@@ -1926,6 +2050,208 @@
                 alert(`❌ Failed to reset analytics: ${error.message}`);
             }
         }
+
+        // ==================== INACTIVE USERS ANALYSIS ====================
+
+        let inactiveUsersData = [];
+        let inactiveUsersSortColumn = 'days_inactive';
+        let inactiveUsersSortAsc = false;
+
+        /**
+         * Load inactive users data from API
+         */
+        async function loadInactiveUsers() {
+            const days = document.getElementById('inactiveDaysFilter').value;
+            
+            try {
+                console.log(`📊 Loading inactive users (${days} days)...`);
+                
+                const apiEndpoints = [
+                    `/api/analytics/inactive-users?days=${days}`,
+                    `http://localhost:5070/api/analytics/inactive-users?days=${days}`
+                ];
+                
+                let response;
+                let lastError;
+                
+                for (const url of apiEndpoints) {
+                    try {
+                        response = await fetch(url);
+                        if (response.ok) {
+                            console.log(`✅ Connected to API: ${url}`);
+                            break;
+                        } else {
+                            lastError = `HTTP ${response.status}`;
+                        }
+                    } catch (e) {
+                        lastError = e.message;
+                    }
+                }
+                
+                if (!response || !response.ok) {
+                    throw new Error(`API unreachable. Last error: ${lastError}`);
+                }
+                
+                const data = await response.json();
+                inactiveUsersData = data.users || [];
+                
+                // Update summary stats
+                document.getElementById('totalInactive').textContent = data.total_inactive || 0;
+                
+                const cutoffDate = new Date(data.cutoff_date);
+                document.getElementById('inactiveSince').textContent = 
+                    `Since ${cutoffDate.toLocaleDateString()}`;
+                
+                // Find oldest version (lowest version number)
+                const versions = data.users
+                    .map(u => u.app_version)
+                    .filter(v => v && v !== 'Unknown');
+                
+                if (versions.length > 0) {
+                    const sortedVersions = versions.sort();
+                    document.getElementById('oldestVersion').textContent = sortedVersions[0];
+                } else {
+                    document.getElementById('oldestVersion').textContent = 'N/A';
+                }
+                
+                // Most common version from distribution
+                const versionDist = data.version_distribution || {};
+                const mostCommon = Object.entries(versionDist)
+                    .filter(([v]) => v !== 'Unknown')
+                    .sort((a, b) => b[1] - a[1])[0];
+                
+                if (mostCommon) {
+                    document.getElementById('mostCommonVersion').textContent = 
+                        `${mostCommon[0]} (${mostCommon[1]} users)`;
+                } else {
+                    document.getElementById('mostCommonVersion').textContent = 'N/A';
+                }
+                
+                // Render table
+                renderInactiveUsersTable();
+                
+                // Show section
+                document.getElementById('inactiveUsersSection').style.display = 'block';
+                
+                console.log(`✅ Loaded ${inactiveUsersData.length} inactive users`);
+                
+            } catch (error) {
+                console.error('Failed to load inactive users:', error);
+                document.getElementById('inactiveUsersBody').innerHTML = 
+                    '<tr><td colspan="6" style="text-align: center; color: red;">Failed to load data: ' + error.message + '</td></tr>';
+            }
+        }
+
+        /**
+         * Render inactive users table
+         */
+        function renderInactiveUsersTable() {
+            const tbody = document.getElementById('inactiveUsersBody');
+            tbody.innerHTML = '';
+            
+            if (inactiveUsersData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No inactive users found</td></tr>';
+                return;
+            }
+            
+            // Sort data
+            const sortedData = [...inactiveUsersData].sort((a, b) => {
+                let aVal = a[inactiveUsersSortColumn];
+                let bVal = b[inactiveUsersSortColumn];
+                
+                // Handle dates
+                if (inactiveUsersSortColumn === 'last_seen') {
+                    aVal = new Date(aVal).getTime();
+                    bVal = new Date(bVal).getTime();
+                }
+                
+                // Handle numbers
+                if (inactiveUsersSortColumn === 'days_inactive') {
+                    aVal = parseInt(aVal) || 0;
+                    bVal = parseInt(bVal) || 0;
+                }
+                
+                // Handle strings
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+                
+                if (inactiveUsersSortAsc) {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+            
+            // Populate table
+            sortedData.forEach(user => {
+                const row = tbody.insertRow();
+                
+                // Username
+                row.insertCell().textContent = user.username;
+                
+                // Last Seen
+                const lastSeenDate = new Date(user.last_seen);
+                const lastSeenCell = row.insertCell();
+                lastSeenCell.textContent = lastSeenDate.toLocaleDateString() + ' ' + 
+                                           lastSeenDate.toLocaleTimeString();
+                lastSeenCell.style.fontSize = '0.9em';
+                
+                // Days Inactive (with color coding)
+                const daysCell = row.insertCell();
+                daysCell.textContent = user.days_inactive;
+                if (user.days_inactive > 90) {
+                    daysCell.style.color = '#ff4444';
+                    daysCell.style.fontWeight = 'bold';
+                } else if (user.days_inactive > 60) {
+                    daysCell.style.color = '#ff9944';
+                } else if (user.days_inactive > 30) {
+                    daysCell.style.color = '#ffbb44';
+                }
+                
+                // App Version
+                const versionCell = row.insertCell();
+                versionCell.textContent = user.app_version || 'Unknown';
+                versionCell.style.fontFamily = 'monospace';
+                
+                // Platform (with icon)
+                const platformCell = row.insertCell();
+                const platformIcons = {
+                    'Android': '🤖',
+                    'iOS': '🍎',
+                    'Web': '🌐',
+                };
+                const icon = platformIcons[user.platform] || '📱';
+                platformCell.textContent = `${icon} ${user.platform || 'Unknown'}`;
+                
+                // Device Info
+                const deviceCell = row.insertCell();
+                const deviceInfo = user.device_info || 'Unknown';
+                deviceCell.textContent = deviceInfo.length > 30 ? 
+                    deviceInfo.substring(0, 30) + '...' : deviceInfo;
+                deviceCell.title = deviceInfo; // Full text on hover
+                deviceCell.style.fontSize = '0.85em';
+            });
+        }
+
+        /**
+         * Sort inactive users table
+         */
+        function sortInactiveUsers(column) {
+            if (inactiveUsersSortColumn === column) {
+                inactiveUsersSortAsc = !inactiveUsersSortAsc;
+            } else {
+                inactiveUsersSortColumn = column;
+                inactiveUsersSortAsc = false;
+            }
+            renderInactiveUsersTable();
+        }
+
+        // Load inactive users on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadInactiveUsers();
+        });
     </script>
 </body>
 </html>

@@ -163,6 +163,105 @@ class AnalyticsAggregator:
             self.db.update_session(session_id, session)
             logger.debug(f"Screen visit recorded: {session_id} -> {screen_name}")
 
+    def get_inactive_users_analysis(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Analyze inactive users with their last app version
+
+        Args:
+            days: Number of days to consider as "inactive" (default: 30)
+
+        Returns:
+            Dict containing:
+            - total_inactive: Number of inactive users
+            - users: List of inactive user details
+            - analyzed_days: Days analyzed
+            - cutoff_date: Date threshold for inactivity
+            - version_distribution: Count of users per app version
+
+        Example:
+            {
+                "total_inactive": 25,
+                "users": [
+                    {
+                        "discord_id": "123456789",
+                        "username": "TestUser",
+                        "last_seen": "2025-11-15T10:30:00",
+                        "app_version": "1.2.3",
+                        "platform": "Android",
+                        "device_info": "Samsung Galaxy S21",
+                        "days_inactive": 33
+                    },
+                    ...
+                ],
+                "analyzed_days": 30,
+                "cutoff_date": "2025-11-18T00:00:00",
+                "version_distribution": {"1.2.3": 10, "1.2.2": 15}
+            }
+        """
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+        # Query: Get users with their last session data
+        # Only include users who haven't been active since cutoff
+        query = """
+            SELECT 
+                discord_id,
+                username,
+                MAX(ended_at) as last_seen,
+                app_version,
+                platform,
+                device_info
+            FROM sessions
+            WHERE ended_at IS NOT NULL
+            GROUP BY discord_id
+            HAVING MAX(ended_at) < ?
+            ORDER BY last_seen DESC
+        """
+
+        inactive_users = []
+
+        with self.db._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (cutoff_date.isoformat(),))
+
+            for row in cursor.fetchall():
+                try:
+                    last_seen = datetime.fromisoformat(row[2])
+                    days_inactive = (datetime.utcnow() - last_seen).days
+
+                    inactive_users.append(
+                        {
+                            "discord_id": row[0],
+                            "username": row[1],
+                            "last_seen": row[2],
+                            "app_version": row[3] or "Unknown",
+                            "platform": row[4] or "Unknown",
+                            "device_info": row[5] or "Unknown",
+                            "days_inactive": days_inactive,
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to process inactive user row: {e}")
+                    continue
+
+        # Calculate version distribution
+        version_counts = {}
+        for user in inactive_users:
+            version = user["app_version"]
+            version_counts[version] = version_counts.get(version, 0) + 1
+
+        logger.info(
+            f"Inactive users analysis: {len(inactive_users)} users inactive for {days}+ days"
+        )
+
+        return {
+            "total_inactive": len(inactive_users),
+            "users": inactive_users,
+            "analyzed_days": days,
+            "cutoff_date": cutoff_date.isoformat(),
+            "version_distribution": version_counts,
+            "analysis_date": datetime.utcnow().isoformat(),
+        }
+
     def get_export_data(self, days: int = None) -> Dict[str, Any]:
         """Export analytics data for external analysis
 
