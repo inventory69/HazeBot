@@ -339,15 +339,15 @@
             }
 
             /* Feature Analytics and Error Analytics: 2 columns each */
-            #featureAnalyticsSection {
+            #section-feature-analytics {
                 grid-column: span 2;
             }
 
-            #featureAnalyticsSection .chart-wrapper {
+            #section-feature-analytics .chart-wrapper {
                 height: 220px;
             }
 
-            #errorAnalyticsSection {
+            #section-error-analytics {
                 grid-column: span 4;
             }
 
@@ -410,6 +410,155 @@
                 width: 100%;
             }
         }
+
+        /* ==================== SECTION VISIBILITY SETTINGS ==================== */
+        
+        /* Hidden section state */
+        .dashboard-section.section-hidden {
+            display: none !important;
+        }
+
+        /* Settings button */
+        .btn-icon {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            min-width: 350px;
+            max-width: 500px;
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .settings-header h4 {
+            margin: 0;
+            font-size: 1.1em;
+            color: var(--text-primary);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            transition: color 0.2s;
+        }
+
+        .close-btn:hover {
+            color: var(--accent-primary);
+        }
+
+        .settings-body {
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .section-toggle-item {
+            margin-bottom: 12px;
+        }
+
+        .section-toggle-item label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.95em;
+            color: var(--text-primary);
+            transition: color 0.2s;
+        }
+
+        .section-toggle-item label:hover {
+            color: var(--accent-primary);
+        }
+
+        .section-toggle-item input[type="checkbox"] {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .settings-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .btn-primary {
+            background: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-secondary);
+            border-color: var(--accent-secondary);
+        }
+
+        /* Overlay */
+        .settings-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
     </style>
 </head>
 <body class="auth-pending">
@@ -452,6 +601,7 @@
                 <button onclick="applyCustomRange()" style="padding: 6px 16px;">Apply</button>
             </div>
             <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button id="openSectionSettings" class="btn-icon" title="Configure visible sections">⚙️ Sections</button>
                 <button onclick="resetAnalytics()" style="background: #dc2626;">🗑️ Reset Analytics</button>
                 <button onclick="exportToCSV('sessions')">📥 Export Sessions</button>
                 <button onclick="exportToCSV('daily')">📥 Export Daily Stats</button>
@@ -459,9 +609,78 @@
             </div>
         </div>
 
+        <!-- Section Visibility Settings Panel -->
+        <div id="sectionSettingsPanel" class="settings-panel" style="display: none;">
+            <div class="settings-header">
+                <h4>📊 Dashboard Sections</h4>
+                <button id="closeSectionSettings" class="close-btn">✕</button>
+            </div>
+            <div class="settings-body">
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="summary-stats" checked>
+                        📊 Summary Statistics
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="user-growth" checked>
+                        📈 User Growth
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="device-distribution" checked>
+                        📱 Device Distribution
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="top-features" checked>
+                        🔥 Top Features
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="peak-usage" checked>
+                        ⏰ Peak Usage Times
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="feature-analytics" checked>
+                        🎯 Feature Analytics
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="inactive-users" checked>
+                        👥 Inactive Users
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="error-analytics" checked>
+                        🐛 Error Analytics
+                    </label>
+                </div>
+                <div class="section-toggle-item">
+                    <label>
+                        <input type="checkbox" data-section="recent-sessions" checked>
+                        🕐 Recent Sessions
+                    </label>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <button id="resetSectionVisibility" class="btn-secondary">🔄 Show All</button>
+                <button id="applySectionSettings" class="btn-primary">✓ Apply</button>
+            </div>
+        </div>
+
         <div id="error" class="error" style="display: none;"></div>
 
-        <div class="stats-grid">
+        <!-- Summary Statistics Section -->
+        <div id="section-summary-stats" class="dashboard-section stats-grid">
             <div class="stat-card">
                 <div class="stat-label">Total Users</div>
                 <div class="stat-value" id="totalUsers">-</div>
@@ -504,22 +723,25 @@
             </div>
         </div>
 
-        <div class="charts-grid">
-            <div class="chart-container full-width">
-                <h3 class="chart-title">📈 User Growth (Daily)</h3>
-                <div class="chart-wrapper">
-                    <canvas id="userGrowthChart"></canvas>
-                </div>
+        <!-- User Growth Chart Section -->
+        <div id="section-user-growth" class="dashboard-section chart-container full-width">
+            <h3 class="chart-title">📈 User Growth (Daily)</h3>
+            <div class="chart-wrapper">
+                <canvas id="userGrowthChart"></canvas>
             </div>
+        </div>
 
-            <div class="chart-container">
+        <div class="charts-grid">
+            <!-- Device Distribution Section -->
+            <div id="section-device-distribution" class="dashboard-section chart-container">
                 <h3 class="chart-title">📱 Device Distribution</h3>
                 <div class="chart-wrapper">
                     <canvas id="deviceChart"></canvas>
                 </div>
             </div>
 
-            <div class="chart-container">
+            <!-- Top Features Section -->
+            <div id="section-top-features" class="dashboard-section chart-container">
                 <h3 class="chart-title">🔥 Top Features</h3>
                 <div class="chart-wrapper">
                     <canvas id="endpointsChart"></canvas>
@@ -529,14 +751,16 @@
 
         <!-- Peak Usage Times & Feature Usage Side-by-Side -->
         <div class="charts-grid" style="margin-bottom: 15px;">
-            <div class="chart-container">
+            <!-- Peak Usage Section -->
+            <div id="section-peak-usage" class="dashboard-section chart-container">
                 <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
                 <div class="chart-wrapper">
                     <canvas id="hourlyChart"></canvas>
                 </div>
             </div>
 
-            <div id="featureAnalyticsSection" class="chart-container" style="display: none;">
+            <!-- Feature Analytics Section -->
+            <div id="section-feature-analytics" class="dashboard-section chart-container" style="display: none;">
                 <h3 class="chart-title">🎯 Feature Usage (Last 30 Days)</h3>
                 <div class="chart-wrapper">
                     <canvas id="featureUsageChart"></canvas>
@@ -562,7 +786,7 @@
         </div>
 
         <!-- Inactive Users Section -->
-        <div id="inactiveUsersSection" class="table-container" style="margin-bottom: 15px; display: none;">
+        <div id="section-inactive-users" class="dashboard-section table-container" style="margin-bottom: 15px; display: none;">
             <h3 class="chart-title">👥 Inactive Users Analysis</h3>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
@@ -612,7 +836,7 @@
         </div>
 
         <!-- Error Analytics Section -->
-        <div id="errorAnalyticsSection" class="table-container" style="margin-bottom: 15px; display: none;">
+        <div id="section-error-analytics" class="dashboard-section table-container" style="margin-bottom: 15px; display: none;">
             <h3 class="chart-title">🐛 Error Analytics</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
                 <div style="text-align: center;">
@@ -647,7 +871,7 @@
         </div>
 
         <!-- Recent Sessions Section -->
-        <div class="table-container" style="margin-bottom: 15px;">
+        <div id="section-recent-sessions" class="dashboard-section table-container" style="margin-bottom: 15px;">
             <h3 class="chart-title">🕐 Recent Sessions</h3>
             <table id="sessionsTable">
                 <thead>
@@ -774,6 +998,139 @@
 
         // Initialize theme on load
         initializeTheme();
+
+        // ==================== SECTION VISIBILITY MANAGEMENT ====================
+
+        const SECTION_VISIBILITY_KEY = 'analytics_section_visibility';
+
+        // Default visibility state
+        const defaultSectionVisibility = {
+            'summary-stats': true,
+            'user-growth': true,
+            'device-distribution': true,
+            'top-features': true,
+            'peak-usage': true,
+            'feature-analytics': true,
+            'inactive-users': true,
+            'error-analytics': true,
+            'recent-sessions': true
+        };
+
+        /**
+         * Load section visibility preferences from LocalStorage
+         */
+        function loadSectionVisibility() {
+            try {
+                const stored = localStorage.getItem(SECTION_VISIBILITY_KEY);
+                if (stored) {
+                    return { ...defaultSectionVisibility, ...JSON.parse(stored) };
+                }
+            } catch (e) {
+                console.error('Failed to load section visibility:', e);
+            }
+            return defaultSectionVisibility;
+        }
+
+        /**
+         * Save section visibility preferences to LocalStorage
+         */
+        function saveSectionVisibility(visibility) {
+            try {
+                localStorage.setItem(SECTION_VISIBILITY_KEY, JSON.stringify(visibility));
+                console.log('✅ Section visibility saved:', visibility);
+            } catch (e) {
+                console.error('Failed to save section visibility:', e);
+            }
+        }
+
+        /**
+         * Apply visibility state to all sections
+         */
+        function applySectionVisibility(visibility) {
+            Object.entries(visibility).forEach(([sectionId, isVisible]) => {
+                const sectionElement = document.getElementById(`section-${sectionId}`);
+                if (sectionElement) {
+                    if (isVisible) {
+                        sectionElement.classList.remove('section-hidden');
+                    } else {
+                        sectionElement.classList.add('section-hidden');
+                    }
+                }
+            });
+            
+            console.log('✅ Applied section visibility');
+        }
+
+        /**
+         * Update settings panel checkboxes based on current state
+         */
+        function updateSettingsPanelState(visibility) {
+            Object.entries(visibility).forEach(([sectionId, isVisible]) => {
+                const checkbox = document.querySelector(`#sectionSettingsPanel input[data-section="${sectionId}"]`);
+                if (checkbox) {
+                    checkbox.checked = isVisible;
+                }
+            });
+        }
+
+        /**
+         * Reset all sections to visible
+         */
+        function resetAllSectionsVisible() {
+            saveSectionVisibility(defaultSectionVisibility);
+            applySectionVisibility(defaultSectionVisibility);
+            updateSettingsPanelState(defaultSectionVisibility);
+        }
+
+        // Initialize section visibility on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load and apply saved visibility
+            const visibility = loadSectionVisibility();
+            applySectionVisibility(visibility);
+            updateSettingsPanelState(visibility);
+            
+            // Open settings panel
+            document.getElementById('openSectionSettings')?.addEventListener('click', () => {
+                document.getElementById('sectionSettingsPanel').style.display = 'block';
+                
+                // Add overlay
+                const overlay = document.createElement('div');
+                overlay.className = 'settings-overlay';
+                overlay.id = 'settingsOverlay';
+                overlay.addEventListener('click', () => {
+                    document.getElementById('sectionSettingsPanel').style.display = 'none';
+                    overlay.remove();
+                });
+                document.body.appendChild(overlay);
+            });
+            
+            // Close settings panel
+            document.getElementById('closeSectionSettings')?.addEventListener('click', () => {
+                document.getElementById('sectionSettingsPanel').style.display = 'none';
+                document.getElementById('settingsOverlay')?.remove();
+            });
+            
+            // Apply settings
+            document.getElementById('applySectionSettings')?.addEventListener('click', () => {
+                const visibility = {};
+                document.querySelectorAll('#sectionSettingsPanel input[type="checkbox"]').forEach(checkbox => {
+                    const sectionId = checkbox.getAttribute('data-section');
+                    visibility[sectionId] = checkbox.checked;
+                });
+                
+                saveSectionVisibility(visibility);
+                applySectionVisibility(visibility);
+                
+                // Close panel
+                document.getElementById('sectionSettingsPanel').style.display = 'none';
+                document.getElementById('settingsOverlay')?.remove();
+            });
+            
+            // Reset all sections
+            document.getElementById('resetSectionVisibility')?.addEventListener('click', () => {
+                resetAllSectionsVisible();
+            });
+        });
 
         // Logout function
         function logout() {
@@ -1421,13 +1778,13 @@
                 
                 if (featureData && featureData.features && Object.keys(featureData.features).length > 0) {
                     updateFeatureAnalytics(featureData);
-                    document.getElementById('featureAnalyticsSection').style.display = 'block';
+                    document.getElementById('section-feature-analytics').style.display = 'block';
                 } else {
-                    document.getElementById('featureAnalyticsSection').style.display = 'none';
+                    document.getElementById('section-feature-analytics').style.display = 'none';
                 }
             } catch (error) {
                 console.error('Failed to load feature analytics:', error);
-                document.getElementById('featureAnalyticsSection').style.display = 'none';
+                document.getElementById('section-feature-analytics').style.display = 'none';
             }
         }
 
@@ -1775,7 +2132,7 @@
             } catch (error) {
                 console.error('Failed to load error analytics:', error);
                 // Hide error section if data unavailable
-                document.getElementById('errorAnalyticsSection').style.display = 'none';
+                document.getElementById('section-error-analytics').style.display = 'none';
             }
         }
 
@@ -1838,7 +2195,7 @@
 
             // Show section if we have errors
             if (errorsToShow.length > 0) {
-                document.getElementById('errorAnalyticsSection').style.display = 'block';
+                document.getElementById('section-error-analytics').style.display = 'block';
             }
         }
 
@@ -2137,7 +2494,7 @@
                 renderInactiveUsersTable();
                 
                 // Show section
-                document.getElementById('inactiveUsersSection').style.display = 'block';
+                document.getElementById('section-inactive-users').style.display = 'block';
                 
                 console.log(`✅ Loaded ${inactiveUsersData.length} inactive users`);
                 
