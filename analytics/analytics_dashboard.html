@@ -1129,14 +1129,28 @@
                 
                 grid.style.display = 'grid';
                 
-                // Calculate optimal columns with overflow protection
-                const columns = calculateOptimalColumns(viewportWidth, visibleCount);
+                // Calculate min section width based on viewport
+                let minSectionWidth;
+                if (viewportWidth >= 2560) {
+                    minSectionWidth = 400;
+                } else if (viewportWidth >= 1920) {
+                    minSectionWidth = 450;
+                } else if (viewportWidth >= 1440) {
+                    minSectionWidth = 500;
+                } else if (viewportWidth >= 1024) {
+                    minSectionWidth = 450;
+                } else {
+                    minSectionWidth = 300;
+                }
                 
-                // Apply dynamic grid template
-                grid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+                // CRITICAL: Use auto-fit with minmax to prevent sections from growing
+                // This keeps sections at consistent size instead of filling available space
+                grid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${minSectionWidth}px, 1fr))`;
                 
-                // Apply special spanning rules for specific sections
-                applySpecialSpanning(visibleSections, columns);
+                // Reset all grid-column spans to default
+                visibleSections.forEach(section => {
+                    section.style.gridColumn = 'auto';
+                });
             });
             
             console.log(`✅ Grid recalculated - Viewport: ${viewportWidth}px`);
