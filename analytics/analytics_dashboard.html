@@ -214,10 +214,22 @@
             margin-top: 3px;
         }
 
-        .charts-grid {
+        /* ✨ NEW: Unified Dashboard Grid with Dense Flow */
+        .dashboard-grid {
             display: grid;
             /* grid-template-columns dynamically set by JavaScript */
-            gap: clamp(8px, 1vw, 15px); /* Responsive gap */
+            gap: clamp(12px, 1.5vw, 20px); /* Responsive gap */
+            margin-bottom: 15px;
+            width: 100%;
+            grid-auto-flow: dense; /* ✨ MAGIC: Fill gaps automatically! */
+            align-items: start; /* Align to top, not stretch */
+            grid-auto-rows: minmax(250px, auto); /* Min height for sections */
+        }
+
+        /* DEPRECATED: Old charts-grid (kept for backwards compatibility) */
+        .charts-grid {
+            display: grid;
+            gap: clamp(8px, 1vw, 15px);
             margin-bottom: 15px;
             width: 100%;
         }
@@ -233,6 +245,7 @@
             max-width: 100%; /* Overflow protection */
             overflow: hidden;
             box-sizing: border-box;
+            /* Width controlled by grid, not by section itself */
         }
 
         .chart-container canvas {
@@ -717,15 +730,17 @@
             </div>
         </div>
 
-        <!-- User Growth Chart Section -->
-        <div id="section-user-growth" class="dashboard-section chart-container full-width" style="margin-bottom: 15px;">
-            <h3 class="chart-title">📈 User Growth (Daily)</h3>
-            <div class="chart-wrapper">
-                <canvas id="userGrowthChart"></canvas>
+        <!-- ✨ UNIFIED DASHBOARD GRID - All sections in ONE grid with dense flow -->
+        <div id="dashboard-main-grid" class="dashboard-grid">
+            
+            <!-- User Growth Chart Section -->
+            <div id="section-user-growth" class="dashboard-section chart-container">
+                <h3 class="chart-title">📈 User Growth (Daily)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="userGrowthChart"></canvas>
+                </div>
             </div>
-        </div>
 
-        <div class="charts-grid">
             <!-- Device Distribution Section -->
             <div id="section-device-distribution" class="dashboard-section chart-container">
                 <h3 class="chart-title">📱 Device Distribution</h3>
@@ -741,10 +756,7 @@
                     <canvas id="endpointsChart"></canvas>
                 </div>
             </div>
-        </div>
 
-        <!-- Peak Usage Times & Feature Usage Side-by-Side -->
-        <div class="charts-grid" style="margin-bottom: 15px;">
             <!-- Peak Usage Section -->
             <div id="section-peak-usage" class="dashboard-section chart-container">
                 <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
@@ -777,112 +789,113 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Inactive Users Section -->
-        <div id="section-inactive-users" class="dashboard-section table-container" style="margin-bottom: 15px; display: none;">
-            <h3 class="chart-title">👥 Inactive Users Analysis</h3>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalInactive">-</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary);" id="inactiveSince">Loading...</div>
+            <!-- Inactive Users Section -->
+            <div id="section-inactive-users" class="dashboard-section table-container" style="display: none;">
+                <h3 class="chart-title">👥 Inactive Users Analysis</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalInactive">-</div>
+                            <div style="font-size: 0.8em; color: var(--text-secondary);" id="inactiveSince">Loading...</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="oldestVersion">-</div>
+                            <div style="font-size: 0.8em; color: var(--text-secondary);">Oldest Version</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="mostCommonVersion">-</div>
+                            <div style="font-size: 0.8em; color: var(--text-secondary);">Most Common Version</div>
+                        </div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="oldestVersion">-</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary);">Oldest Version</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="mostCommonVersion">-</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary);">Most Common Version</div>
+                    <div style="margin-left: 20px;">
+                        <label style="font-size: 0.9em; color: var(--text-secondary);">
+                            Inactive for: 
+                            <select id="inactiveDaysFilter" onchange="loadInactiveUsers()" style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;">
+                                <option value="7">7 days</option>
+                                <option value="14">14 days</option>
+                                <option value="30" selected>30 days</option>
+                                <option value="60">60 days</option>
+                                <option value="90">90 days</option>
+                                <option value="180">180 days</option>
+                            </select>
+                        </label>
                     </div>
                 </div>
-                <div style="margin-left: 20px;">
-                    <label style="font-size: 0.9em; color: var(--text-secondary);">
-                        Inactive for: 
-                        <select id="inactiveDaysFilter" onchange="loadInactiveUsers()" style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;">
-                            <option value="7">7 days</option>
-                            <option value="14">14 days</option>
-                            <option value="30" selected>30 days</option>
-                            <option value="60">60 days</option>
-                            <option value="90">90 days</option>
-                            <option value="180">180 days</option>
-                        </select>
-                    </label>
+                
+                <table id="inactiveUsersTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortInactiveUsers('username')" style="cursor: pointer;">Username ↕</th>
+                            <th onclick="sortInactiveUsers('last_seen')" style="cursor: pointer;">Last Seen ↕</th>
+                            <th onclick="sortInactiveUsers('days_inactive')" style="cursor: pointer;">Days Inactive ↕</th>
+                            <th onclick="sortInactiveUsers('app_version')" style="cursor: pointer;">App Version ↕</th>
+                            <th onclick="sortInactiveUsers('platform')" style="cursor: pointer;">Platform ↕</th>
+                            <th>Device</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inactiveUsersBody">
+                        <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading inactive users...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Error Analytics Section -->
+            <div id="section-error-analytics" class="dashboard-section table-container" style="display: none;">
+                <h3 class="chart-title">🐛 Error Analytics</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Total Errors</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="uniqueErrors">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Unique Errors</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="errorRate">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Avg/Day</div>
+                    </div>
                 </div>
+                <h4 style="font-size: 1em; color: var(--text-primary); margin: 15px 0 10px 0;">Top Errors (Last 7 Days)</h4>
+                <table id="errorsTable">
+                    <thead>
+                        <tr>
+                            <th>Error Type</th>
+                            <th>Message</th>
+                            <th>Endpoint</th>
+                            <th>Count</th>
+                            <th>Affected Users</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody id="errorsTableBody">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Recent Sessions Section -->
+            <div id="section-recent-sessions" class="dashboard-section table-container">
+                <h3 class="chart-title">🕐 Recent Sessions</h3>
+                <table id="sessionsTable">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Device</th>
+                            <th>Duration</th>
+                            <th>Actions</th>
+                            <th>Top Feature</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessionsTableBody">
+                        <tr><td colspan="6">Loading...</td></tr>
+                    </tbody>
+                </table>
             </div>
             
-            <table id="inactiveUsersTable">
-                <thead>
-                    <tr>
-                        <th onclick="sortInactiveUsers('username')" style="cursor: pointer;">Username ↕</th>
-                        <th onclick="sortInactiveUsers('last_seen')" style="cursor: pointer;">Last Seen ↕</th>
-                        <th onclick="sortInactiveUsers('days_inactive')" style="cursor: pointer;">Days Inactive ↕</th>
-                        <th onclick="sortInactiveUsers('app_version')" style="cursor: pointer;">App Version ↕</th>
-                        <th onclick="sortInactiveUsers('platform')" style="cursor: pointer;">Platform ↕</th>
-                        <th>Device</th>
-                    </tr>
-                </thead>
-                <tbody id="inactiveUsersBody">
-                    <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading inactive users...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Error Analytics Section -->
-        <div id="section-error-analytics" class="dashboard-section table-container" style="margin-bottom: 15px; display: none;">
-            <h3 class="chart-title">🐛 Error Analytics</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
-                <div style="text-align: center;">
-                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
-                    <div style="font-size: 0.8em; color: var(--text-secondary);">Total Errors</div>
-                </div>
-                <div style="text-align: center;">
-                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="uniqueErrors">-</div>
-                    <div style="font-size: 0.8em; color: var(--text-secondary);">Unique Errors</div>
-                </div>
-                <div style="text-align: center;">
-                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="errorRate">-</div>
-                    <div style="font-size: 0.8em; color: var(--text-secondary);">Avg/Day</div>
-                </div>
-            </div>
-            <h4 style="font-size: 1em; color: var(--text-primary); margin: 15px 0 10px 0;">Top Errors (Last 7 Days)</h4>
-            <table id="errorsTable">
-                <thead>
-                    <tr>
-                        <th>Error Type</th>
-                        <th>Message</th>
-                        <th>Endpoint</th>
-                        <th>Count</th>
-                        <th>Affected Users</th>
-                        <th>Last Seen</th>
-                    </tr>
-                </thead>
-                <tbody id="errorsTableBody">
-                    <tr><td colspan="6">Loading...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Recent Sessions Section -->
-        <div id="section-recent-sessions" class="dashboard-section table-container" style="margin-bottom: 15px;">
-            <h3 class="chart-title">🕐 Recent Sessions</h3>
-            <table id="sessionsTable">
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>User</th>
-                        <th>Device</th>
-                        <th>Duration</th>
-                        <th>Actions</th>
-                        <th>Top Feature</th>
-                    </tr>
-                </thead>
-                <tbody id="sessionsTableBody">
-                    <tr><td colspan="6">Loading...</td></tr>
-                </tbody>
-            </table>
-        </div>
+        </div> <!-- end #dashboard-main-grid -->
         </div> <!-- end .container -->
     </div> <!-- end #main-content -->
 
@@ -1037,123 +1050,117 @@
             }
         }
 
-        /**
-         * Calculate optimal columns with overflow protection
-         */
-        function calculateOptimalColumns(viewportWidth, sectionCount) {
-            let columns = 1;
-            let minSectionWidth = 300;
-            
-            if (viewportWidth >= 2560) {
-                minSectionWidth = 350;
-                columns = Math.min(sectionCount, 4);
-            } else if (viewportWidth >= 1920) {
-                minSectionWidth = 400;
-                columns = Math.min(sectionCount, 3);
-            } else if (viewportWidth >= 1440) {
-                minSectionWidth = 450;
-                columns = Math.min(sectionCount, 2);
-            } else if (viewportWidth >= 1024) {
-                minSectionWidth = 400;
-                columns = Math.min(sectionCount, 2);
-            } else {
-                minSectionWidth = 300;
-                columns = 1;
-            }
-            
-            // Overflow protection: Calculate max possible columns
-            const containerPadding = 40; // Left + Right padding
-            const gridGap = 15; // Gap between sections
-            const availableWidth = viewportWidth - containerPadding;
-            const widthPerColumn = minSectionWidth + gridGap;
-            const maxPossibleColumns = Math.floor((availableWidth + gridGap) / widthPerColumn);
-            
-            // Return minimum of desired and possible columns
-            columns = Math.min(columns, maxPossibleColumns, sectionCount);
-            
-            return Math.max(columns, 1);
-        }
+        /* DEPRECATED: Old helper functions - Unified grid handles this now */
 
         /**
-         * Apply special spanning rules for specific sections
+         * ✨ NEW: Unified Grid Layout with Dense Flow
+         * Dynamically adjusts columns based on viewport and applies spanning rules
          */
-        function applySpecialSpanning(sections, totalColumns) {
-            sections.forEach(section => {
-                // Reset all to single span first
-                section.style.gridColumn = 'span 1';
-                
+        function recalculateGridLayout() {
+            const mainGrid = document.getElementById('dashboard-main-grid');
+            if (!mainGrid) {
+                console.warn('⚠️ dashboard-main-grid not found');
+                return;
+            }
+            
+            const viewportWidth = window.innerWidth;
+            
+            // Get all sections (visible and hidden)
+            const allSections = Array.from(mainGrid.children)
+                .filter(child => child.classList.contains('dashboard-section'));
+            
+            // Count visible sections
+            const visibleSections = allSections.filter(
+                section => !section.classList.contains('section-hidden')
+            );
+            
+            const visibleCount = visibleSections.length;
+            
+            if (visibleCount === 0) {
+                mainGrid.style.display = 'none';
+                console.log('📭 No visible sections - hiding grid');
+                return;
+            }
+            
+            mainGrid.style.display = 'grid';
+            
+            // Calculate fixed section width and max columns based on viewport
+            let sectionWidth;
+            let maxColumns;
+            
+            if (viewportWidth >= 2560) {
+                // Ultrawide: 4 columns
+                sectionWidth = 520;
+                maxColumns = 4;
+            } else if (viewportWidth >= 1920) {
+                // Full HD: 3 columns
+                sectionWidth = 500;
+                maxColumns = 3;
+            } else if (viewportWidth >= 1440) {
+                // Laptop: 2 columns
+                sectionWidth = 550;
+                maxColumns = 2;
+            } else if (viewportWidth >= 1024) {
+                // Tablet: 2 columns
+                sectionWidth = 480;
+                maxColumns = 2;
+            } else {
+                // Mobile: 1 column, full width
+                mainGrid.style.gridTemplateColumns = '1fr';
+                allSections.forEach(section => {
+                    section.style.gridColumn = 'auto';
+                });
+                console.log('📱 Mobile layout - single column');
+                return;
+            }
+            
+            // ✨ KEY: Fixed width columns with auto-fill
+            // This creates as many columns as fit, with FIXED width (no 1fr!)
+            mainGrid.style.gridTemplateColumns = `repeat(auto-fill, ${sectionWidth}px)`;
+            mainGrid.style.gridAutoFlow = 'dense'; // Fill gaps automatically
+            
+            // Apply spanning rules for specific sections
+            allSections.forEach(section => {
                 const sectionId = section.id;
                 
-                // User Growth: Full width if only section in its grid
-                if (sectionId === 'section-user-growth' && sections.length === 1) {
-                    section.style.gridColumn = `span ${totalColumns}`;
-                } else if (sectionId === 'section-user-growth' && totalColumns >= 2) {
-                    section.style.gridColumn = 'span 2';
+                // Reset to default
+                section.style.gridColumn = 'auto';
+                
+                // Skip hidden sections
+                if (section.classList.contains('section-hidden')) {
+                    return;
                 }
                 
-                // Feature Analytics: 2 columns on ultrawide if space allows
-                if (sectionId === 'section-feature-analytics' && totalColumns >= 3) {
-                    section.style.gridColumn = 'span 2';
+                // User Growth: Span 2 columns on medium+ screens
+                if (sectionId === 'section-user-growth') {
+                    if (maxColumns >= 2) {
+                        section.style.gridColumn = 'span 2';
+                    }
                 }
                 
-                // Error Analytics: 2 columns minimum, full width if alone
+                // Feature Analytics: Span 2 on wide screens
+                if (sectionId === 'section-feature-analytics') {
+                    if (maxColumns >= 3) {
+                        section.style.gridColumn = 'span 2';
+                    }
+                }
+                
+                // Error Analytics: Span 2 if space allows
                 if (sectionId === 'section-error-analytics') {
-                    if (sections.length === 1) {
-                        section.style.gridColumn = `span ${totalColumns}`;
-                    } else if (totalColumns >= 2) {
+                    if (maxColumns >= 2 && visibleCount <= 4) {
+                        section.style.gridColumn = 'span 2';
+                    }
+                }
+                
+                // Recent Sessions: Span 2 on ultrawide
+                if (sectionId === 'section-recent-sessions') {
+                    if (maxColumns >= 3) {
                         section.style.gridColumn = 'span 2';
                     }
                 }
             });
-        }
-
-        /**
-         * Dynamically adjust grid columns based on visible sections and viewport (ENHANCED)
-         */
-        function recalculateGridLayout() {
-            const grids = document.querySelectorAll('.charts-grid');
-            const viewportWidth = window.innerWidth;
             
-            grids.forEach(grid => {
-                // Count visible sections in this grid
-                const visibleSections = Array.from(grid.children)
-                    .filter(child => child.classList.contains('dashboard-section') && 
-                                   !child.classList.contains('section-hidden'));
-                
-                const visibleCount = visibleSections.length;
-                
-                if (visibleCount === 0) {
-                    grid.style.display = 'none'; // Hide empty grids
-                    return;
-                }
-                
-                grid.style.display = 'grid';
-                
-                // Calculate min section width based on viewport
-                let minSectionWidth;
-                if (viewportWidth >= 2560) {
-                    minSectionWidth = 400;
-                } else if (viewportWidth >= 1920) {
-                    minSectionWidth = 450;
-                } else if (viewportWidth >= 1440) {
-                    minSectionWidth = 500;
-                } else if (viewportWidth >= 1024) {
-                    minSectionWidth = 450;
-                } else {
-                    minSectionWidth = 300;
-                }
-                
-                // CRITICAL: Use auto-fit with minmax to prevent sections from growing
-                // This keeps sections at consistent size instead of filling available space
-                grid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${minSectionWidth}px, 1fr))`;
-                
-                // Reset all grid-column spans to default
-                visibleSections.forEach(section => {
-                    section.style.gridColumn = 'auto';
-                });
-            });
-            
-            console.log(`✅ Grid recalculated - Viewport: ${viewportWidth}px`);
+            console.log(`✅ Unified grid recalculated - ${maxColumns} max columns, ${visibleCount}/${allSections.length} visible, viewport: ${viewportWidth}px`);
         }
 
         /**
