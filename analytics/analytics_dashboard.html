@@ -1,3 +1,27 @@
+        /* Adaptive Section Widths for Masonry */
+        .adaptive-width {
+            min-width: 320px;
+            flex: 1 1 320px;
+        }
+
+        /* Masonry Grid: Adaptive Columns */
+        .dashboard-masonry-grid {
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        }
+
+        @media (max-width: 900px) {
+            .adaptive-width {
+                width: 100% !important;
+                min-width: 0;
+            }
+        }
+
+        @media (min-width: 1800px) {
+            .adaptive-width {
+                min-width: 280px;
+                max-width: 33vw;
+            }
+        }
 <!DOCTYPE html>
 <html lang="en">
 <head>
