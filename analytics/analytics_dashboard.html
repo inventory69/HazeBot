@@ -214,16 +214,30 @@
             margin-top: 3px;
         }
 
-        /* ✨ NEW: Unified Dashboard Grid with Dense Flow */
-        .dashboard-grid {
+        /* 🧱 Masonry Layout */
+        .dashboard-masonry-grid {
             display: grid;
-            /* grid-template-columns dynamically set by JavaScript */
-            gap: clamp(12px, 1.5vw, 20px); /* Responsive gap */
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: clamp(12px, 1.5vw, 20px);
             margin-bottom: 15px;
             width: 100%;
-            grid-auto-flow: dense; /* ✨ MAGIC: Fill gaps automatically! */
-            align-items: start; /* Align to top, not stretch */
-            grid-auto-rows: minmax(250px, auto); /* Min height for sections */
+            align-items: start;
+            /* Masonry only in supported browsers */
+            grid-template-rows: masonry;
+        }
+
+        @supports not (grid-template-rows: masonry) {
+            .dashboard-masonry-grid {
+                /* Fallback: CSS columns for older browsers */
+                display: block;
+                column-count: 3;
+                column-gap: clamp(12px, 1.5vw, 20px);
+            }
+            .dashboard-masonry-grid > .dashboard-section {
+                display: inline-block;
+                width: 100%;
+                margin-bottom: 15px;
+            }
         }
 
         /* DEPRECATED: Old charts-grid (kept for backwards compatibility) */
@@ -731,7 +745,7 @@
         </div>
 
         <!-- ✨ UNIFIED DASHBOARD GRID - All sections in ONE grid with dense flow -->
-        <div id="dashboard-main-grid" class="dashboard-grid">
+    <div id="dashboard-masonry-grid" class="dashboard-masonry-grid">
             
             <!-- User Growth Chart Section -->
             <div id="section-user-growth" class="dashboard-section chart-container">
@@ -895,7 +909,7 @@
                 </table>
             </div>
             
-        </div> <!-- end #dashboard-main-grid -->
+    </div> <!-- end #dashboard-masonry-grid -->
         </div> <!-- end .container -->
     </div> <!-- end #main-content -->
 
@@ -1057,9 +1071,9 @@
          * Dynamically adjusts columns based on viewport and applies spanning rules
          */
         function recalculateGridLayout() {
-            const mainGrid = document.getElementById('dashboard-main-grid');
+            const mainGrid = document.getElementById('dashboard-masonry-grid');
             if (!mainGrid) {
-                console.warn('⚠️ dashboard-main-grid not found');
+                console.warn('⚠️ dashboard-masonry-grid not found');
                 return;
             }
             
