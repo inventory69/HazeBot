@@ -7,8 +7,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
-    <!-- Masonry Layout Library (desandro) -->
-    <script src="https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js"></script>
+    
+    <!-- GridStack.js - Drag & Drop Grid Layout -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
+    
     <style>
         :root {
             /* Dark Theme (Default) */
@@ -216,40 +219,109 @@
             margin-top: 3px;
         }
 
-        /* 🧱 Masonry Layout - JS-controlled, NO CSS Grid */
-        .dashboard-masonry-grid {
-            /* Masonry JS takes full control - no display: grid! */
-            margin: 0 auto;
-            /* Width auto-calculated by Masonry with fitWidth: true */
+        /* 🎯 GridStack Layout - Drag & Drop Grid System */
+        .grid-stack {
+            background: transparent;
+            min-height: 100vh;
+            padding-bottom: 50px;
+        }
+        
+        .grid-stack-item-content {
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px var(--shadow);
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+        
+        /* GridStack Theme Customization */
+        .grid-stack-item > .ui-resizable-handle {
+            background: var(--accent-primary);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .grid-stack-item:hover > .ui-resizable-handle {
+            opacity: 0.7;
+        }
+        
+        .grid-stack-item.ui-draggable-dragging,
+        .grid-stack-item.ui-resizable-resizing {
+            opacity: 0.8;
+            z-index: 100;
         }
 
-        /* Adaptive-width sections (Device Dist, Top Features, Peak Usage, Feature Usage) */
+        /* 📊 Default Section Widths */
+        .dashboard-section {
+            position: relative;
+            transition: width 0.3s ease;
+            margin-bottom: 10px;
+        }
+
         .dashboard-section.adaptive-width {
-            width: 100%; /* Flexibel im Masonry Grid */
-            max-width: 520px;
-            min-width: 380px;
-            margin-bottom: 15px;
+            width: 450px !important;
+            max-width: calc(100vw - 40px);
         }
 
-        /* Full-width sections (User Growth, Inactive Users, Error Analytics, Recent Sessions) */
         .dashboard-section.full-width {
             width: 100% !important;
             max-width: none !important;
-            margin-bottom: 15px;
         }
 
-        /* Responsive breakpoints */
-        @media (max-width: 1200px) {
-            .dashboard-section.adaptive-width {
-                max-width: 100%;
-                min-width: 0;
-            }
+        /* Individual Section Width Toggle Classes */
+        .dashboard-section.width-expanded {
+            width: 100% !important;
+            max-width: none !important;
         }
 
+        .dashboard-section.width-compact {
+            width: 450px !important;
+            max-width: calc(100vw - 40px) !important;
+        }
+
+        /* Section Width Toggle Button */
+        .section-width-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.2s;
+            z-index: 10;
+            opacity: 0.7;
+        }
+
+        .section-width-toggle:hover {
+            opacity: 1;
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            transform: scale(1.1);
+        }
+
+        .dashboard-section:hover .section-width-toggle {
+            opacity: 1;
+        }
+
+        /* � FULL-WIDTH MODE: Alle Sections nehmen volle Breite */
+        /* Responsive: Mobile immer volle Breite */
         @media (max-width: 900px) {
-            .dashboard-section.adaptive-width {
-                width: 100%;
-                max-width: none;
+            .dashboard-section.adaptive-width,
+            .dashboard-section.full-width,
+            .dashboard-section.width-compact {
+                width: 100% !important;
+                max-width: none !important;
+            }
+            
+            .section-width-toggle {
+                display: none;
             }
         }
 
@@ -635,6 +707,10 @@
                 <button onclick="applyCustomRange()" style="padding: 6px 16px;">Apply</button>
             </div>
             <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button id="lockGridBtn" onclick="toggleGridLock()" style="background: #334155;" title="Lock/Unlock grid layout">
+                    <span id="lockGridIcon">🔓</span> <span id="lockGridText">Unlocked</span>
+                </button>
+                <button onclick="resetGridLayout()" style="background: #f59e0b;" title="Reset grid to default layout">↺ Reset Layout</button>
                 <button id="openSectionSettings" class="btn-icon" title="Configure visible sections">⚙️ Sections</button>
                 <button onclick="resetAnalytics()" style="background: #dc2626;">🗑️ Reset Analytics</button>
                 <button onclick="exportToCSV('sessions')">📥 Export Sessions</button>
@@ -757,43 +833,52 @@
             </div>
         </div>
 
-        <!-- ✨ UNIFIED DASHBOARD GRID - All sections in ONE grid with dense flow -->
-    <div id="dashboard-masonry-grid" class="dashboard-masonry-grid">
+        <!-- ✨ GRIDSTACK DASHBOARD - Drag & Drop Resizable Grid -->
+        <div id="dashboard-grid" class="grid-stack">
             
             <!-- User Growth Chart Section -->
-            <div id="section-user-growth" class="dashboard-section chart-container full-width">
-                <h3 class="chart-title">📈 User Growth (Daily)</h3>
-                <div class="chart-wrapper">
-                    <canvas id="userGrowthChart"></canvas>
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="0" data-gs-width="12" data-gs-height="3" id="section-user-growth" data-gs-id="section-user-growth">
+                <div class="grid-stack-item-content dashboard-section chart-container">
+                    <h3 class="chart-title">📈 User Growth (Daily)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="userGrowthChart"></canvas>
+                    </div>
                 </div>
             </div>
 
             <!-- Device Distribution Section -->
-            <div id="section-device-distribution" class="dashboard-section chart-container adaptive-width">
-                <h3 class="chart-title">📱 Device Distribution</h3>
-                <div class="chart-wrapper">
-                    <canvas id="deviceChart"></canvas>
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="3" data-gs-width="4" data-gs-height="3" id="section-device-distribution" data-gs-id="section-device-distribution">
+                <div class="grid-stack-item-content dashboard-section chart-container">
+                    <h3 class="chart-title">📱 Device Distribution</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="deviceChart"></canvas>
+                    </div>
                 </div>
             </div>
 
             <!-- Top Features Section -->
-            <div id="section-top-features" class="dashboard-section chart-container adaptive-width">
-                <h3 class="chart-title">🔥 Top Features</h3>
-                <div class="chart-wrapper">
-                    <canvas id="endpointsChart"></canvas>
+            <div class="grid-stack-item" data-gs-x="4" data-gs-y="3" data-gs-width="4" data-gs-height="3" id="section-top-features" data-gs-id="section-top-features">
+                <div class="grid-stack-item-content dashboard-section chart-container">
+                    <h3 class="chart-title">🔥 Top Features</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="endpointsChart"></canvas>
+                    </div>
                 </div>
             </div>
 
             <!-- Peak Usage Section -->
-            <div id="section-peak-usage" class="dashboard-section chart-container adaptive-width">
-                <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
-                <div class="chart-wrapper">
-                    <canvas id="hourlyChart"></canvas>
+            <div class="grid-stack-item" data-gs-x="8" data-gs-y="3" data-gs-width="4" data-gs-height="3" id="section-peak-usage" data-gs-id="section-peak-usage">
+                <div class="grid-stack-item-content dashboard-section chart-container">
+                    <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
                 </div>
             </div>
 
             <!-- Feature Analytics Section -->
-            <div id="section-feature-analytics" class="dashboard-section chart-container adaptive-width" style="display: none;">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="6" data-gs-width="12" data-gs-height="4" id="section-feature-analytics" data-gs-id="section-feature-analytics">
+                <div class="grid-stack-item-content dashboard-section chart-container">
                 <h3 class="chart-title">🎯 Feature Usage (Last 30 Days)</h3>
                 <div class="chart-wrapper">
                     <canvas id="featureUsageChart"></canvas>
@@ -815,114 +900,121 @@
                         <div style="font-size: 0.7em; color: var(--text-secondary);" id="topPowerUserActions">-</div>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- Inactive Users Section -->
-            <div id="section-inactive-users" class="dashboard-section table-container full-width" style="display: none;">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="10" data-gs-width="12" data-gs-height="5" id="section-inactive-users" data-gs-id="section-inactive-users">
+                <div class="grid-stack-item-content dashboard-section table-container">
                 <h3 class="chart-title">👥 Inactive Users Analysis</h3>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
-                        <div style="text-align: center;">
-                            <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalInactive">-</div>
-                            <div style="font-size: 0.8em; color: var(--text-secondary);" id="inactiveSince">Loading...</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="oldestVersion">-</div>
-                            <div style="font-size: 0.8em; color: var(--text-secondary);">Oldest Version</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="mostCommonVersion">-</div>
-                            <div style="font-size: 0.8em; color: var(--text-secondary);">Most Common Version</div>
-                        </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalInactive">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);" id="inactiveSince">Loading...</div>
                     </div>
-                    <div style="margin-left: 20px;">
-                        <label style="font-size: 0.9em; color: var(--text-secondary);">
-                            Inactive for: 
-                            <select id="inactiveDaysFilter" onchange="loadInactiveUsers()" style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;">
-                                <option value="7">7 days</option>
-                                <option value="14">14 days</option>
-                                <option value="30" selected>30 days</option>
-                                <option value="60">60 days</option>
-                                <option value="90">90 days</option>
-                                <option value="180">180 days</option>
-                            </select>
-                        </label>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="oldestVersion">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Oldest Version</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="mostCommonVersion">-</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Most Common Version</div>
                     </div>
                 </div>
-                
-                <table id="inactiveUsersTable">
-                    <thead>
-                        <tr>
-                            <th onclick="sortInactiveUsers('username')" style="cursor: pointer;">Username ↕</th>
-                            <th onclick="sortInactiveUsers('last_seen')" style="cursor: pointer;">Last Seen ↕</th>
-                            <th onclick="sortInactiveUsers('days_inactive')" style="cursor: pointer;">Days Inactive ↕</th>
-                            <th onclick="sortInactiveUsers('app_version')" style="cursor: pointer;">App Version ↕</th>
-                            <th onclick="sortInactiveUsers('platform')" style="cursor: pointer;">Platform ↕</th>
-                            <th>Device</th>
-                        </tr>
-                    </thead>
-                    <tbody id="inactiveUsersBody">
-                        <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading inactive users...</td></tr>
-                    </tbody>
-                </table>
+                <div style="margin-left: 20px;">
+                    <label style="font-size: 0.9em; color: var(--text-secondary);">
+                        Inactive for: 
+                        <select id="inactiveDaysFilter" onchange="loadInactiveUsers()" style="padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;">
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30" selected>30 days</option>
+                            <option value="60">60 days</option>
+                            <option value="90">90 days</option>
+                            <option value="180">180 days</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+            
+            <table id="inactiveUsersTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortInactiveUsers('username')" style="cursor: pointer;">Username ↕</th>
+                        <th onclick="sortInactiveUsers('last_seen')" style="cursor: pointer;">Last Seen ↕</th>
+                        <th onclick="sortInactiveUsers('days_inactive')" style="cursor: pointer;">Days Inactive ↕</th>
+                        <th onclick="sortInactiveUsers('app_version')" style="cursor: pointer;">App Version ↕</th>
+                        <th onclick="sortInactiveUsers('platform')" style="cursor: pointer;">Platform ↕</th>
+                        <th>Device</th>
+                    </tr>
+                </thead>
+                <tbody id="inactiveUsersBody">
+                    <tr><td colspan="6" style="text-align: center; padding: 20px;">Loading inactive users...</td></tr>
+                </tbody>
+            </table>
+                </div>
             </div>
 
             <!-- Error Analytics Section -->
-            <div id="section-error-analytics" class="dashboard-section table-container full-width" style="display: none;">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="15" data-gs-width="12" data-gs-height="5" id="section-error-analytics" data-gs-id="section-error-analytics">
+                <div class="grid-stack-item-content dashboard-section table-container">
                 <h3 class="chart-title">🐛 Error Analytics</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary);">Total Errors</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="uniqueErrors">-</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary);">Unique Errors</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="errorRate">-</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary);">Avg/Day</div>
-                    </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="totalErrors">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">Total Errors</div>
                 </div>
-                <h4 style="font-size: 1em; color: var(--text-primary); margin: 15px 0 10px 0;">Top Errors (Last 7 Days)</h4>
-                <table id="errorsTable">
-                    <thead>
-                        <tr>
-                            <th>Error Type</th>
-                            <th>Message</th>
-                            <th>Endpoint</th>
-                            <th>Count</th>
-                            <th>Affected Users</th>
-                            <th>Last Seen</th>
-                        </tr>
-                    </thead>
-                    <tbody id="errorsTableBody">
-                        <tr><td colspan="6">Loading...</td></tr>
-                    </tbody>
-                </table>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="uniqueErrors">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">Unique Errors</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5em; color: var(--accent-primary); font-weight: bold;" id="errorRate">-</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">Avg/Day</div>
+                </div>
+            </div>
+            <h4 style="font-size: 1em; color: var(--text-primary); margin: 15px 0 10px 0;">Top Errors (Last 7 Days)</h4>
+            <table id="errorsTable">
+                <thead>
+                    <tr>
+                        <th>Error Type</th>
+                        <th>Message</th>
+                        <th>Endpoint</th>
+                        <th>Count</th>
+                        <th>Affected Users</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody id="errorsTableBody">
+                    <tr><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+                </div>
             </div>
 
             <!-- Recent Sessions Section -->
-            <div id="section-recent-sessions" class="dashboard-section table-container full-width">
+            <div class="grid-stack-item" data-gs-x="0" data-gs-y="20" data-gs-width="12" data-gs-height="4" id="section-recent-sessions" data-gs-id="section-recent-sessions">
+                <div class="grid-stack-item-content dashboard-section table-container">
                 <h3 class="chart-title">🕐 Recent Sessions</h3>
-                <table id="sessionsTable">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>User</th>
-                            <th>Device</th>
-                            <th>Duration</th>
-                            <th>Actions</th>
-                            <th>Top Feature</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sessionsTableBody">
-                        <tr><td colspan="6">Loading...</td></tr>
-                    </tbody>
-                </table>
+            <table id="sessionsTable">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>User</th>
+                        <th>Device</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                        <th>Top Feature</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionsTableBody">
+                    <tr><td colspan="6">Loading...</td></tr>
+                </tbody>
+            </table>
+                </div>
             </div>
             
-    </div> <!-- end #dashboard-masonry-grid -->
+        </div> <!-- end #dashboard-grid -->
         </div> <!-- end .container -->
     </div> <!-- end #main-content -->
 
@@ -1033,6 +1125,9 @@
         // Initialize theme on load
         initializeTheme();
 
+        // ==================== DEPRECATED: OLD WIDTH TOGGLE SYSTEM ====================
+        // Replaced by GridStack drag & resize functionality
+
         // ==================== SECTION VISIBILITY MANAGEMENT ====================
 
         const SECTION_VISIBILITY_KEY = 'analytics_section_visibility';
@@ -1077,117 +1172,13 @@
             }
         }
 
-        /* DEPRECATED: Old helper functions - Unified grid handles this now */
+        /* DEPRECATED: Old helper functions - GridStack handles layout automatically */
 
         /**
-         * ✨ NEW: Unified Grid Layout with Dense Flow
-         * Dynamically adjusts columns based on viewport and applies spanning rules
+         * DEPRECATED: Old grid layout calculation - replaced by GridStack
          */
         function recalculateGridLayout() {
-            const mainGrid = document.getElementById('dashboard-masonry-grid');
-            if (!mainGrid) {
-                console.warn('⚠️ dashboard-masonry-grid not found');
-                return;
-            }
-            
-            const viewportWidth = window.innerWidth;
-            
-            // Get all sections (visible and hidden)
-            const allSections = Array.from(mainGrid.children)
-                .filter(child => child.classList.contains('dashboard-section'));
-            
-            // Count visible sections
-            const visibleSections = allSections.filter(
-                section => !section.classList.contains('section-hidden')
-            );
-            
-            const visibleCount = visibleSections.length;
-            
-            if (visibleCount === 0) {
-                mainGrid.style.display = 'none';
-                console.log('📭 No visible sections - hiding grid');
-                return;
-            }
-            
-            mainGrid.style.display = 'grid';
-            
-            // Calculate fixed section width and max columns based on viewport
-            let sectionWidth;
-            let maxColumns;
-            
-            if (viewportWidth >= 2560) {
-                // Ultrawide: 4 columns
-                sectionWidth = 520;
-                maxColumns = 4;
-            } else if (viewportWidth >= 1920) {
-                // Full HD: 3 columns
-                sectionWidth = 500;
-                maxColumns = 3;
-            } else if (viewportWidth >= 1440) {
-                // Laptop: 2 columns
-                sectionWidth = 550;
-                maxColumns = 2;
-            } else if (viewportWidth >= 1024) {
-                // Tablet: 2 columns
-                sectionWidth = 480;
-                maxColumns = 2;
-            } else {
-                // Mobile: 1 column, full width
-                mainGrid.style.gridTemplateColumns = '1fr';
-                allSections.forEach(section => {
-                    section.style.gridColumn = 'auto';
-                });
-                console.log('📱 Mobile layout - single column');
-                return;
-            }
-            
-            // ✨ KEY: Fixed width columns with auto-fill
-            // This creates as many columns as fit, with FIXED width (no 1fr!)
-            mainGrid.style.gridTemplateColumns = `repeat(auto-fill, ${sectionWidth}px)`;
-            mainGrid.style.gridAutoFlow = 'dense'; // Fill gaps automatically
-            
-            // Apply spanning rules for specific sections
-            allSections.forEach(section => {
-                const sectionId = section.id;
-                
-                // Reset to default
-                section.style.gridColumn = 'auto';
-                
-                // Skip hidden sections
-                if (section.classList.contains('section-hidden')) {
-                    return;
-                }
-                
-                // User Growth: Span 2 columns on medium+ screens
-                if (sectionId === 'section-user-growth') {
-                    if (maxColumns >= 2) {
-                        section.style.gridColumn = 'span 2';
-                    }
-                }
-                
-                // Feature Analytics: Span 2 on wide screens
-                if (sectionId === 'section-feature-analytics') {
-                    if (maxColumns >= 3) {
-                        section.style.gridColumn = 'span 2';
-                    }
-                }
-                
-                // Error Analytics: Span 2 if space allows
-                if (sectionId === 'section-error-analytics') {
-                    if (maxColumns >= 2 && visibleCount <= 4) {
-                        section.style.gridColumn = 'span 2';
-                    }
-                }
-                
-                // Recent Sessions: Span 2 on ultrawide
-                if (sectionId === 'section-recent-sessions') {
-                    if (maxColumns >= 3) {
-                        section.style.gridColumn = 'span 2';
-                    }
-                }
-            });
-            
-            console.log(`✅ Unified grid recalculated - ${maxColumns} max columns, ${visibleCount}/${allSections.length} visible, viewport: ${viewportWidth}px`);
+            // GridStack handles all layout automatically
         }
 
         /**
@@ -1206,11 +1197,6 @@
                     }
                 }
             });
-            
-            // Reload Masonry layout after visibility changes
-            setTimeout(() => {
-                reloadMasonry();
-            }, 100);
             
             console.log('✅ Applied section visibility');
         }
@@ -1269,23 +1255,13 @@
             console.log('✅ Chart responsiveness initialized');
         }
 
-        // Window resize listener (debounced)
-        let resizeTimeout;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                reloadMasonry();
-            }, 200); // 200ms debounce
-        });
+        // Window resize - GridStack handles responsive layout automatically
 
         document.addEventListener('DOMContentLoaded', () => {
             // Load and apply saved visibility
             const visibility = loadSectionVisibility();
             applySectionVisibility(visibility);
             updateSettingsPanelState(visibility);
-            
-            // Initial grid layout calculation
-            recalculateGridLayout();
             
             // Open settings panel
             document.getElementById('openSectionSettings')?.addEventListener('click', () => {
@@ -1981,13 +1957,13 @@
                 
                 if (featureData && featureData.features && Object.keys(featureData.features).length > 0) {
                     updateFeatureAnalytics(featureData);
-                    document.getElementById('section-feature-analytics').style.display = 'block';
                 } else {
-                    document.getElementById('section-feature-analytics').style.display = 'none';
+                    console.log('No feature analytics data available');
+                    // Section bleibt sichtbar im Grid, zeigt nur "No data"
                 }
             } catch (error) {
                 console.error('Failed to load feature analytics:', error);
-                document.getElementById('section-feature-analytics').style.display = 'none';
+                hideGridStackSection('section-feature-analytics');
             }
         }
 
@@ -2334,8 +2310,8 @@
                 }
             } catch (error) {
                 console.error('Failed to load error analytics:', error);
-                // Hide error section if data unavailable
-                document.getElementById('section-error-analytics').style.display = 'none';
+                // Section is now fixed outside GridStack (always visible)
+                console.log('Error analytics section remains visible (no data to display)');
             }
         }
 
@@ -2396,10 +2372,8 @@
                 row.insertCell().textContent = lastSeen;
             });
 
-            // Show section if we have errors
-            if (errorsToShow.length > 0) {
-                document.getElementById('section-error-analytics').style.display = 'block';
-            }
+            // Section bleibt immer im Grid sichtbar
+            console.log(`Error analytics: ${errorsToShow.length} errors displayed`);
         }
 
         function toggleAutoRefresh() {
@@ -2696,9 +2670,6 @@
                 // Render table
                 renderInactiveUsersTable();
                 
-                // Show section
-                document.getElementById('section-inactive-users').style.display = 'block';
-                
                 console.log(`✅ Loaded ${inactiveUsersData.length} inactive users`);
                 
             } catch (error) {
@@ -2814,67 +2785,127 @@
             renderInactiveUsersTable();
         }
 
-        // Masonry-Initialisierung
-        function initMasonry() {
-            if (window.Masonry) {
-                const grid = document.querySelector('#dashboard-masonry-grid');
-                if (grid) {
-                    // Destroy previous instance if exists
-                    if (grid._masonryInstance) {
-                        grid._masonryInstance.destroy();
-                    }
-                    
-                    // Calculate optimal column width based on viewport
-                    const viewportWidth = window.innerWidth;
-                    let columnWidth;
-                    
-                    if (viewportWidth >= 2200) {
-                        columnWidth = 420; // 3-4 Spalten auf Ultrawide
-                    } else if (viewportWidth >= 1600) {
-                        columnWidth = 450; // 3 Spalten
-                    } else if (viewportWidth >= 1200) {
-                        columnWidth = 480; // 2 Spalten
-                    } else if (viewportWidth >= 900) {
-                        columnWidth = '48%'; // 2 Spalten flexibel
-                    } else {
-                        columnWidth = '100%'; // 1 Spalte mobile
-                    }
-                    
-                    // Initialize Masonry with dynamic column width
-                    grid._masonryInstance = new Masonry(grid, {
-                        itemSelector: '.dashboard-section:not(.section-hidden)',
-                        columnWidth: columnWidth,
-                        gutter: 15, // Reduziert von 20
-                        fitWidth: true, // Container zentriert sich
-                        horizontalOrder: true,
-                        transitionDuration: '0.3s'
+        // ========================================
+        // 📊 GridStack Layout System
+        // ========================================
+        
+        let gridStack = null;
+        let isGridLocked = false;
+        
+        const GRID_CONFIG = {
+            column: 12,
+            cellHeight: 80,
+            margin: 10,
+            float: true,
+            removable: false,
+            resizable: {
+                handles: 'e, se, s, sw, w'
+            },
+            draggable: {
+                handle: '.chart-title',
+                scroll: true
+            }
+        };
+        
+        const DEFAULT_LAYOUT = [
+            { id: 'section-user-growth', x: 0, y: 0, w: 12, h: 3 },
+            { id: 'section-device-distribution', x: 0, y: 3, w: 4, h: 3 },
+            { id: 'section-top-features', x: 4, y: 3, w: 4, h: 3 },
+            { id: 'section-peak-usage', x: 8, y: 3, w: 4, h: 3 },
+            { id: 'section-feature-analytics', x: 0, y: 6, w: 12, h: 4 },
+            { id: 'section-inactive-users', x: 0, y: 10, w: 12, h: 5 },
+            { id: 'section-error-analytics', x: 0, y: 15, w: 12, h: 5 },
+            { id: 'section-recent-sessions', x: 0, y: 20, w: 12, h: 4 }
+        ];
+        
+        function initGridStack() {
+            if (!window.GridStack) {
+                console.error('❌ GridStack not loaded');
+                return;
+            }
+            
+            gridStack = GridStack.init(GRID_CONFIG);
+            
+            const savedLayout = localStorage.getItem('hazebot_analytics_gridstack_layout');
+            if (savedLayout) {
+                try {
+                    const layout = JSON.parse(savedLayout);
+                    layout.forEach(item => {
+                        const element = document.querySelector(`[data-gs-id="${item.id}"]`);
+                        if (element) {
+                            gridStack.update(element, { x: item.x, y: item.y, w: item.w, h: item.h });
+                        }
                     });
-                    
-                    console.log(`✅ Masonry initialized - columnWidth: ${columnWidth}, viewport: ${viewportWidth}px`);
+                    console.log('✅ GridStack: Layout loaded from localStorage');
+                } catch (e) {
+                    console.warn('⚠️ Failed to load layout, using default');
                 }
+            } else {
+                console.log('✅ GridStack: Default layout applied');
+            }
+            
+            gridStack.on('change', () => autoSaveGridLayout());
+            gridStack.on('resizestop', (event, element) => {
+                const sectionId = element.getAttribute('data-gs-id');
+                resizeChartsInSection(sectionId);
+            });
+        }
+        
+        function toggleGridLock() {
+            if (isGridLocked) {
+                gridStack.enable();
+                isGridLocked = false;
+                document.getElementById('lockGridIcon').textContent = '🔓';
+                document.getElementById('lockGridText').textContent = 'Unlocked';
+                document.getElementById('lockGridBtn').style.background = '#334155';
+                console.log('🔓 Grid unlocked');
+            } else {
+                gridStack.disable();
+                isGridLocked = true;
+                document.getElementById('lockGridIcon').textContent = '🔒';
+                document.getElementById('lockGridText').textContent = 'Locked';
+                document.getElementById('lockGridBtn').style.background = '#dc2626';
+                console.log('🔒 Grid locked');
             }
         }
         
-        // Reload Masonry layout (after visibility changes)
-        function reloadMasonry() {
-            const grid = document.querySelector('#dashboard-masonry-grid');
-            if (grid && grid._masonryInstance) {
-                grid._masonryInstance.reloadItems();
-                grid._masonryInstance.layout();
-                console.log('🔄 Masonry layout reloaded');
+        function resetGridLayout() {
+            if (confirm('Reset dashboard to default layout?')) {
+                localStorage.removeItem('hazebot_analytics_gridstack_layout');
+                DEFAULT_LAYOUT.forEach(item => {
+                    const element = document.querySelector(`[data-gs-id="${item.id}"]`);
+                    if (element && gridStack) {
+                        gridStack.update(element, { x: item.x, y: item.y, w: item.w, h: item.h });
+                    }
+                });
+                console.log('🔄 Layout reset to default');
+            }
+        }
+        
+        function autoSaveGridLayout() {
+            const layout = [];
+            document.querySelectorAll('.grid-stack-item').forEach(el => {
+                const node = el.gridstackNode;
+                const id = el.getAttribute('data-gs-id');
+                if (node && id) {
+                    layout.push({ id: id, x: node.x, y: node.y, w: node.w, h: node.h });
+                }
+            });
+            localStorage.setItem('hazebot_analytics_gridstack_layout', JSON.stringify(layout));
+        }
+        
+        function resizeChartsInSection(sectionId) {
+            const section = document.querySelector(`[data-gs-id="${sectionId}"]`);
+            if (!section) return;
+            const canvas = section.querySelector('canvas');
+            if (canvas && canvas.chart) {
+                setTimeout(() => canvas.chart.resize(), 100);
             }
         }
 
-        // Initialisiere Masonry nach dem Laden
-        window.addEventListener('load', function() {
-            setTimeout(initMasonry, 300); // nach initialem Rendern + Charts geladen
-        });
 
-        // Re-Init Masonry nach jedem Layout-Update
-        function recalculateGridLayout() {
-            // ...existing code...
-            setTimeout(initMasonry, 100); // Masonry nach Grid-Update
-        }
+        // Show/Hide GridStack sections properly
+        window.addEventListener('load', () => setTimeout(initGridStack, 300));
     </script>
 </body>
 </html>
