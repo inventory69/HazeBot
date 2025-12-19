@@ -216,53 +216,41 @@
             margin-top: 3px;
         }
 
-        /* 🧱 Masonry Layout */
+        /* 🧱 Masonry Layout - JS-controlled, NO CSS Grid */
         .dashboard-masonry-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: clamp(12px, 1.5vw, 20px);
-            margin-bottom: 15px;
+            /* Masonry JS takes full control - no display: grid! */
             width: 100%;
-            align-items: start;
-            /* Masonry only in supported browsers */
-            grid-template-rows: masonry;
+            margin: 0 auto;
         }
 
-        /* Adaptive Section Widths for Masonry */
-        .adaptive-width {
-            min-width: 320px;
-            width: calc(33.333% - 14px); /* 3 columns by default */
+        /* Adaptive-width sections (Device Dist, Top Features, Peak Usage, Feature Usage) */
+        .dashboard-section.adaptive-width {
+            width: 480px;
+            margin-bottom: 20px;
         }
 
+        /* Full-width sections (User Growth, Inactive Users, Error Analytics, Recent Sessions) */
+        .dashboard-section.full-width {
+            width: 100% !important;
+            margin-bottom: 20px;
+        }
+
+        /* Responsive breakpoints */
         @media (max-width: 1400px) {
-            .adaptive-width {
-                width: calc(50% - 10px); /* 2 columns on medium screens */
+            .dashboard-section.adaptive-width {
+                width: calc(50% - 10px);
             }
         }
 
         @media (max-width: 900px) {
-            .adaptive-width {
-                width: 100% !important; /* 1 column on mobile */
-            }
-        }
-
-        @media (min-width: 2000px) {
-            .adaptive-width {
-                width: calc(25% - 15px); /* 4 columns on ultrawide */
-            }
-        }
-
-        @supports not (grid-template-rows: masonry) {
-            .dashboard-masonry-grid {
-                /* Fallback: CSS columns for older browsers */
-                display: block;
-                column-count: 3;
-                column-gap: clamp(12px, 1.5vw, 20px);
-            }
-            .dashboard-masonry-grid > .dashboard-section {
-                display: inline-block;
+            .dashboard-section.adaptive-width {
                 width: 100%;
-                margin-bottom: 15px;
+            }
+        }
+
+        @media (min-width: 2200px) {
+            .dashboard-section.adaptive-width {
+                width: 420px;
             }
         }
 
@@ -774,7 +762,7 @@
     <div id="dashboard-masonry-grid" class="dashboard-masonry-grid">
             
             <!-- User Growth Chart Section -->
-            <div id="section-user-growth" class="dashboard-section chart-container">
+            <div id="section-user-growth" class="dashboard-section chart-container full-width">
                 <h3 class="chart-title">📈 User Growth (Daily)</h3>
                 <div class="chart-wrapper">
                     <canvas id="userGrowthChart"></canvas>
@@ -831,7 +819,7 @@
             </div>
 
             <!-- Inactive Users Section -->
-            <div id="section-inactive-users" class="dashboard-section table-container" style="display: none;">
+            <div id="section-inactive-users" class="dashboard-section table-container full-width" style="display: none;">
                 <h3 class="chart-title">👥 Inactive Users Analysis</h3>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; flex: 1;">
@@ -881,7 +869,7 @@
             </div>
 
             <!-- Error Analytics Section -->
-            <div id="section-error-analytics" class="dashboard-section table-container" style="display: none;">
+            <div id="section-error-analytics" class="dashboard-section table-container full-width" style="display: none;">
                 <h3 class="chart-title">🐛 Error Analytics</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px;">
                     <div style="text-align: center;">
@@ -916,7 +904,7 @@
             </div>
 
             <!-- Recent Sessions Section -->
-            <div id="section-recent-sessions" class="dashboard-section table-container">
+            <div id="section-recent-sessions" class="dashboard-section table-container full-width">
                 <h3 class="chart-title">🕐 Recent Sessions</h3>
                 <table id="sessionsTable">
                     <thead>
@@ -1220,11 +1208,10 @@
                 }
             });
             
-            // Re-initialize Masonry after visibility changes
+            // Reload Masonry layout after visibility changes
             setTimeout(() => {
-                recalculateGridLayout();
-                initMasonry();
-            }, 50);
+                reloadMasonry();
+            }, 100);
             
             console.log('✅ Applied section visibility');
         }
@@ -1288,8 +1275,7 @@
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
-                recalculateGridLayout();
-                initMasonry();
+                reloadMasonry();
             }, 200); // 200ms debounce
         });
 
@@ -2838,19 +2824,35 @@
                     if (grid._masonryInstance) {
                         grid._masonryInstance.destroy();
                     }
+                    
+                    // Initialize Masonry with fixed column width
                     grid._masonryInstance = new Masonry(grid, {
-                        itemSelector: '.dashboard-section',
-                        columnWidth: '.dashboard-section',
-                        percentPosition: true,
-                        gutter: 20
+                        itemSelector: '.dashboard-section:not(.section-hidden)',
+                        columnWidth: 480, // Fixed width for adaptive sections
+                        gutter: 20,
+                        fitWidth: false, // Use full container width
+                        horizontalOrder: true, // Keep order consistent
+                        transitionDuration: '0.3s'
                     });
+                    
+                    console.log('✅ Masonry initialized');
                 }
+            }
+        }
+        
+        // Reload Masonry layout (after visibility changes)
+        function reloadMasonry() {
+            const grid = document.querySelector('#dashboard-masonry-grid');
+            if (grid && grid._masonryInstance) {
+                grid._masonryInstance.reloadItems();
+                grid._masonryInstance.layout();
+                console.log('🔄 Masonry layout reloaded');
             }
         }
 
         // Initialisiere Masonry nach dem Laden
-        window.addEventListener('DOMContentLoaded', function() {
-            setTimeout(initMasonry, 100); // nach initialem Rendern
+        window.addEventListener('load', function() {
+            setTimeout(initMasonry, 300); // nach initialem Rendern + Charts geladen
         });
 
         // Re-Init Masonry nach jedem Layout-Update
