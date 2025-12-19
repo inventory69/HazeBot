@@ -77,16 +77,14 @@ class HazeWorldBot(commands.Bot):
         Logger.info("🚀 Starting Cog loading sequence...")
         loaded_cogs = []
 
-        # Load AnalyticsManager first (APIServer needs it) - ONLY IN PROD MODE
-        if PROD_MODE:
-            try:
-                await self.load_extension("Cogs.AnalyticsManager")
-                loaded_cogs.append("AnalyticsManager")
-                Logger.info("   └─ ✅ Loaded: AnalyticsManager")
-            except Exception as e:
-                Logger.error(f"   └─ ❌ Failed to load AnalyticsManager: {e}")
-        else:
-            Logger.info("   └─ ⏭️ Skipped: AnalyticsManager (Test Mode)")
+        # Load AnalyticsManager first (APIServer needs it) - WORKS IN BOTH MODES
+        # Uses TestData/ in Test Mode, Data/ in Production Mode
+        try:
+            await self.load_extension("Cogs.AnalyticsManager")
+            loaded_cogs.append("AnalyticsManager")
+            Logger.info("   └─ ✅ Loaded: AnalyticsManager")
+        except Exception as e:
+            Logger.error(f"   └─ ❌ Failed to load AnalyticsManager: {e}")
 
         # Load APIServer second (uses AnalyticsManager)
         try:
