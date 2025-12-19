@@ -758,7 +758,7 @@
             </div>
 
             <!-- Device Distribution Section -->
-            <div id="section-device-distribution" class="dashboard-section chart-container">
+            <div id="section-device-distribution" class="dashboard-section chart-container adaptive-width">
                 <h3 class="chart-title">📱 Device Distribution</h3>
                 <div class="chart-wrapper">
                     <canvas id="deviceChart"></canvas>
@@ -766,7 +766,7 @@
             </div>
 
             <!-- Top Features Section -->
-            <div id="section-top-features" class="dashboard-section chart-container">
+            <div id="section-top-features" class="dashboard-section chart-container adaptive-width">
                 <h3 class="chart-title">🔥 Top Features</h3>
                 <div class="chart-wrapper">
                     <canvas id="endpointsChart"></canvas>
@@ -774,7 +774,7 @@
             </div>
 
             <!-- Peak Usage Section -->
-            <div id="section-peak-usage" class="dashboard-section chart-container">
+            <div id="section-peak-usage" class="dashboard-section chart-container adaptive-width">
                 <h3 class="chart-title">⏰ Peak Usage Times (24h)</h3>
                 <div class="chart-wrapper">
                     <canvas id="hourlyChart"></canvas>
@@ -782,7 +782,31 @@
             </div>
 
             <!-- Feature Analytics Section -->
-            <div id="section-feature-analytics" class="dashboard-section chart-container" style="display: none;">
+            <div id="section-feature-analytics" class="dashboard-section chart-container adaptive-width" style="display: none;">
+        /* Adaptive Section Widths for Masonry */
+        .adaptive-width {
+            min-width: 320px;
+            flex: 1 1 320px;
+        }
+
+        /* Masonry Grid: Adaptive Columns */
+        .dashboard-masonry-grid {
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        }
+
+        @media (max-width: 900px) {
+            .adaptive-width {
+                width: 100% !important;
+                min-width: 0;
+            }
+        }
+
+        @media (min-width: 1800px) {
+            .adaptive-width {
+                min-width: 280px;
+                max-width: 33vw;
+            }
+        }
                 <h3 class="chart-title">🎯 Feature Usage (Last 30 Days)</h3>
                 <div class="chart-wrapper">
                     <canvas id="featureUsageChart"></canvas>
