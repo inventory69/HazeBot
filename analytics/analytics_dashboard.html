@@ -219,38 +219,37 @@
         /* 🧱 Masonry Layout - JS-controlled, NO CSS Grid */
         .dashboard-masonry-grid {
             /* Masonry JS takes full control - no display: grid! */
-            width: 100%;
             margin: 0 auto;
+            /* Width auto-calculated by Masonry with fitWidth: true */
         }
 
         /* Adaptive-width sections (Device Dist, Top Features, Peak Usage, Feature Usage) */
         .dashboard-section.adaptive-width {
-            width: 480px;
-            margin-bottom: 20px;
+            width: 100%; /* Flexibel im Masonry Grid */
+            max-width: 520px;
+            min-width: 380px;
+            margin-bottom: 15px;
         }
 
         /* Full-width sections (User Growth, Inactive Users, Error Analytics, Recent Sessions) */
         .dashboard-section.full-width {
             width: 100% !important;
-            margin-bottom: 20px;
+            max-width: none !important;
+            margin-bottom: 15px;
         }
 
         /* Responsive breakpoints */
-        @media (max-width: 1400px) {
+        @media (max-width: 1200px) {
             .dashboard-section.adaptive-width {
-                width: calc(50% - 10px);
+                max-width: 100%;
+                min-width: 0;
             }
         }
 
         @media (max-width: 900px) {
             .dashboard-section.adaptive-width {
                 width: 100%;
-            }
-        }
-
-        @media (min-width: 2200px) {
-            .dashboard-section.adaptive-width {
-                width: 420px;
+                max-width: none;
             }
         }
 
@@ -2825,17 +2824,33 @@
                         grid._masonryInstance.destroy();
                     }
                     
-                    // Initialize Masonry with fixed column width
+                    // Calculate optimal column width based on viewport
+                    const viewportWidth = window.innerWidth;
+                    let columnWidth;
+                    
+                    if (viewportWidth >= 2200) {
+                        columnWidth = 420; // 3-4 Spalten auf Ultrawide
+                    } else if (viewportWidth >= 1600) {
+                        columnWidth = 450; // 3 Spalten
+                    } else if (viewportWidth >= 1200) {
+                        columnWidth = 480; // 2 Spalten
+                    } else if (viewportWidth >= 900) {
+                        columnWidth = '48%'; // 2 Spalten flexibel
+                    } else {
+                        columnWidth = '100%'; // 1 Spalte mobile
+                    }
+                    
+                    // Initialize Masonry with dynamic column width
                     grid._masonryInstance = new Masonry(grid, {
                         itemSelector: '.dashboard-section:not(.section-hidden)',
-                        columnWidth: 480, // Fixed width for adaptive sections
-                        gutter: 20,
-                        fitWidth: false, // Use full container width
-                        horizontalOrder: true, // Keep order consistent
+                        columnWidth: columnWidth,
+                        gutter: 15, // Reduziert von 20
+                        fitWidth: true, // Container zentriert sich
+                        horizontalOrder: true,
                         transitionDuration: '0.3s'
                     });
                     
-                    console.log('✅ Masonry initialized');
+                    console.log(`✅ Masonry initialized - columnWidth: ${columnWidth}, viewport: ${viewportWidth}px`);
                 }
             }
         }
