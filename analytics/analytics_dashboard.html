@@ -7,6 +7,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <!-- Masonry Layout Library (desandro) -->
+    <script src="https://unpkg.com/masonry-layout@4/dist/masonry.pkgd.min.js"></script>
     <style>
         :root {
             /* Dark Theme (Default) */
@@ -1224,6 +1226,7 @@
         // Initialize section visibility on page load
         /**
          * Make charts responsive to container size changes
+         * @deprecated - Masonry layout now handles responsive behavior
          */
         function initResponsiveCharts() {
             if (!('ResizeObserver' in window)) {
@@ -1864,30 +1867,30 @@
                         backgroundColor: '#667eea'
                     }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#94a3b8', font: { size: 10 } },
-                            grid: { display: false }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
                         },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1,
-                                color: '#94a3b8'
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8', font: { size: 10 } },
+                                grid: { display: false }
                             },
-                            grid: { color: '#334155' }
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    color: '#94a3b8'
+                                },
+                                grid: { color: '#334155' }
+                            }
                         }
                     }
-                }
-            });
+                });
         }
 
         function updateSessionsTable(sessions) {
@@ -2798,10 +2801,35 @@
             renderInactiveUsersTable();
         }
 
-        // Load inactive users on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            loadInactiveUsers();
+        // Masonry-Initialisierung
+        function initMasonry() {
+            if (window.Masonry) {
+                const grid = document.querySelector('#dashboard-masonry-grid');
+                if (grid) {
+                    // Destroy previous instance if exists
+                    if (grid._masonryInstance) {
+                        grid._masonryInstance.destroy();
+                    }
+                    grid._masonryInstance = new Masonry(grid, {
+                        itemSelector: '.dashboard-section',
+                        columnWidth: '.dashboard-section',
+                        percentPosition: true,
+                        gutter: 20
+                    });
+                }
+            }
+        }
+
+        // Initialisiere Masonry nach dem Laden
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initMasonry, 100); // nach initialem Rendern
         });
+
+        // Re-Init Masonry nach jedem Layout-Update
+        function recalculateGridLayout() {
+            // ...existing code...
+            setTimeout(initMasonry, 100); // Masonry nach Grid-Update
+        }
     </script>
 </body>
 </html>
